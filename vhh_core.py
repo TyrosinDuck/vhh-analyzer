@@ -883,7 +883,8 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
                      annotations: dict, figures: dict | None = None,
                      ph: float | None = None, version: str = "",
                      author: str = "", with_hallmarks: bool = True,
-                     with_liabilities: bool = True) -> Path:
+                     with_liabilities: bool = True,
+                     app_name: str = "VHH tool box") -> Path:
     """Render a complete analysis report as a PDF.
 
     ``figures`` maps a caption to a matplotlib figure; they are embedded in the
@@ -915,7 +916,7 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
         str(path), pagesize=A4,
         leftMargin=16 * mm, rightMargin=16 * mm,
         topMargin=14 * mm, bottomMargin=16 * mm,
-        title="VHH analysis report", author=author or "VHH Analyzer")
+        title="VHH analysis report", author=author or app_name)
 
     def table(data, widths=None, font=7.2, header=True):
         t = Table(data, colWidths=widths, repeatRows=1 if header else 0, hAlign="LEFT")
@@ -944,7 +945,7 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     meta = f"Generated {stamp} · {len(seqs)} sequence(s) · net charge at pH {ph}"
     if version:
-        meta += f" · VHH Analyzer {version}"
+        meta += f" · {app_name} {version}"
     if author:
         meta += f" · {author}"
     story += [Paragraph(meta, small), Spacer(1, 7)]
@@ -1099,7 +1100,7 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
         "• Germline identity reflects similarity to the closest germline gene; it is "
         "not an immunogenicity prediction.", body)]
 
-    footer_bits = [b for b in ["VHH Analyzer", version, author] if b]
+    footer_bits = [b for b in [app_name, version, author] if b]
     story += [Spacer(1, 8), Paragraph(" · ".join(footer_bits), small)]
 
     doc.build(story)

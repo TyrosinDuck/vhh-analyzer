@@ -1,5 +1,5 @@
 """
-VHH Analyzer — Streamlit front-end.
+VHH tool box — Streamlit front-end.
 
 The app is organised in three sections, reachable from the home page and from
 the sidebar:
@@ -48,11 +48,16 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.2130"
+VERSION = "20261020.2230"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
-st.set_page_config(page_title="VHH Analyzer", page_icon="🧬", layout="wide")
+# The app name and its icon live here so the page title, the sidebar, the home
+# page, the footer and the PDF report can never drift apart.
+APP_NAME = "VHH tool box"
+APP_ICON = "🧰"
+
+st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 
 
 def _fit() -> dict:
@@ -298,7 +303,7 @@ def footer() -> None:
                "dna_features_viewer. Theoretical predictions — validate "
                "experimentally. Sequences are not stored; for confidential work, "
                "run the app locally.")
-    st.caption(f"VHH Analyzer · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
+    st.caption(f"{APP_NAME} · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
 
 
 # A widget's state cannot be written after the widget exists, so anything that
@@ -316,7 +321,7 @@ section = st.session_state["section"]
 # --------------------------------------------------------------------------- #
 
 with st.sidebar:
-    st.markdown("### 🧬 VHH Analyzer")
+    st.markdown(f"### {APP_ICON} {APP_NAME}")
     st.button("🏠 Home", key="nav_home", **FIT,
               disabled=section == "home", on_click=go_to, args=("home",))
     for key, (icon, label, _desc) in SECTIONS.items():
@@ -371,7 +376,7 @@ requirements.txt`, `streamlit run app.py`, and nothing ever leaves your computer
 # --------------------------------------------------------------------------- #
 
 if section == "home":
-    st.title("🧬 VHH Analyzer")
+    st.title(f"{APP_ICON} {APP_NAME}")
     st.markdown(
         "A workbench for single-domain antibodies: characterize them, pull them out "
         "of sequencing reads, and plan the cloning. Pick where to start.")
@@ -1164,7 +1169,8 @@ with tabs[7]:
             with tempfile.TemporaryDirectory() as tmp:
                 pdf_path = vc.build_pdf_report(
                     f"{tmp}/vhh_report.pdf", df, sequences, annotations,
-                    figures=figures, ph=ph, version=VERSION, author=AUTHOR)
+                    figures=figures, ph=ph, version=VERSION, author=AUTHOR,
+                    app_name=APP_NAME)
                 st.session_state["pdf_bytes"] = pdf_path.read_bytes()
         plt.close("all")
 

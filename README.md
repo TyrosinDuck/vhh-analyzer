@@ -1,4 +1,4 @@
-# VHH Analyzer
+# VHH tool box
 
 A web front-end for sequence-level characterization of VHH / single-domain antibodies:
 physico-chemical descriptors, CDR/framework annotation (ANARCI or regex anchors),
@@ -50,8 +50,8 @@ conda install -c conda-forge -c bioconda hmmer anarci
 ## Run with Docker
 
 ```bash
-docker build -t vhh-analyzer .
-docker run -p 8501:8501 vhh-analyzer
+docker build -t vhh-toolbox .
+docker run -p 8501:8501 vhh-toolbox
 ```
 
 The image is built on micromamba specifically so HMMER and ANARCI can come from
