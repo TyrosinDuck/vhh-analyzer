@@ -35,7 +35,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1530"
+VERSION = "20261020.1535"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -176,6 +176,11 @@ with col_in:
     # before the widget is instantiated, which is the supported way to prefill it.
     text = st.text_area("Sequences", height=220, key="seq_text",
                         placeholder=">MyNanobody\nEVQLVESGGGLVQ...")
+    # Clicking the button moves focus out of the text area, which is what commits
+    # what was just typed — the same thing ⌘/Ctrl + Enter does, without the
+    # keyboard shortcut nobody discovers on their own.
+    st.button("Analyze", type="primary", **FIT)
+    st.caption("Click Analyze, or press ⌘ + Enter (Ctrl + Enter on Windows/Linux).")
 
 if not text.strip():
     st.info("Paste sequences above, upload a FASTA file, or load the example to start.")
