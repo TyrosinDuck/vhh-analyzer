@@ -39,6 +39,10 @@ __all__ = [
     "restriction_profile", "unique_cutters", "plot_map", "sequence_stats",
 ]
 
+# Bumped whenever the public API changes, so app.py can tell the user that a
+# module is out of date instead of crashing on a missing attribute.
+__version__ = "2026.10.21"
+
 # --------------------------------------------------------------------------- #
 # Motif library — short protein elements only, see the module docstring
 # --------------------------------------------------------------------------- #

@@ -48,7 +48,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.0010"
+VERSION = "20261021.0030"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -58,6 +58,22 @@ APP_NAME = "VHH tool box"
 APP_ICON = "🧰"
 
 st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
+
+# The analysis modules live in separate files that are updated together with this
+# one. Copying only app.py across used to fail deep inside a call with an opaque
+# AttributeError; this turns that into a message naming the stale file.
+REQUIRED_MODULES = {"vhh_core": "2026.10.21", "sanger": "2026.10.21",
+                    "cloning": "2026.10.21"}
+_stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
+          f"needs {want})"
+          for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
+                                  ("sanger", REQUIRED_MODULES["sanger"], sg),
+                                  ("cloning", REQUIRED_MODULES["cloning"], cl))
+          if getattr(mod, "__version__", None) != want]
+if _stale:
+    st.error("Some modules are out of date — update " + ", ".join(_stale) +
+             " alongside `app.py`, they are released together.")
+    st.stop()
 
 
 def _fit() -> dict:

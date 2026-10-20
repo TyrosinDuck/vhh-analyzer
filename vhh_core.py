@@ -38,6 +38,10 @@ __all__ = [
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS",
 ]
 
+# Bumped whenever the public API changes, so app.py can tell the user that a
+# module is out of date instead of crashing on a missing attribute.
+__version__ = "2026.10.21"
+
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
