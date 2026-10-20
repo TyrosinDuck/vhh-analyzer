@@ -35,7 +35,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1610"
+VERSION = "20261020.1740"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -81,6 +81,16 @@ def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
 
 
+def _analyze_one(name: str, seq: str, ph: float, method: str):
+    """Analyse a single sequence — the unit the progress bar advances on.
+
+    Caching per sequence rather than per batch means adding one sequence to a
+    list of ten only costs one analysis, not eleven.
+    """
+    frame, anns, errs = vc.analyze({name: seq}, ph=ph, method=method)
+    return frame.iloc[0].to_dict(), anns.get(name), errs.get(name)
+
+
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
 def hallmark_data(seq: str, annotation: dict | None = None):
     """Hallmark tetrad for one sequence (cached: ANARCI numbering is not free)."""
@@ -96,8 +106,32 @@ def germline_data(seq: str):
 if CACHE_TTL:
     run_analysis = st.cache_data(
         show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)(_analyze)
+    analyze_one = st.cache_data(
+        show_spinner=False, ttl=CACHE_TTL,
+        max_entries=CACHE_MAX_ENTRIES * 8)(_analyze_one)
 else:
     run_analysis = _analyze
+    analyze_one = _analyze_one
+
+
+def analyze_with_progress(seqs: dict[str, str], ph: float, method: str):
+    """Run the analysis sequence by sequence, showing progress as it goes."""
+    bar = st.progress(0.0, text="Preparing…")
+    rows, anns, errs = [], {}, {}
+    total = len(seqs)
+    try:
+        for i, (name, seq) in enumerate(seqs.items()):
+            bar.progress(i / total, text=f"Analyzing {name} ({i + 1}/{total})…")
+            row, ann, err = analyze_one(name, seq, ph, method)
+            rows.append(row)
+            if ann:
+                anns[name] = ann
+            if err:
+                errs[name] = err
+        bar.progress(1.0, text="Done")
+    finally:
+        bar.empty()
+    return pd.DataFrame(rows), anns, errs
 
 
 def footer() -> None:
@@ -210,8 +244,7 @@ except ValueError as exc:
     footer()
     st.stop()
 
-with st.spinner(f"Analyzing {len(sequences)} sequence(s)…"):
-    df, annotations, errors = run_analysis(sequences, ph, method)
+df, annotations, errors = analyze_with_progress(sequences, ph, method)
 
 if errors:
     for name, msg in errors.items():
@@ -219,7 +252,7 @@ if errors:
                    "Physico-chemical values are still reported below.")
 
 tabs = st.tabs(["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
-                "Liabilities", "Alignment", "Download"])
+                "Liabilities", "Alignment", "DNA", "Download"])
 
 # --- Properties ------------------------------------------------------------ #
 with tabs[0]:
@@ -281,6 +314,26 @@ with tabs[1]:
     st.pyplot(fig_prof, **FIT)
     st.caption("Sliding-window charge (blue) and Kyte–Doolittle hydropathy (orange). "
                "Shaded bands are the CDRs.")
+
+    st.subheader("Predicted secondary structure")
+    cf_window = st.slider("Chou–Fasman window", 3, 11,
+                          vc.DEFAULTS["chou_fasman_window"], 2, key="cf_window")
+    cf_figs = {}
+    for name, seq in sequences.items():
+        fig_cf = vc.plot_chou_fasman(seq, name, window=cf_window,
+                                     annotation=annotations.get(name))
+        cf_figs[name] = fig_cf
+        st.pyplot(fig_cf, **FIT)
+        prof = vc.chou_fasman_profile(seq, cf_window)
+        st.caption(
+            f"{name}: {prof['fractions']['E']:.0%} sheet, "
+            f"{prof['fractions']['H']:.0%} helix, {prof['fractions']['C']:.0%} coil "
+            "by this heuristic.")
+    st.caption("The Chou–Fasman heuristic is roughly 50–60% accurate: it shows where "
+               "the sequence tends towards each conformation, it does not predict the "
+               "fold. A VHH is an immunoglobulin β-sandwich, so a sheet-dominated "
+               "profile is the expected result. For real secondary structure, run DSSP "
+               "on a model.")
     plt.close("all")
 
 # --- CDR / Framework ------------------------------------------------------- #
@@ -432,8 +485,57 @@ with tabs[5]:
                    "one that tells you whether they are really the same binder.")
         plt.close("all")
 
-# --- Download -------------------------------------------------------------- #
+# --- DNA -------------------------------------------------------------------- #
 with tabs[6]:
+    st.markdown(
+        "Back-translation into DNA using *E. coli* preferred codons, with cloning "
+        "sites and long homopolymer runs removed.")
+
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        avoid = st.multiselect(
+            "Restriction sites to avoid", sorted(vc.DEFAULT_AVOID_SITES),
+            default=sorted(vc.DEFAULT_AVOID_SITES),
+            help="A codon creating one of these sites is swapped for a synonymous one.")
+    with col_b:
+        add_stop = st.checkbox("Append a stop codon (TAA)", value=True)
+        gc_max = st.slider("Maximum GC fraction", 0.45, 0.70, 0.60, 0.01)
+
+    sites = {k: vc.DEFAULT_AVOID_SITES[k] for k in avoid}
+    fasta_parts = []
+    for name, seq in sequences.items():
+        res = vc.reverse_translate(seq, avoid_sites=sites, add_stop=add_stop,
+                                   gc_max=gc_max)
+        ok = vc.translate_dna(res["dna"]) == seq
+        fasta_parts.append(f">{name}_optimized\n" +
+                           "\n".join(res["dna"][i:i + 60]
+                                     for i in range(0, len(res["dna"]), 60)))
+        with st.container(border=True):
+            st.markdown(f"**{name}** — {res['length_nt']} nt, "
+                        f"GC {res['gc_percent']} %, "
+                        f"{len(res['repairs'])} codon(s) swapped for sites, "
+                        f"{res['gc_swaps']} for GC balance")
+            if not ok:
+                st.error("Round-trip check failed — do not order this sequence.")
+            if res["remaining_issues"]:
+                st.warning("Could not remove: " + ", ".join(res["remaining_issues"]))
+            st.code(res["dna"], language="text")
+            if res["repairs"]:
+                with st.expander(f"{len(res['repairs'])} codon swap(s)"):
+                    st.dataframe(pd.DataFrame(res["repairs"]), hide_index=True, **FIT)
+
+    st.download_button("Download DNA (FASTA)", "\n".join(fasta_parts) + "\n",
+                       file_name="vhh_optimized_dna.fasta", mime="text/plain",
+                       type="primary")
+    st.caption(
+        "Every output is verified by translating it back and comparing to the input. "
+        "This optimiser maximises codon frequency, balances GC and removes "
+        "cloning-unfriendly motifs — it does not model mRNA secondary structure near "
+        "the ribosome binding site, codon-pair bias or tRNA availability. Run the "
+        "sequence through your synthesis vendor's checker before ordering.")
+
+# --- Download -------------------------------------------------------------- #
+with tabs[7]:
     st.markdown("Export the full results table, including every region sequence, "
                 "custom feature and flag.")
     st.download_button("Results (CSV)", df.to_csv(index=False),
@@ -454,8 +556,10 @@ with tabs[6]:
         "seconds, so it is generated on demand.")
 
     if st.button("Build PDF report", type="secondary"):
-        figures = {"Secondary structure": fig_ss, "Charge": fig_charge,
+        figures = {"Secondary structure composition": fig_ss, "Charge": fig_charge,
                    "Charge and hydropathy profiles": fig_prof}
+        for cf_name, cf_fig in cf_figs.items():
+            figures[f"Predicted secondary structure — {cf_name}"] = cf_fig
         if len(sequences) >= 2:
             try:
                 with tempfile.TemporaryDirectory() as tmp:

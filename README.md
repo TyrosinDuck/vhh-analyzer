@@ -134,14 +134,22 @@ A feature that raises returns `NaN` rather than breaking the run.
 | Tab | Contents |
 |---|---|
 | Properties | physico-chemical descriptors, developability flags, custom features |
-| Plots | secondary-structure composition, titration curves, per-residue profiles |
+| Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | CDR / Framework | region table, coloured sequences, both annotation methods explained |
 | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
 | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
 | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
+| DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
 | Download | CSV, figures as PNG, and a complete PDF report |
 
-Two of these deserve a word of caution. The **hallmark score** is indicative: IMGT 49
+Three of these deserve a word of caution. The **Chou–Fasman plot** is a
+composition-based heuristic, roughly 50–60% accurate: it shows where the sequence
+tends towards each conformation, it does not predict the fold. The **DNA optimiser**
+maximises codon frequency, balances GC and removes cloning-unfriendly motifs, but it
+does not model mRNA secondary structure near the ribosome binding site, codon-pair
+bias or tRNA availability — run its output through your synthesis vendor's checker
+before ordering. Every back-translation is verified by translating it back and
+comparing to the input. The **hallmark score** is indicative: IMGT 49
 is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs sit
 between the two profiles. **Germline identity** measures similarity to the closest
 germline gene — it is a first-pass humanness indicator, not an immunogenicity

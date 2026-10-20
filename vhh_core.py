@@ -45,6 +45,7 @@ __all__ = [
 DEFAULTS = {
     "ph": 7.4,                 # pH used for net-charge calculations
     "profile_window": 9,       # sliding window for per-residue profiles
+    "chou_fasman_window": 5,   # sliding window for the Chou-Fasman profile
     "annotation_method": "auto",  # "auto" | "anarci" | "regex"
     "max_sequences": 50,       # guard rail for the web front-end
     "max_length": 400,         # a VHH is ~110-135 aa; reject obvious non-VHH input
@@ -1103,3 +1104,243 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
 
     doc.build(story)
     return path
+
+
+# --------------------------------------------------------------------------- #
+# Chou-Fasman secondary structure profile
+# --------------------------------------------------------------------------- #
+
+# Chou & Fasman (1978) conformational parameters: helix and sheet propensities.
+# A value above 100 means the residue is found in that conformation more often
+# than expected by chance.
+CHOU_FASMAN = {
+    "A": (142, 83), "R": (98, 93), "N": (67, 89), "D": (101, 54), "C": (70, 119),
+    "Q": (111, 110), "E": (151, 37), "G": (57, 75), "H": (100, 87), "I": (108, 160),
+    "L": (121, 130), "K": (114, 74), "M": (145, 105), "F": (113, 138), "P": (57, 55),
+    "S": (77, 75), "T": (83, 119), "W": (108, 137), "Y": (69, 147), "V": (106, 170),
+}
+
+
+def chou_fasman_profile(seq: str, window: int = 5) -> dict:
+    """Per-residue helix and sheet propensities, plus a predicted state track.
+
+    The state at each position is helix (H) when the smoothed helix propensity
+    exceeds both the sheet propensity and 100, sheet (E) in the mirror case, and
+    coil (C) otherwise. This is the classic Chou–Fasman heuristic, which is
+    roughly 50–60% accurate: it shows where the sequence *tends* towards each
+    conformation, it does not predict the fold. For real secondary structure,
+    run DSSP on a model.
+    """
+    seq = clean_sequence(seq)
+    helix = sliding(np.array([CHOU_FASMAN[a][0] for a in seq], float), window)
+    sheet = sliding(np.array([CHOU_FASMAN[a][1] for a in seq], float), window)
+    state = np.where((helix > sheet) & (helix > 100), "H",
+                     np.where((sheet > helix) & (sheet > 100), "E", "C"))
+    counts = {s: int((state == s).sum()) for s in "HEC"}
+    return {"helix": helix, "sheet": sheet, "state": state,
+            "counts": counts, "window": window,
+            "fractions": {s: round(counts[s] / len(seq), 3) for s in "HEC"}}
+
+
+STATE_COLORS = {"H": "#c44e52", "E": "#4c72b0", "C": "#d9d9d9"}
+STATE_NAMES = {"H": "Helix", "E": "Sheet", "C": "Coil"}
+
+
+def plot_chou_fasman(seq: str, name: str = "", window: int = 5,
+                     annotation: dict | None = None):
+    """Chou–Fasman propensity curves with a predicted-state track underneath."""
+    prof = chou_fasman_profile(seq, window)
+    x = np.arange(1, len(seq) + 1)
+
+    fig, (ax, ax_track) = plt.subplots(
+        2, 1, figsize=(12, 4.4), sharex=True,
+        gridspec_kw={"height_ratios": [5, 1], "hspace": 0.12})
+
+    ax.plot(x, prof["helix"], color=STATE_COLORS["H"], lw=1.4,
+            label=f"Helix propensity (Chou–Fasman, w={window})")
+    ax.plot(x, prof["sheet"], color=STATE_COLORS["E"], lw=1.4,
+            label=f"Sheet propensity (Chou–Fasman, w={window})")
+    ax.axhline(100, color="#555555", lw=0.8, ls="--")
+    ax.set_ylabel("Propensity")
+    title = "Predicted secondary structure (Chou–Fasman heuristic)"
+    ax.set_title(f"{title} — {name}" if name else title, fontsize=11)
+
+    for i, s in enumerate(prof["state"]):
+        ax_track.axvspan(i + 0.5, i + 1.5, color=STATE_COLORS[s], lw=0)
+    ax_track.set_yticks([])
+    ax_track.set_ylabel("Predicted", fontsize=8, rotation=0,
+                        ha="right", va="center")
+    ax_track.set_xlabel("Residue position")
+    ax_track.set_xlim(0.5, len(seq) + 0.5)
+    for spine in ax_track.spines.values():
+        spine.set_visible(True)
+
+    if annotation:
+        for region in ("CDR1", "CDR2", "CDR3"):
+            r = annotation.get(region)
+            if r and r["start"]:
+                ax.axvspan(r["start"], r["end"], color=REGION_COLORS[region],
+                           alpha=0.12, lw=0)
+                lo, hi = ax.get_ylim()
+                ax.text((r["start"] + r["end"]) / 2, hi - 0.03 * (hi - lo),
+                        region, ha="center", va="top", fontsize=7,
+                        color=REGION_COLORS[region], fontweight="bold")
+
+    # One figure-level legend for the predicted-state track, below everything.
+    # tight_layout cannot place it, so the margins are set explicitly.
+    # One figure-level legend for both the curves and the track, so nothing
+    # overlaps the CDR labels inside the axes.
+    line_handles, line_labels = ax.get_legend_handles_labels()
+    patches = [plt.Rectangle((0, 0), 1, 1, color=STATE_COLORS[s]) for s in "HEC"]
+    fig.legend(line_handles + patches,
+               line_labels + [f"Predicted {STATE_NAMES[s].lower()}" for s in "HEC"],
+               ncol=5, fontsize=7.5, frameon=False, loc="lower center",
+               bbox_to_anchor=(0.5, -0.02))
+    fig.subplots_adjust(top=0.90, bottom=0.22, left=0.08, right=0.98)
+    return fig
+
+
+# --------------------------------------------------------------------------- #
+# Reverse translation (E. coli codon optimisation)
+# --------------------------------------------------------------------------- #
+
+# Relative synonymous codon usage in E. coli K-12, highly expressed genes,
+# ordered from most to least preferred. Rare codons (AGG/AGA, CTA, ATA, CGA)
+# are kept at the end of their list so they are only used as a last resort when
+# a forbidden site has to be broken.
+ECOLI_CODONS = {
+    "A": ["GCG", "GCC", "GCA", "GCT"], "R": ["CGT", "CGC", "CGG", "CGA"],
+    "N": ["AAC", "AAT"], "D": ["GAT", "GAC"], "C": ["TGC", "TGT"],
+    "Q": ["CAG", "CAA"], "E": ["GAA", "GAG"], "G": ["GGC", "GGT", "GGG", "GGA"],
+    "H": ["CAT", "CAC"], "I": ["ATC", "ATT", "ATA"],
+    "L": ["CTG", "TTA", "CTT", "CTC", "TTG", "CTA"], "K": ["AAA", "AAG"],
+    "M": ["ATG"], "F": ["TTT", "TTC"], "P": ["CCG", "CCA", "CCT", "CCC"],
+    "S": ["AGC", "TCT", "TCC", "AGT", "TCG", "TCA"],
+    "T": ["ACC", "ACG", "ACT", "ACA"], "W": ["TGG"], "Y": ["TAT", "TAC"],
+    "V": ["GTG", "GTT", "GTC", "GTA"],
+}
+
+# Restriction sites commonly used for cloning, avoided by default
+DEFAULT_AVOID_SITES = {
+    "NdeI": "CATATG", "XhoI": "CTCGAG", "EcoRI": "GAATTC", "BamHI": "GGATCC",
+    "HindIII": "AAGCTT", "NcoI": "CCATGG", "NotI": "GCGGCCGC", "SalI": "GTCGAC",
+    "BsaI": "GGTCTC", "BsmBI": "CGTCTC", "SapI": "GCTCTTC",
+}
+
+
+def _violations(dna: str, sites: dict[str, str], max_run: int) -> list[tuple[int, str]]:
+    """(position, label) of every forbidden site or homopolymer run in a sequence."""
+    found = []
+    for label, site in sites.items():
+        for m in re.finditer(f"(?=({site}))", dna):
+            found.append((m.start(), label))
+        rc = site.translate(str.maketrans("ACGT", "TGCA"))[::-1]
+        if rc != site:
+            for m in re.finditer(f"(?=({rc}))", dna):
+                found.append((m.start(), f"{label} (reverse)"))
+    for m in re.finditer(r"(A{%d,}|C{%d,}|G{%d,}|T{%d,})" % ((max_run + 1,) * 4), dna):
+        found.append((m.start(), f"{len(m.group(1))}-nt homopolymer"))
+    return found
+
+
+def _gc(seq: str) -> float:
+    return (seq.count("G") + seq.count("C")) / len(seq) if seq else 0.0
+
+
+def reverse_translate(protein: str, avoid_sites: dict[str, str] | None = None,
+                      max_homopolymer: int = 6, add_stop: bool = True,
+                      stop_codon: str = "TAA", gc_max: float = 0.60,
+                      gc_min: float = 0.40) -> dict:
+    """Back-translate a protein into E. coli codon-optimised DNA.
+
+    Each residue first takes the most frequent E. coli codon; the sequence is
+    then repaired where it contains a forbidden restriction site or a long
+    homopolymer run, by swapping the offending codon for the next synonymous
+    one. Returns the DNA plus a report of what was changed and what remains.
+
+    This is a first-pass optimiser: it maximises codon frequency and removes
+    cloning-unfriendly motifs. It does not model mRNA secondary structure near
+    the ribosome binding site, codon-pair bias or tRNA availability, so for a
+    construct that matters, run the output through your synthesis vendor's own
+    checker before ordering.
+    """
+    protein = clean_sequence(protein)
+    sites = DEFAULT_AVOID_SITES if avoid_sites is None else avoid_sites
+
+    codons = [ECOLI_CODONS[aa][0] for aa in protein]
+    repairs = []
+
+    for _ in range(12):                                   # bounded repair passes
+        dna = "".join(codons)
+        problems = _violations(dna, sites, max_homopolymer)
+        if not problems:
+            break
+        pos, label = problems[0]
+        fixed = False
+        # try every codon overlapping the offending position, nearest first
+        for idx in range(max(0, pos // 3 - 1), min(len(codons), pos // 3 + 3)):
+            aa = protein[idx]
+            for alt in ECOLI_CODONS[aa][1:]:
+                trial = codons.copy()
+                trial[idx] = alt
+                if len(_violations("".join(trial), sites, max_homopolymer)) < len(problems):
+                    repairs.append({"position_aa": idx + 1, "residue": aa,
+                                    "from": codons[idx], "to": alt, "reason": label})
+                    codons = trial
+                    fixed = True
+                    break
+            if fixed:
+                break
+        if not fixed:
+            break
+
+    # Codon-frequency optimisation alone pushes GC high, because the preferred
+    # E. coli codons are GC-rich (GCG, CTG, CGT...). Synthesis vendors flag
+    # sequences above ~60%, so trade a little codon frequency for GC balance by
+    # swapping in the next-best synonymous codon where it helps.
+    gc_swaps = 0
+    for _ in range(len(codons)):
+        dna_now = "".join(codons)
+        current = _gc(dna_now)
+        if gc_min <= current <= gc_max:
+            break
+        lowering = current > gc_max
+        best = None
+        for idx, aa in enumerate(protein):
+            for alt in ECOLI_CODONS[aa][1:3]:
+                delta = _gc(alt) - _gc(codons[idx])
+                if (lowering and delta < 0) or (not lowering and delta > 0):
+                    trial = codons.copy()
+                    trial[idx] = alt
+                    if _violations("".join(trial), sites, max_homopolymer):
+                        continue
+                    gain = abs(delta)
+                    if best is None or gain > best[0]:
+                        best = (gain, idx, alt)
+        if best is None:
+            break
+        _g, idx, alt = best
+        codons[idx] = alt
+        gc_swaps += 1
+
+    dna = "".join(codons) + (stop_codon if add_stop else "")
+    remaining = _violations(dna, sites, max_homopolymer)
+    gc = 100 * (dna.count("G") + dna.count("C")) / len(dna)
+
+    return {
+        "dna": dna,
+        "length_nt": len(dna),
+        "gc_percent": round(gc, 1),
+        "repairs": repairs,
+        "gc_swaps": gc_swaps,
+        "remaining_issues": sorted({label for _p, label in remaining}),
+        "sites_checked": sorted(sites),
+        "stop_codon": stop_codon if add_stop else None,
+    }
+
+
+def translate_dna(dna: str) -> str:
+    """Translate DNA back to protein — used to verify a back-translation."""
+    from Bio.Seq import Seq
+
+    return str(Seq(dna).translate(to_stop=True))
