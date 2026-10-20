@@ -146,45 +146,47 @@ A feature that raises returns `NaN` rather than breaking the run.
 
 ## In-silico cloning
 
-Five vectors ship with the app (pMECS, pMES3, pMES4, pHEN6, pHEN25) as SnapGene
-files in `data/plasmids/`, and you can upload your own in SnapGene, GenBank or FASTA.
-The app infers the cloning window between the PelB leader and the first tag, then
-ranks restriction enzymes: a candidate cuts the backbone exactly once, inside that
-window, and does not cut the insert. Enzymes that do cut the insert are still listed
-with their position — in VHH cloning that is sometimes by design, BstEII having its
-site in FR4.
+One screen, three steps: pick the recipient vector, paste the donor DNA, read the
+plan.
 
-The flow is split into sub-tabs: **Insert & PCR**, **Enzymes**, **Construct**,
-**Primers**, **Map**.
+Five vectors ship with the app (pMECS, pMES3, pMES4, pHEN6, pHEN25) in
+`data/plasmids/`; you can upload your own in SnapGene, GenBank or FASTA. The donor is
+either a whole plasmid carrying the VHH — the app then finds the domain, picks the
+primer pair that brackets it and amplifies it in silico — or a fragment already
+amplified with primers, which must carry the restriction sites those primers added. A
+bare coding sequence cannot be cloned by restriction, and the app says so rather than
+failing quietly.
 
-**Insert & PCR** — the insert can be amplified in silico from a donor plasmid, taken
-from the loaded sequences, or pasted. The PCR finds where each primer's 3' end
-anneals, allowing a 5' tail, so a primer that adds a restriction site produces a
-product carrying it. Only primers with a site in that donor are offered, split by the
-direction they would extend.
+The insert always lands between the end of the signal peptide and the first tag.
+Every candidate enzyme pair is actually cut, joined and translated, then the VHH the
+construct encodes is compared with the VHH in the donor. A pair is only recommended
+when the protein survives unchanged *and* nothing annotated in the vector is deleted —
+HindIII + BstEII translates perfectly on pMES3 while removing 120 bp that include the
+PelB leader, so it is rejected.
 
-**Enzymes** — pairs are not merely ranked by cut position: each candidate pair is
-actually cut, joined and translated, and the resulting cassette is read back with the
-same extractor the Sanger section uses. A pair that cuts in the right places but
-leaves the VHH out of frame with the tags is rejected here rather than at the bench.
-On the bundled vectors with a VHH amplicon, PstI + BstEII comes out on top, which is
-the classic nanobody strategy.
+Among the pairs that pass, the one disturbing the vector least is recommended, which
+on these vectors is PstI + BstEII.
 
-There is deliberately no "insert length must be a multiple of 3" check: an empty
-phage-display vector carries a stuffer, so its downstream tag is usually out of frame
-with the leader until a correctly sized VHH is cloned in. Translating the finished
-construct is the only check that means anything.
+Three things worth knowing about the protein check:
 
-**Construct** — the verified construct downloads as GenBank, annotated with the
-insert and the cassette parts, so SnapGene or Benchling opens it ready to read, plus
-a protocol summary.
+- A fragment amplified with primers starts at the 5' restriction site, a few codons
+  into FR1, so the first residues of the cloned VHH necessarily come from the
+  recipient. The app reports this as *donor part preserved* and names the residues
+  added, rather than calling it a mismatch.
+- The vectors do not all start the domain the same way: **pMECS begins QVQLQ and
+  pHEN25 begins EVQLQ**. Moving a VHH from pMECS into pHEN25 through PstI therefore
+  changes residue 1, and that pair is rejected — NcoI + BstEII is proposed instead,
+  because its site sits upstream of the difference.
+- There is deliberately no "insert length must be a multiple of 3" test. An empty
+  phage-display vector carries a stuffer, so its downstream tag is usually out of
+  frame with the leader until a correctly sized VHH is cloned in. Translating the
+  finished construct is the only check that means anything.
 
-Primers live in `data/primers.csv` (or upload your own CSV with `name,sequence`).
-Only the primers with an exact binding site in the selected vector are offered; the
-others are listed as not applicable, because a primer that does not bind is usually a
-property of the vector rather than a mistake — pHEN6 has no gIII for a gIII primer to
-sit in. Orientation is reported explicitly: a primer downstream of the insert reads
-back into it only when used as its reverse complement.
+The verified construct downloads as GenBank, annotated with the insert and the
+cassette parts, plus a protocol summary. Primers live in `data/primers.csv` (or upload
+your own CSV with `name,sequence`); each is tried as written and as its reverse
+complement, because a primer is often noted as the plus-strand sequence of its target
+rather than as the oligo that primes back towards the insert.
 
 ## Sanger (.ab1) workflow
 

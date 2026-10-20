@@ -514,7 +514,11 @@ def primer_report(plasmid: dict, primers: pd.DataFrame) -> pd.DataFrame:
 # Insertion region and enzyme choice
 # --------------------------------------------------------------------------- #
 
-TAG_LABELS = ("his", "ha", "myc", "flag", "strep", "nb back", "tag")
+# Labels that mark the start of the tag region, i.e. the 3' end of the cloning
+# window. "Nb back" is deliberately absent: in pHEN6 it names a pseudo-nanobody
+# fragment used as a cloning stuffer, not a tag, and treating it as one cuts the
+# window short and hides the enzymes that sit just after it.
+TAG_LABELS = ("his", "ha", "myc", "flag", "strep", "tag")
 
 
 def insertion_region(plasmid: dict, features: pd.DataFrame | None = None
@@ -907,3 +911,243 @@ def record_to_genbank(record: SeqRecord) -> str:
     handle = io.StringIO()
     SeqIO.write(record, handle, "genbank")
     return handle.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# One-call cloning planner
+# --------------------------------------------------------------------------- #
+
+def extract_vhh_protein(dna: str, circular: bool = False) -> dict:
+    """Find the VHH domain encoded by a piece of DNA, plasmid or bare fragment.
+
+    Works without a leader: the domain is recognised by its own FR1/FR2/FR4
+    signatures in any of the six frames. A bare PCR product usually starts at the
+    5' restriction site, a few codons into FR1, so the protein returned can be
+    slightly shorter at the N-terminus than the domain in a full plasmid — which
+    is exactly what ``compare_vhh`` accounts for.
+    """
+    record = SeqRecord(Seq(re.sub(r"[^ACGTacgt]", "", dna.upper())),
+                       id="x", annotations={"molecule_type": "DNA"})
+    if len(record.seq) < 60:
+        return {"protein": "", "start": None, "end": None, "strand": None,
+                "note": "sequence too short to contain a VHH"}
+    hits = [h for h in detect_motifs(record, circular=circular) if h["kind"] == "vhh"]
+    if not hits:
+        return {"protein": "", "start": None, "end": None, "strand": None,
+                "note": "no VHH scaffold found (FR1/FR2/FR4 signatures absent)"}
+    best = max(hits, key=lambda h: len(h["protein"]))
+    return {"protein": best["protein"], "start": best["start"], "end": best["end"],
+            "strand": best["strand"],
+            "note": f"{len(hits)} scaffold hit(s); longest kept"}
+
+
+def compare_vhh(donor_protein: str, construct_protein: str) -> dict:
+    """Compare the VHH before and after cloning, and say precisely how they differ.
+
+    Three outcomes:
+
+    * **identical** — the construct encodes exactly the donor's domain;
+    * **donor part preserved** — the construct carries extra N-terminal residues
+      that the recipient vector contributes. A bare PCR product starts at the 5'
+      restriction site, so the first few codons of FR1 necessarily come from the
+      recipient; as long as the construct ends with the donor's sequence and
+      starts on a valid FR1, nothing of the donor was altered;
+    * **changed** — a real difference, reported position by position.
+    """
+    d, c = donor_protein or "", construct_protein or ""
+    if not d or not c:
+        return {"status": "unknown", "ok": False, "differences": [],
+                "message": "one of the two sequences could not be read"}
+    if d == c:
+        return {"status": "identical", "ok": True, "differences": [],
+                "from_recipient": "",
+                "message": "the construct encodes exactly the donor's VHH"}
+    if c.endswith(d):
+        prefix = c[: len(c) - len(d)]
+        valid_fr1 = bool(VHH_FR1_RE.match(c[:5]))
+        return {
+            "status": "donor part preserved", "ok": valid_fr1, "differences": [],
+            "from_recipient": prefix,
+            "message": (
+                f"the construct adds {len(prefix)} N-terminal residue(s) "
+                f"({prefix}) that come from the recipient vector, upstream of the "
+                "5' restriction site; everything the donor encodes is unchanged"
+                + ("" if valid_fr1 else
+                   " — but the result does not start on a recognisable FR1, so "
+                   "check for a spacer between the leader and the domain")),
+        }
+    diffs = [{"position": i + 1, "donor": a, "construct": b}
+             for i, (a, b) in enumerate(zip(d, c)) if a != b][:25]
+    return {"status": "changed", "ok": False, "differences": diffs,
+            "from_recipient": "",
+            "message": (f"the VHH differs: {len(d)} aa in the donor against {len(c)} "
+                        f"aa in the construct, {len(diffs)} substitution(s) listed")}
+
+
+def auto_primer_pair(donor: SeqRecord, primers: pd.DataFrame,
+                     vhh_start: int, vhh_end: int, circular: bool = True) -> dict:
+    """Pick the primer pair that brackets the VHH on a donor plasmid.
+
+    Each primer is tried as written and as its reverse complement, because a
+    primer is often noted as the plus-strand sequence of its target rather than
+    as the oligo that primes back towards the insert. The shortest bracketing
+    product wins.
+    """
+    candidates = []
+    for _, row in primers.iterrows():
+        for seq_, form in ((row["sequence"], "as written"),
+                           (str(Seq(row["sequence"]).reverse_complement()),
+                            "reverse complement")):
+            for hit in primer_sites(donor, seq_, circular):
+                candidates.append({"name": row["name"], "form": form,
+                                   "sequence": seq_, **hit})
+
+    forwards = [c for c in candidates
+                if c["orientation"] == "forward" and c["end"] < vhh_start]
+    reverses = [c for c in candidates
+                if c["orientation"] == "reverse" and c["start"] > vhh_end]
+    best = None
+    for f in forwards:
+        for r in reverses:
+            size = r["end"] - f["start"] + 1
+            if size <= 0:
+                continue
+            if best is None or size < best["length"]:
+                best = {"forward": f, "reverse": r, "length": size}
+    return {"pair": best, "candidates": candidates,
+            "n_forward": len(forwards), "n_reverse": len(reverses)}
+
+
+DEFAULT_ENZYMES = ("PstI", "NotI", "BstEII", "NcoI", "SfiI", "XbaI", "EcoRI",
+                   "HindIII", "BamHI", "XhoI", "SalI", "NdeI", "KpnI", "SacI",
+                   "SpeI", "ApaLI", "AscI", "AgeI", "NheI", "EagI", "ApaI", "SmaI")
+
+
+def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
+                 primers: pd.DataFrame | None = None,
+                 enzymes: tuple[str, ...] | None = None,
+                 layout: str = "pMES3") -> dict:
+    """Plan the whole cloning in one call.
+
+    Reads the VHH out of the donor, amplifies it when the donor is a plasmid,
+    tries every enzyme pair that could open the recipient between its leader and
+    its tags, and keeps only the pairs whose construct encodes the donor's VHH
+    unchanged. Returns everything needed to show the result and the reason for
+    every rejection.
+    """
+    enzymes = enzymes or DEFAULT_ENZYMES
+    primers = cl_primers = (primers if primers is not None else load_primers())
+    donor_dna = re.sub(r"[^ACGTacgt]", "", (donor_dna or "").upper())
+
+    out = {"ok": False, "stage": "donor", "messages": [], "donor_vhh": "",
+           "amplicon": "", "primer_pair": None, "candidates": pd.DataFrame(),
+           "plans": [], "region": None}
+
+    if not donor_dna:
+        out["messages"].append("no donor DNA provided")
+        return out
+
+    # ---- 1. the VHH in the donor ----
+    found = extract_vhh_protein(donor_dna, circular=donor_is_plasmid)
+    if not found["protein"]:
+        out["messages"].append(f"donor: {found['note']}")
+        return out
+    out["donor_vhh"] = found["protein"]
+    out["donor_vhh_position"] = (found["start"], found["end"])
+
+    # ---- 2. the fragment to clone ----
+    insert = donor_dna
+    if donor_is_plasmid:
+        record = SeqRecord(Seq(donor_dna), id="donor",
+                           annotations={"molecule_type": "DNA",
+                                        "topology": "circular"})
+        chosen = auto_primer_pair(record, primers, found["start"], found["end"])
+        out["primer_candidates"] = chosen["candidates"]
+        if not chosen["pair"]:
+            out["stage"] = "primers"
+            out["messages"].append(
+                "no primer pair brackets the VHH in this donor — "
+                f"{chosen['n_forward']} usable forward and {chosen['n_reverse']} "
+                "usable reverse site(s) found")
+            return out
+        pair = chosen["pair"]
+        pcr = simulate_pcr(record, pair["forward"]["sequence"],
+                           pair["reverse"]["sequence"], circular=True)
+        if not pcr["product"]:
+            out["stage"] = "pcr"
+            out["messages"].extend(pcr["warnings"] or ["the PCR gave no product"])
+            return out
+        insert = pcr["product"]
+        out["primer_pair"] = pair
+        out["pcr"] = pcr
+    out["amplicon"] = insert
+
+    # ---- 3. where the insert must land ----
+    features = feature_table(recipient)
+    region = insertion_region(recipient, features)
+    if not region:
+        out["stage"] = "region"
+        out["messages"].append(
+            "could not locate the window between the leader and the first tag in "
+            "the recipient")
+        return out
+    out["region"] = region
+
+    # ---- 4. enzymes, assembly, and the protein check ----
+    circular = recipient["topology"] == "circular"
+    cand = recommend_enzymes(recipient["record"], insert, region,
+                             enzymes=list(enzymes), circular=circular)
+    out["candidates"] = cand
+    # A fragment can only be cloned by restriction if at least two enzymes cut
+    # both it and the recipient inside the window. Saying which of the two is
+    # missing is what tells the user whether to change primers or change vector.
+    cuts_insert = cand[cand["insert_cuts"] > 0]
+    opens_vector = cand[(cand["backbone_cuts"] == 1) & cand["in_region"]]
+    shared = set(cuts_insert["enzyme"]) & set(opens_vector["enzyme"])
+    if len(shared) < 2:
+        out["stage"] = "sites"
+        if cuts_insert.empty:
+            out["messages"].append(
+                "the donor fragment carries none of the restriction sites "
+                "considered — a fragment amplified with plain primers cannot be "
+                "cloned this way, it needs primers whose 5' tails add the sites")
+        else:
+            out["messages"].append(
+                "the donor fragment and the recipient share fewer than two usable "
+                "sites (shared: " + (", ".join(sorted(shared)) or "none") + ") — "
+                "amplify with primers carrying tails that add sites the recipient "
+                "also has, or pick another recipient")
+        return out
+
+    pairs = evaluate_pairs(recipient["record"], insert, cand, layout=layout,
+                           circular=circular)
+    plans = []
+    for _, row in pairs.iterrows():
+        after = verify_construct(row["construct"], layout)
+        comparison = compare_vhh(found["protein"], after["vhh_aa"])
+        p5 = cand.loc[cand["enzyme"] == row["enzyme_5"], "position"].iloc[0]
+        p3 = cand.loc[cand["enzyme"] == row["enzyme_3"], "position"].iloc[0]
+        # A pair that cuts far apart also deletes whatever the recipient has
+        # between the two sites. The cassette can still translate while the
+        # promoter or the ribosome binding site is gone, so name what is lost.
+        lost = [str(f["feature"]) for _, f in features.iterrows()
+                if f["start"] >= p5 and f["end"] <= p3
+                and not str(f["feature"]).lower().startswith(("nb ", "insertion"))]
+        plans.append({**row.to_dict(), "construct_vhh": after["vhh_aa"],
+                      "comparison": comparison,
+                      "protein_ok": comparison["ok"],
+                      "deletes": lost,
+                      "usable": bool(row["cassette_ok"] and comparison["ok"]
+                                     and not lost)})
+    # Rank by: works at all, then an exact protein match, then the pair that
+    # disturbs the recipient least — which is what a cloner would pick by hand.
+    plans.sort(key=lambda p: (not p["usable"],
+                              p["comparison"]["status"] != "identical",
+                              p["removed_bp"]))
+    out["plans"] = plans
+    out["ok"] = any(p["usable"] for p in plans)
+    out["stage"] = "done"
+    if not out["ok"]:
+        out["messages"].append(
+            "no enzyme pair gives a construct that preserves the donor's VHH")
+    return out
