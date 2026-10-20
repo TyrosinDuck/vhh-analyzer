@@ -1,9 +1,12 @@
 """
 VHH Analyzer — Streamlit front-end for vhh_core.
 
-Nothing submitted here is written to disk or logged: sequences are analysed in
-memory and discarded when the session ends. All analysis logic lives in
-vhh_core.py, which the Jupyter notebook imports as well.
+Data handling: submitted sequences are never written to a persistent file, logged
+or sent to a third party. They are processed in the server's memory. The result
+cache is deliberately short-lived (see CACHE_TTL) and the alignment step writes a
+temporary FASTA that is deleted as soon as the figure is rendered.
+
+All analysis logic lives in vhh_core.py, which the Jupyter notebook imports too.
 
 Run locally:   streamlit run app.py
 """
@@ -58,14 +61,25 @@ def anarci_status() -> bool:
     return vc.anarci_available()
 
 
-@st.cache_data(show_spinner=False)
-def run_analysis(seqs: dict[str, str], ph: float, method: str):
-    """Cache results per (sequences, settings) so re-renders are instant.
+# How long a result may stay in the in-memory cache, and how many results are
+# kept at once. The cache makes moving a sidebar slider instant instead of
+# re-running the whole analysis, but it is shared by the whole server process,
+# so it is kept deliberately small and short-lived. Set CACHE_TTL = 0 to switch
+# caching off entirely: the app then recomputes on every interaction, which
+# costs well under a second for a handful of sequences.
+CACHE_TTL = 600        # seconds
+CACHE_MAX_ENTRIES = 8
 
-    The cache lives in the server process memory and is keyed on the input; it
-    is not a database and nothing reaches the filesystem.
-    """
+
+def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
+
+
+if CACHE_TTL:
+    run_analysis = st.cache_data(
+        show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)(_analyze)
+else:
+    run_analysis = _analyze
 
 
 def fig_to_png(fig) -> bytes:
@@ -96,9 +110,21 @@ with st.sidebar:
         f"ANARCI: {'available' if has_anarci else 'not installed — regex anchors only'}")
 
     st.divider()
-    st.caption(
-        "**Privacy** — sequences are processed in memory and never stored, "
-        "logged or sent to a third party. Close the tab and nothing remains.")
+    with st.expander("🔒 How your sequences are handled"):
+        st.markdown(f"""
+Sequences are **never written to a persistent file, logged, or sent to a third
+party**. They are processed in the server's memory and the results are kept in a
+short-lived cache ({CACHE_TTL // 60} min, {CACHE_MAX_ENTRIES} entries max) that
+only exists to make the sidebar controls responsive.
+
+This app runs on Streamlit Community Cloud, i.e. on third-party infrastructure.
+Traffic is encrypted, nothing is stored — but the data does pass through a server
+that is not yours.
+
+**For confidential or unpublished sequences**, run the app on your own machine
+instead. The code is open source: clone the repository, `pip install -r
+requirements.txt`, `streamlit run app.py`, and nothing ever leaves your computer.
+""")
     st.caption(
         "All values are theoretical, derived from the sequence alone. "
         "Confirm pI and extinction coefficient experimentally before relying on them.")
@@ -278,6 +304,8 @@ with tabs[3]:
         st.info("Submit at least two sequences to see an alignment.")
     else:
         with st.spinner("Aligning…"):
+            # pymsaviz reads from a path, so the aligned FASTA is written to a
+            # temporary directory that is removed as soon as the figure exists.
             with tempfile.TemporaryDirectory() as tmp:
                 fig_msa, aln_path = vc.plot_msa(sequences, annotations, workdir=tmp)
                 aln_text = aln_path.read_text()
@@ -305,4 +333,5 @@ with tabs[4]:
 
 st.divider()
 st.caption("Built on Biopython (ProtParam), ANARCI, FAMSA and pymsaviz. "
-           "Theoretical predictions — validate experimentally.")
+           "Theoretical predictions — validate experimentally. "
+           "Sequences are not stored; for confidential work, run the app locally.")

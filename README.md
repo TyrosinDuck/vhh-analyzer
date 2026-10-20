@@ -91,10 +91,21 @@ location / {
 
 ## Data handling
 
-Submitted sequences are **not stored, logged or sent anywhere**. They are parsed into
-memory, analysed, and discarded when the session ends. `@st.cache_data` keeps results
-in the server process memory keyed on the input, which speeds up re-renders; it is not
-a database and never touches the filesystem.
+Submitted sequences are **not stored in any persistent file, not logged, and not sent
+to a third party**. They are parsed into memory and analysed there. Precisely:
+
+- **Result cache** — `@st.cache_data` keeps results in the server process memory, keyed
+  on the input. It is shared by the whole process rather than per session, so it is
+  capped at 8 entries and 10 minutes (`CACHE_TTL` / `CACHE_MAX_ENTRIES` in `app.py`).
+  Set `CACHE_TTL = 0` to disable caching entirely; the analysis takes well under a
+  second, so the only cost is slightly less snappy sidebar controls.
+- **Alignment** — `pymsaviz` reads from a path, so the aligned FASTA is written to a
+  `TemporaryDirectory` that is deleted as soon as the figure is rendered.
+- **Uploads** — handled in memory by Streamlit, never written to disk by this app.
+- **Hosting** — on Community Cloud the app runs on third-party infrastructure. Traffic
+  is encrypted and nothing is stored, but the data does transit a server you do not own.
+  The sidebar says so explicitly, and points users at running the app locally for
+  confidential sequences.
 
 This is deliberate. People will paste unpublished VHH sequences into this form, and
 persisting them would mean holding other labs' intellectual property on your server.
