@@ -36,7 +36,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1845"
+VERSION = "20261020.1915"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -294,7 +294,27 @@ with st.expander("🧬 Extract VHH sequences from Sanger .ab1 files", expanded=F
                                  "tags_found", "tags_missing", "premature_stops",
                                  "n_copies", "duplicate_of", "warnings"]
                      if c in sanger_df.columns]
-        st.dataframe(sanger_df[show_cols], hide_index=True, **FIT)
+        st.dataframe(
+            sanger_df[show_cols], hide_index=True, **FIT,
+            column_config={
+                "warnings": st.column_config.TextColumn("Warnings", width="large"),
+                "mean_phred_trim": st.column_config.NumberColumn("Mean Q", format="%.1f"),
+                "trimmed_len": st.column_config.NumberColumn("Trimmed (nt)"),
+                "vhh_len": st.column_config.NumberColumn("VHH (aa)"),
+                "duplicate_of": st.column_config.TextColumn("Duplicate of"),
+            })
+        st.caption("Drag a column edge to widen it, or use the fullscreen button at the "
+                   "top right of the table.")
+
+        flagged = sanger_df[sanger_df["warnings"].astype(bool)] \
+            if "warnings" in sanger_df.columns else sanger_df.iloc[0:0]
+        if len(flagged):
+            with st.expander(f"Warnings in full ({len(flagged)} read(s))", expanded=True):
+                for _, row in flagged.iterrows():
+                    st.markdown(f"**{row['read']}** — *{row['status']}*")
+                    for w in str(row["warnings"]).split("; "):
+                        if w:
+                            st.markdown(f"- {w}")
 
         if n_total - n_usable:
             st.caption("A failed read is not necessarily a failed clone: "
