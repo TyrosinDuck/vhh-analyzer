@@ -129,6 +129,27 @@ def _my_descriptor(seq, ctx):
 
 A feature that raises returns `NaN` rather than breaking the run.
 
+## Sanger (.ab1) workflow
+
+The panel under the input area takes the chromatograms from a screening run and turns
+them into sequences you can analyse:
+
+1. each read is quality-trimmed with Mott's algorithm (the one phred and Staden use);
+2. the PelB–VHH–tag cassette is located in **any strand and any reading frame**, so
+   forward and reverse reads are handled without being told which is which;
+3. the VHH protein and DNA sequences are extracted, with frameshifts, premature stops,
+   missing tags and truncated reads reported rather than silently returned;
+4. identical protein sequences are grouped, so the same colony picked twice shows up as
+   one sequence with a copy count;
+5. you pick the ones you want and send them straight to the analysis above.
+
+Supported vectors are pMES3 and pMECS — they differ only in which tags are expected
+after the VHH. Add one in `sanger.VECTORS`, taking the layout from the actual plasmid
+map: a wrong tag layout makes the app report missing tags on clones that are fine.
+
+Everything is downloadable: the full per-read table as CSV, and the extracted VHHs as
+protein or DNA FASTA.
+
 ## What the app reports
 
 | Tab | Contents |

@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
+import sanger as sg
 import vhh_core as vc
 
 EXAMPLE = """>NbExample1
@@ -35,7 +36,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1740"
+VERSION = "20261020.1845"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -112,6 +113,14 @@ if CACHE_TTL:
 else:
     run_analysis = _analyze
     analyze_one = _analyze_one
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=4)
+def process_ab1(payload: tuple, vector: str, cutoff: float, min_len: int,
+                min_phred: float):
+    """Parse and extract a batch of .ab1 uploads (cached on the file contents)."""
+    return sg.process_reads(list(payload), vector=vector, mott_cutoff=cutoff,
+                            min_trimmed_len=min_len, min_mean_phred=min_phred)
 
 
 def analyze_with_progress(seqs: dict[str, str], ph: float, method: str):
@@ -200,6 +209,12 @@ st.markdown(
     "Physico-chemical characterization, CDR/framework annotation and alignment "
     "of single-domain antibodies. Paste one or more sequences, in FASTA or raw form.")
 
+# A widget's state cannot be written after the widget exists, so anything that
+# wants to fill the text area (the Sanger panel below) parks its text here and
+# reruns; it is moved into place before the widget is created.
+if "pending_seq_text" in st.session_state:
+    st.session_state["seq_text"] = st.session_state.pop("pending_seq_text")
+
 st.session_state.setdefault("seq_text", "")
 
 col_in, col_act = st.columns([3, 1])
@@ -228,8 +243,117 @@ with col_in:
     st.button("Analyze", type="primary", **FIT)
     st.caption("Click Analyze, or press ⌘ + Enter (Ctrl + Enter on Windows/Linux).")
 
+# --- Sanger .ab1 panel ------------------------------------------------------ #
+with st.expander("🧬 Extract VHH sequences from Sanger .ab1 files", expanded=False):
+    st.markdown(
+        "Upload the chromatograms from a screening run. Each read is quality-trimmed, "
+        "then the PelB–VHH–tag cassette is located in any strand and reading frame, "
+        "and the VHH protein sequence is extracted. Pick the ones you want and send "
+        "them to the analysis above.")
+
+    ab1_files = st.file_uploader("Chromatograms (.ab1)", type=["ab1"],
+                                 accept_multiple_files=True, key="ab1_uploader")
+
+    opts = st.columns(4)
+    with opts[0]:
+        vector = st.selectbox("Vector", list(sg.VECTORS), index=0,
+                              help="Determines which tags are expected after the VHH.")
+    with opts[1]:
+        mott_cutoff = st.slider("Trim cutoff", 0.01, 0.20,
+                                sg.DEFAULTS["mott_cutoff"], 0.01,
+                                help="Mott algorithm error-probability cutoff. "
+                                     "Lower is stricter.")
+    with opts[2]:
+        min_len = st.number_input("Min trimmed length (nt)", 50, 800,
+                                  sg.DEFAULTS["min_trimmed_len"], 10)
+    with opts[3]:
+        min_phred = st.number_input("Min mean Phred", 5, 50,
+                                    sg.DEFAULTS["min_mean_phred"], 1)
+    st.caption(f"{vector} layout: " + " → ".join(sg.VECTORS[vector]["layout"]))
+
+    if ab1_files:
+        payload = tuple((f.name, f.getvalue()) for f in ab1_files)
+        bar = st.progress(0.0, text="Reading chromatograms…")
+        try:
+            sanger_df, reads = process_ab1(payload, vector, mott_cutoff,
+                                           int(min_len), float(min_phred))
+        finally:
+            bar.empty()
+
+        n_total = len(sanger_df)
+        n_usable = int(sanger_df["usable"].sum()) if "usable" in sanger_df else 0
+        n_unique = sanger_df[sanger_df["usable"]]["vhh_aa"].nunique() if n_usable else 0
+        cols_m = st.columns(4)
+        cols_m[0].metric("Reads", n_total)
+        cols_m[1].metric("VHH extracted", n_usable)
+        cols_m[2].metric("Unique sequences", n_unique)
+        cols_m[3].metric("Failed", n_total - n_usable)
+
+        show_cols = [c for c in ["read", "status", "qc_pass", "trimmed_len",
+                                 "mean_phred_trim", "strand", "frame", "vhh_len",
+                                 "tags_found", "tags_missing", "premature_stops",
+                                 "n_copies", "duplicate_of", "warnings"]
+                     if c in sanger_df.columns]
+        st.dataframe(sanger_df[show_cols], hide_index=True, **FIT)
+
+        if n_total - n_usable:
+            st.caption("A failed read is not necessarily a failed clone: "
+                       "'no FR4' usually means the read stopped before the end of the "
+                       "VHH, and a frameshift means PelB and FR4 sit in different "
+                       "reading frames, so an indel lies between them.")
+
+        if reads:
+            with st.expander("Quality traces"):
+                fig_q = sg.plot_quality(reads)
+                if fig_q:
+                    st.pyplot(fig_q, **FIT)
+                    st.caption("Blue is the window kept after trimming; the dashed "
+                               "line is Phred 20.")
+                plt.close("all")
+
+        usable_df = sanger_df[sanger_df["usable"]] if n_usable else sanger_df.iloc[0:0]
+        if n_usable:
+            st.subheader("Send to analysis")
+            unique_first = usable_df[usable_df["duplicate_of"] == ""]["read"].tolist()
+            chosen = st.multiselect(
+                "Sequences to analyse", usable_df["read"].tolist(),
+                default=unique_first,
+                help="Duplicates are left out by default — one entry per unique "
+                     "protein sequence.")
+            replace = st.checkbox("Replace what is currently in the text area",
+                                  value=True)
+            if st.button("Send selected to analysis", type="primary",
+                         disabled=not chosen):
+                picked = usable_df[usable_df["read"].isin(chosen)]
+                fasta = sg.reads_to_fasta(picked, only_usable=False)
+                current = st.session_state.get("seq_text", "").strip()
+                st.session_state["pending_seq_text"] = (
+                    fasta if replace or not current else current + "\n" + fasta)
+                st.rerun()
+
+        st.subheader("Download")
+        dl = st.columns(3)
+        with dl[0]:
+            st.download_button("Sequencing results (CSV)",
+                               sanger_df.drop(columns=["vhh_nt"], errors="ignore")
+                               .to_csv(index=False),
+                               file_name="sanger_results.csv", mime="text/csv")
+        with dl[1]:
+            st.download_button("VHH proteins (FASTA)",
+                               sg.reads_to_fasta(sanger_df),
+                               file_name="vhh_proteins.fasta", mime="text/plain",
+                               disabled=not n_usable)
+        with dl[2]:
+            st.download_button("VHH DNA (FASTA)",
+                               sg.reads_to_fasta(sanger_df, column="vhh_nt"),
+                               file_name="vhh_dna.fasta", mime="text/plain",
+                               disabled=not n_usable)
+    else:
+        st.info("No chromatogram uploaded yet.")
+
 if not text.strip():
-    st.info("Paste sequences above, upload a FASTA file, or load the example to start.")
+    st.info("Paste sequences above, upload a FASTA file, load the example, or extract "
+            "them from .ab1 chromatograms in the panel above.")
     footer()
     st.stop()
 
