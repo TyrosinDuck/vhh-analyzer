@@ -18,6 +18,21 @@ vhh_webapp/
 `vhh_core.py` is the single source of truth. The notebook and the web app both import
 it, so a fix to a descriptor propagates to both instead of drifting apart.
 
+## Layout
+
+The app opens on a home page with three sections, also reachable from the sidebar,
+which carries a **Home** button on every screen:
+
+| Section | What it does |
+|---|---|
+| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks and germline, liabilities, alignment, codon-optimised DNA, PDF report |
+| **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
+| **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
+
+The three share one sequence list: what you load in the analysis section is what the
+cloning section offers as an insert, and the sequencing section writes into it. Each
+section still works on its own.
+
 ## Run locally
 
 ```bash
@@ -128,6 +143,23 @@ def _my_descriptor(seq, ctx):
 ```
 
 A feature that raises returns `NaN` rather than breaking the run.
+
+## In-silico cloning
+
+Five vectors ship with the app (pMECS, pMES3, pMES4, pHEN6, pHEN25) as SnapGene
+files in `data/plasmids/`, and you can upload your own in SnapGene, GenBank or FASTA.
+The app infers the cloning window between the PelB leader and the first tag, then
+ranks restriction enzymes: a candidate cuts the backbone exactly once, inside that
+window, and does not cut the insert. Enzymes that do cut the insert are still listed
+with their position — in VHH cloning that is sometimes by design, BstEII having its
+site in FR4.
+
+Primers live in `data/primers.csv` (or upload your own CSV with `name,sequence`).
+Only the primers with an exact binding site in the selected vector are offered; the
+others are listed as not applicable, because a primer that does not bind is usually a
+property of the vector rather than a mistake — pHEN6 has no gIII for a gIII primer to
+sit in. Orientation is reported explicitly: a primer downstream of the insert reads
+back into it only when used as its reverse complement.
 
 ## Sanger (.ab1) workflow
 

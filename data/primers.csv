@@ -1,0 +1,5 @@
+name,sequence,note
+MP57,TTATGCTTCCGGCTCGTATG,"Anneals upstream of the lac promoter region; forward primer reading into the insert"
+GIII,CTATGAGGGCTGTCTGTGG,"Sits downstream of the insert in gIII-containing vectors; see orientation note"
+FP,CACACAGGAAACAGCTATGAC,"Contains the M13 reverse core; present in pHEN6/pHEN25 only"
+RP,GTGACTGGGAAAACCCTGGCG,"Reverse complement is the M13 -47 forward primer"
