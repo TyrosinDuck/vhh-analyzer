@@ -33,6 +33,12 @@ DVQLQASGGGSVQAGGSLRLSCAASGYTIGPYCMGWFRQAPGKEREGVAAINMGGGITYYADSVKG
 RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 """
 
+# Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
+# users would notice — it is what someone will quote back to you in a bug report.
+VERSION = "20261020.1530"
+AUTHOR = "TyrosinDuck"
+AUTHOR_URL = "https://github.com/TyrosinDuck"
+
 st.set_page_config(page_title="VHH Analyzer", page_icon="🧬", layout="wide")
 
 def _fit() -> dict:
@@ -80,6 +86,15 @@ if CACHE_TTL:
         show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)(_analyze)
 else:
     run_analysis = _analyze
+
+
+def footer() -> None:
+    """Page footer — shown on every screen, including before any analysis."""
+    st.divider()
+    st.caption("Built on Biopython (ProtParam), ANARCI, FAMSA and pymsaviz. "
+               "Theoretical predictions — validate experimentally. "
+               "Sequences are not stored; for confidential work, run the app locally.")
+    st.caption(f"VHH Analyzer · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
 
 
 def fig_to_png(fig) -> bytes:
@@ -164,6 +179,7 @@ with col_in:
 
 if not text.strip():
     st.info("Paste sequences above, upload a FASTA file, or load the example to start.")
+    footer()
     st.stop()
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +190,7 @@ try:
     sequences = vc.parse_input(text)
 except ValueError as exc:
     st.error(f"Input error — {exc}")
+    footer()
     st.stop()
 
 with st.spinner(f"Analyzing {len(sequences)} sequence(s)…"):
@@ -331,7 +348,4 @@ with tabs[4]:
                        file_name="profiles.png", mime="image/png")
     st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
 
-st.divider()
-st.caption("Built on Biopython (ProtParam), ANARCI, FAMSA and pymsaviz. "
-           "Theoretical predictions — validate experimentally. "
-           "Sequences are not stored; for confidential work, run the app locally.")
+footer()
