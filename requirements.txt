@@ -1,0 +1,11 @@
+# Streamlit Community Cloud installs these with pip, and packages.txt with apt.
+biopython>=1.81
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+pyfamsa>=0.5
+pymsaviz>=0.4
+streamlit>=1.30
+# ANARCI needs the HMMER binary, which comes from packages.txt.
+# Remove this line (and packages.txt) to run with the regex annotator only.
+anarci>=2024.0
