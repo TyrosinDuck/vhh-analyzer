@@ -36,7 +36,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1915"
+VERSION = "20261020.2000"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -152,10 +152,70 @@ def footer() -> None:
     st.caption(f"VHH Analyzer · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
 
 
-def fig_to_png(fig) -> bytes:
+def fig_to_png(fig, dpi: int = 200, close: bool = False) -> bytes:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    if close:
+        plt.close(fig)
     return buf.getvalue()
+
+
+# Streamlit re-runs the whole script — and every tab body — on each interaction,
+# so without caching, moving one slider re-renders every figure. These return
+# PNG bytes rather than figure objects because bytes cache cleanly and a static
+# image is all these plots need; the PDF builder rebuilds real figures on demand.
+_FIG_CACHE = dict(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=24)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_secondary_structure(frame):
+    return fig_to_png(vc.plot_secondary_structure(frame), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_charge(frame, seqs, ph):
+    return fig_to_png(vc.plot_charge(frame, seqs, ph=ph), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_profiles(seqs, anns, window):
+    return fig_to_png(vc.plot_profiles(seqs, anns, window=window), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_chou_fasman(name, seq, window, ann):
+    return fig_to_png(vc.plot_chou_fasman(seq, name, window=window, annotation=ann),
+                      close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_identity(seqs, anns, region):
+    mat = vc.identity_matrix(seqs, anns, region=region) if region \
+        else vc.identity_matrix(seqs)
+    if len(mat) < 2:
+        return None
+    title = f"{region} identity (%)" if region else "Full-length identity (%)"
+    return fig_to_png(vc.plot_identity(mat, title), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_msa(seqs, anns):
+    with tempfile.TemporaryDirectory() as tmp:
+        fig, aln_path = vc.plot_msa(seqs, anns, workdir=tmp)
+        return fig_to_png(fig, close=True), aln_path.read_text()
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_quality(payload, cutoff):
+    reads = [sg.read_ab1(data, name=name, cutoff=cutoff) for name, data in payload]
+    fig = sg.plot_quality(reads)
+    return fig_to_png(fig, close=True) if fig else None
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=256)
+def dna_for(seq, sites, add_stop, gc_max):
+    return vc.reverse_translate(seq, avoid_sites=dict(sites), add_stop=add_stop,
+                                gc_max=gc_max)
 
 
 # --------------------------------------------------------------------------- #
@@ -324,9 +384,9 @@ with st.expander("🧬 Extract VHH sequences from Sanger .ab1 files", expanded=F
 
         if reads:
             with st.expander("Quality traces"):
-                fig_q = sg.plot_quality(reads)
-                if fig_q:
-                    st.pyplot(fig_q, **FIT)
+                img_q = png_quality(payload, mott_cutoff)
+                if img_q:
+                    st.image(img_q, **FIT)
                     st.caption("Blue is the window kept after trimming; the dashed "
                                "line is Phred 20.")
                 plt.close("all")
@@ -447,27 +507,35 @@ with tabs[0]:
 
 # --- Plots ----------------------------------------------------------------- #
 with tabs[1]:
-    fig_ss = vc.plot_secondary_structure(df)
-    st.pyplot(fig_ss, **FIT)
+    img_ss = png_secondary_structure(df)
+    st.image(img_ss, **FIT)
 
-    fig_charge = vc.plot_charge(df, sequences, ph=ph)
-    st.pyplot(fig_charge, **FIT)
+    img_charge = png_charge(df, sequences, ph)
+    st.image(img_charge, **FIT)
     st.caption("Each titration curve crosses zero at the theoretical pI of that sequence.")
 
-    fig_prof = vc.plot_profiles(sequences, annotations, window=window)
-    st.pyplot(fig_prof, **FIT)
+    img_prof = png_profiles(sequences, annotations, window)
+    st.image(img_prof, **FIT)
     st.caption("Sliding-window charge (blue) and Kyte–Doolittle hydropathy (orange). "
                "Shaded bands are the CDRs.")
 
     st.subheader("Predicted secondary structure")
     cf_window = st.slider("Chou–Fasman window", 3, 11,
                           vc.DEFAULTS["chou_fasman_window"], 2, key="cf_window")
-    cf_figs = {}
-    for name, seq in sequences.items():
-        fig_cf = vc.plot_chou_fasman(seq, name, window=cf_window,
-                                     annotation=annotations.get(name))
-        cf_figs[name] = fig_cf
-        st.pyplot(fig_cf, **FIT)
+    # With many sequences, drawing every panel on every rerun is the single
+    # slowest thing the app does, so only the selected one is shown by default.
+    cf_names = list(sequences)
+    if len(cf_names) > 1:
+        show_all_cf = st.checkbox(f"Show all {len(cf_names)} sequences", value=False,
+                                  key="cf_all")
+        cf_shown = cf_names if show_all_cf else [
+            st.selectbox("Sequence", cf_names, key="cf_pick")]
+    else:
+        cf_shown = cf_names
+
+    for name in cf_shown:
+        seq = sequences[name]
+        st.image(png_chou_fasman(name, seq, cf_window, annotations.get(name)), **FIT)
         prof = vc.chou_fasman_profile(seq, cf_window)
         st.caption(
             f"{name}: {prof['fractions']['E']:.0%} sheet, "
@@ -602,28 +670,22 @@ with tabs[5]:
         with st.spinner("Aligning…"):
             # pymsaviz reads from a path, so the aligned FASTA is written to a
             # temporary directory that is removed as soon as the figure exists.
-            with tempfile.TemporaryDirectory() as tmp:
-                fig_msa, aln_path = vc.plot_msa(sequences, annotations, workdir=tmp)
-                aln_text = aln_path.read_text()
-        st.pyplot(fig_msa, **FIT)
+            img_msa, aln_text = png_msa(sequences, annotations)
+        st.image(img_msa, **FIT)
         st.caption("FAMSA alignment rendered with pymsaviz. CDR bands refer to the "
                    "first sequence submitted.")
         st.download_button("Download alignment (FASTA)", aln_text,
                            file_name="alignment.fasta", mime="text/plain")
 
         st.subheader("Pairwise identity")
-        fig_id = vc.plot_identity(vc.identity_matrix(sequences),
-                                  "Full-length identity (%)")
         cols_id = st.columns(2)
         with cols_id[0]:
-            st.pyplot(fig_id, **FIT)
-        fig_id3 = None
+            st.image(png_identity(sequences, None, None), **FIT)
         if annotations and any(a["CDR3"]["seq"] for a in annotations.values()):
-            mat3 = vc.identity_matrix(sequences, annotations, region="CDR3")
-            if len(mat3) >= 2:
-                fig_id3 = vc.plot_identity(mat3, "CDR3 identity (%)")
+            img_id3 = png_identity(sequences, annotations, "CDR3")
+            if img_id3:
                 with cols_id[1]:
-                    st.pyplot(fig_id3, **FIT)
+                    st.image(img_id3, **FIT)
         st.caption("Two clones from the same panning can share 90%+ full-length "
                    "identity while having unrelated CDR3s — the second matrix is the "
                    "one that tells you whether they are really the same binder.")
@@ -648,8 +710,7 @@ with tabs[6]:
     sites = {k: vc.DEFAULT_AVOID_SITES[k] for k in avoid}
     fasta_parts = []
     for name, seq in sequences.items():
-        res = vc.reverse_translate(seq, avoid_sites=sites, add_stop=add_stop,
-                                   gc_max=gc_max)
+        res = dna_for(seq, tuple(sorted(sites.items())), add_stop, gc_max)
         ok = vc.translate_dna(res["dna"]) == seq
         fasta_parts.append(f">{name}_optimized\n" +
                            "\n".join(res["dna"][i:i + 60]
@@ -685,11 +746,11 @@ with tabs[7]:
     st.download_button("Results (CSV)", df.to_csv(index=False),
                        file_name="vhh_results.csv", mime="text/csv",
                        type="primary")
-    st.download_button("Secondary structure (PNG)", fig_to_png(fig_ss),
+    st.download_button("Secondary structure (PNG)", png_secondary_structure(df),
                        file_name="secondary_structure.png", mime="image/png")
-    st.download_button("Charge (PNG)", fig_to_png(fig_charge),
+    st.download_button("Charge (PNG)", png_charge(df, sequences, ph),
                        file_name="charge.png", mime="image/png")
-    st.download_button("Profiles (PNG)", fig_to_png(fig_prof),
+    st.download_button("Profiles (PNG)", png_profiles(sequences, annotations, window),
                        file_name="profiles.png", mime="image/png")
 
     st.divider()
@@ -699,11 +760,26 @@ with tabs[7]:
         "hallmarks, germline, liabilities and all figures. Building it takes a few "
         "seconds, so it is generated on demand.")
 
+    include_cf = st.checkbox(
+        "Include the per-sequence secondary-structure plots",
+        value=len(sequences) <= 6,
+        help="One extra page per sequence. With many sequences this is most of the "
+             "file size and most of the build time.")
+
     if st.button("Build PDF report", type="secondary"):
-        figures = {"Secondary structure composition": fig_ss, "Charge": fig_charge,
-                   "Charge and hydropathy profiles": fig_prof}
-        for cf_name, cf_fig in cf_figs.items():
-            figures[f"Predicted secondary structure — {cf_name}"] = cf_fig
+        # The displayed plots are cached as PNG bytes, so the report rebuilds
+        # real figure objects — only when the button is pressed.
+        figures = {
+            "Secondary structure composition": vc.plot_secondary_structure(df),
+            "Charge": vc.plot_charge(df, sequences, ph=ph),
+            "Charge and hydropathy profiles": vc.plot_profiles(
+                sequences, annotations, window=window),
+        }
+        if include_cf:
+            for cf_name, cf_seq in sequences.items():
+                figures[f"Predicted secondary structure — {cf_name}"] = \
+                    vc.plot_chou_fasman(cf_seq, cf_name, window=cf_window,
+                                        annotation=annotations.get(cf_name))
         if len(sequences) >= 2:
             try:
                 with tempfile.TemporaryDirectory() as tmp:

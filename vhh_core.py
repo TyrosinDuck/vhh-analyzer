@@ -871,7 +871,7 @@ def analyze(seqs: dict[str, str], ph: float | None = None,
 SEVERITY_COLORS = {"high": "#c44e52", "medium": "#dd8452", "low": "#8c8c8c"}
 
 
-def _fig_bytes(fig, dpi: int = 200) -> bytes:
+def _fig_bytes(fig, dpi: int = 150) -> bytes:
     import io
 
     buf = io.BytesIO()
