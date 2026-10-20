@@ -624,3 +624,286 @@ def enzyme_pairs(candidates: pd.DataFrame, max_pairs: int = 12) -> pd.DataFrame:
     return (pd.DataFrame(rows).sort_values(["directional", "span_bp"],
                                            ascending=[False, False])
             .head(max_pairs).reset_index(drop=True))
+
+
+# --------------------------------------------------------------------------- #
+# PCR, digestion and assembly
+# --------------------------------------------------------------------------- #
+
+def _anneal(template: str, primer: str, min_anneal: int = 15) -> list[dict]:
+    """Find where a primer's 3' end anneals, allowing a 5' tail.
+
+    Only the 3' portion of a primer has to match: the 5' end may carry a tail
+    (a restriction site, for instance) that is absent from the template and ends
+    up in the product. The longest matching 3' suffix is used.
+    """
+    primer = re.sub(r"[^ACGT]", "", primer.upper())
+    hits = []
+    for length in range(len(primer), min_anneal - 1, -1):
+        core = primer[len(primer) - length:]
+        tail = primer[:len(primer) - length]
+        for m in re.finditer(f"(?=({re.escape(core)}))", template):
+            hits.append({"start": m.start(), "end": m.start() + length - 1,
+                         "anneal": core, "tail": tail, "anneal_len": length})
+        if hits:                       # longest match wins; stop at the first length
+            break
+    return hits
+
+
+def simulate_pcr(record: SeqRecord, forward: str, reverse: str,
+                 circular: bool = True, min_anneal: int = 15,
+                 max_product: int = 20000) -> dict:
+    """Amplify a template with two primers and return the product.
+
+    The forward primer anneals to the minus strand and extends rightwards; the
+    reverse primer anneals to the plus strand and extends leftwards, so what is
+    searched for is its reverse complement. Any 5' tail on either primer is
+    carried into the product, which is how restriction sites get added.
+    """
+    seq = str(record.seq).upper()
+    total = len(seq)
+    search = seq + seq if circular else seq
+
+    fwd = re.sub(r"[^ACGT]", "", forward.upper())
+    rev = re.sub(r"[^ACGT]", "", reverse.upper())
+    rev_rc = str(Seq(rev).reverse_complement())
+
+    f_hits = _anneal(search, fwd, min_anneal)
+    r_hits = _anneal(search, rev_rc, min_anneal)
+    # a reverse primer's tail sits at the 3' end of its reverse complement
+    for h in r_hits:
+        tail = re.sub(r"[^ACGT]", "", h["tail"])
+        h["tail"] = ""
+        h["tail_rc"] = str(Seq(rev[:len(rev) - h["anneal_len"]]).reverse_complement())
+
+    result = {"product": "", "length": 0, "forward_site": None, "reverse_site": None,
+              "forward_tail": "", "reverse_tail": "", "warnings": [], "n_products": 0}
+
+    if not f_hits:
+        result["warnings"].append(
+            f"forward primer does not anneal (needs {min_anneal} nt of 3' match)")
+    if not r_hits:
+        result["warnings"].append(
+            f"reverse primer does not anneal (needs {min_anneal} nt of 3' match)")
+    if not f_hits or not r_hits:
+        return result
+
+    products, seen = [], set()
+    for f in f_hits:
+        if f["start"] >= total:              # duplicate from the doubled copy
+            continue
+        for r in r_hits:
+            if r["end"] <= f["end"]:
+                continue
+            size = r["end"] - f["start"] + 1
+            if size > max_product:
+                continue
+            # on a circular template the doubled sequence yields the same product
+            # twice; key on the wrapped coordinates to count it once
+            key = (f["start"] % total, r["end"] % total)
+            if key in seen:
+                continue
+            seen.add(key)
+            products.append((f, r, size))
+    if not products:
+        result["warnings"].append(
+            "primers anneal but never in a productive orientation — check which one "
+            "is forward and which is reverse")
+        return result
+
+    products.sort(key=lambda t: t[2])
+    f, r, size = products[0]
+    result["n_products"] = len(products)
+    if len(products) > 1:
+        result["warnings"].append(
+            f"{len(products)} possible products — the shortest ({size} bp) is reported")
+
+    core = search[f["start"]: r["end"] + 1]
+    product = f["tail"] + core + r["tail_rc"]
+    result.update({
+        "product": product, "length": len(product),
+        "forward_site": (f["start"] % total + 1, f["end"] % total + 1),
+        "reverse_site": (r["start"] % total + 1, r["end"] % total + 1),
+        "forward_tail": f["tail"], "reverse_tail": r["tail_rc"],
+        "forward_anneal_len": f["anneal_len"], "reverse_anneal_len": r["anneal_len"],
+    })
+    return result
+
+
+def cut_positions(seq: str, enzyme_name: str, circular: bool = False) -> list[int]:
+    """1-based top-strand cut positions of one enzyme in a sequence."""
+    from Bio.Restriction import RestrictionBatch
+
+    batch = RestrictionBatch([enzyme_name])
+    enzyme = list(batch)[0]
+    return sorted(enzyme.search(Seq(re.sub(r"[^ACGT]", "", seq.upper())),
+                                linear=not circular))
+
+
+def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
+             circular: bool = True) -> dict:
+    """Cut backbone and insert with two enzymes and join them.
+
+    ``enzyme_5`` is the enzyme on the 5' side of the cloning window (the lower
+    coordinate), ``enzyme_3`` the one on the 3' side. Both must cut the backbone
+    exactly once and the insert exactly once, which is what makes the join
+    unambiguous and directional.
+
+    The assembly is done on the top strand. Because both partners are cut with
+    the same pair of enzymes, their overhangs match by construction, so the
+    top-strand join is the product you would get at the bench — but it is a
+    design check, not a simulation of ligation efficiency.
+    """
+    vector = str(backbone.seq).upper()
+    insert = re.sub(r"[^ACGT]", "", insert_dna.upper())
+    report = {"construct": "", "length": 0, "warnings": [], "ok": False,
+              "vector_cuts": {}, "insert_cuts": {}}
+
+    for name, seq_, label, circ in ((enzyme_5, vector, "backbone", circular),
+                                    (enzyme_3, vector, "backbone", circular)):
+        pass  # positions collected below, kept explicit for clarity
+
+    v5 = cut_positions(vector, enzyme_5, circular)
+    v3 = cut_positions(vector, enzyme_3, circular)
+    i5 = cut_positions(insert, enzyme_5, False)
+    i3 = cut_positions(insert, enzyme_3, False)
+    report["vector_cuts"] = {enzyme_5: v5, enzyme_3: v3}
+    report["insert_cuts"] = {enzyme_5: i5, enzyme_3: i3}
+
+    for label, name, cuts in (("backbone", enzyme_5, v5), ("backbone", enzyme_3, v3),
+                              ("insert", enzyme_5, i5), ("insert", enzyme_3, i3)):
+        if len(cuts) != 1:
+            report["warnings"].append(
+                f"{name} cuts the {label} {len(cuts)} time(s) — exactly one is needed")
+    if report["warnings"]:
+        return report
+
+    p5, p3 = v5[0], v3[0]
+    q5, q3 = i5[0], i3[0]
+    if p5 > p3:
+        report["warnings"].append(
+            f"{enzyme_5} cuts the backbone at {p5}, downstream of {enzyme_3} at {p3} — "
+            "swap the two enzymes")
+        return report
+    if q5 > q3:
+        report["warnings"].append(
+            f"{enzyme_5} cuts the insert at {q5}, downstream of {enzyme_3} at {q3} — "
+            "the insert would go in backwards")
+        return report
+
+    removed = p3 - p5
+    piece = insert[q5 - 1: q3 - 1]
+    construct = vector[: p5 - 1] + piece + vector[p3 - 1:]
+
+    report.update({
+        "construct": construct, "length": len(construct), "ok": True,
+        "removed_bp": removed, "inserted_bp": len(piece),
+        "insert_start": p5, "insert_end": p5 + len(piece) - 1,
+        "net_change": len(piece) - removed,
+    })
+    # No frame arithmetic here on purpose. An empty phage-display vector carries a
+    # stuffer, so its downstream tag is usually *out* of frame with the leader
+    # until a correctly sized VHH is cloned in — comparing the length change to
+    # the empty vector's frame would flag every correct construct. The real test
+    # is translating the finished construct, which verify_construct does.
+    return report
+
+
+def verify_construct(construct: str, vector_layout: str = "pMES3") -> dict:
+    """Translate the assembled construct and check the expression cassette.
+
+    Reuses the Sanger cassette extractor: the same code that validates a
+    sequencing read validates a designed construct, so a frame error, a
+    premature stop or a lost tag is caught here rather than after the ligation.
+    """
+    from sanger import VECTORS, extract_cassette
+
+    layout = vector_layout if vector_layout in VECTORS else "pMES3"
+    ex = extract_cassette(construct, layout)
+    ok = bool(ex["vhh_aa"]) and not ex["frameshift"] and "*" not in ex["vhh_aa"]
+    return {
+        "ok": ok, "vhh_aa": ex["vhh_aa"], "vhh_len": len(ex["vhh_aa"]),
+        "cassette_aa": ex["cassette_aa"], "tags_found": ex["tags_found"],
+        "tags_missing": ex["tags_missing"],
+        "premature_stops": ex["n_premature_stops"],
+        "stop_codon": ex["stop_codon_present"], "frameshift": ex["frameshift"],
+        "strand": ex["strand"], "frame": ex["frame"],
+        "warnings": list(ex["warnings"]), "layout": layout,
+    }
+
+
+def evaluate_pairs(backbone: SeqRecord, insert_dna: str, candidates: pd.DataFrame,
+                   layout: str = "pMES3", circular: bool = True,
+                   max_pairs: int = 20) -> pd.DataFrame:
+    """Try each enzyme pair for real: assemble, translate, and report the verdict.
+
+    Ranking enzymes by where they cut says which pairs are *plausible*. This
+    goes one step further and builds each construct, then reads its expression
+    cassette back out — so a pair that cuts in the right places but leaves the
+    VHH out of frame with the tags is caught here rather than at the bench.
+    """
+    pool = (candidates[candidates["backbone_cuts"] == 1]
+            if "backbone_cuts" in candidates else candidates)
+    names = list(dict.fromkeys(pool["enzyme"])) if len(pool) else []
+    rows = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            for e5, e3 in ((a, b), (b, a)):
+                built = assemble(backbone, insert_dna, e5, e3, circular=circular)
+                if not built["ok"]:
+                    continue
+                check = verify_construct(built["construct"], layout)
+                rows.append({
+                    "enzyme_5": e5, "enzyme_3": e3,
+                    "construct_bp": built["length"],
+                    "removed_bp": built["removed_bp"],
+                    "inserted_bp": built["inserted_bp"],
+                    "cassette_ok": check["ok"],
+                    "vhh_len": check["vhh_len"],
+                    "tags_found": check["tags_found"],
+                    "premature_stops": check["premature_stops"],
+                    "verdict": ("full cassette in frame" if check["ok"] else
+                                "; ".join(check["warnings"]) or "cassette not readable"),
+                    "construct": built["construct"],
+                })
+                break           # the other orientation of the same pair is redundant
+    if not rows:
+        return pd.DataFrame(columns=["enzyme_5", "enzyme_3", "construct_bp",
+                                     "cassette_ok", "verdict"])
+    df = pd.DataFrame(rows)
+    return (df.sort_values(["cassette_ok", "vhh_len"], ascending=[False, False])
+            .head(max_pairs).reset_index(drop=True))
+
+
+def construct_record(construct: str, name: str, insert_start: int, insert_end: int,
+                     layout: str = "pMES3", circular: bool = True) -> SeqRecord:
+    """Wrap an assembled construct as an annotated SeqRecord, ready for GenBank.
+
+    The insert is annotated from the assembly coordinates; the cassette parts
+    (leader, VHH, tags) are re-detected on the finished sequence, so the record
+    describes what the construct actually encodes rather than what was intended.
+    """
+    from Bio.SeqFeature import SeqFeature, SimpleLocation
+
+    record = SeqRecord(Seq(construct), id=name[:16] or "construct", name=name[:16],
+                       description=f"{name} — assembled in silico",
+                       annotations={"molecule_type": "DNA",
+                                    "topology": "circular" if circular else "linear"})
+    record.features.append(SeqFeature(
+        SimpleLocation(insert_start - 1, insert_end), type="misc_feature",
+        qualifiers={"label": ["inserted fragment"]}))
+
+    for hit in detect_motifs(record, circular=circular):
+        record.features.append(SeqFeature(
+            SimpleLocation(hit["start"] - 1, hit["end"],
+                           strand=-1 if hit["strand"] == "-" else 1),
+            type="CDS" if hit["kind"] == "vhh" else "misc_feature",
+            qualifiers={"label": [hit["feature"]]}))
+    return record
+
+
+def record_to_genbank(record: SeqRecord) -> str:
+    """GenBank text for a record — the format SnapGene and Benchling both read."""
+    handle = io.StringIO()
+    SeqIO.write(record, handle, "genbank")
+    return handle.getvalue()

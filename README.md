@@ -154,6 +154,31 @@ window, and does not cut the insert. Enzymes that do cut the insert are still li
 with their position — in VHH cloning that is sometimes by design, BstEII having its
 site in FR4.
 
+The flow is split into sub-tabs: **Insert & PCR**, **Enzymes**, **Construct**,
+**Primers**, **Map**.
+
+**Insert & PCR** — the insert can be amplified in silico from a donor plasmid, taken
+from the loaded sequences, or pasted. The PCR finds where each primer's 3' end
+anneals, allowing a 5' tail, so a primer that adds a restriction site produces a
+product carrying it. Only primers with a site in that donor are offered, split by the
+direction they would extend.
+
+**Enzymes** — pairs are not merely ranked by cut position: each candidate pair is
+actually cut, joined and translated, and the resulting cassette is read back with the
+same extractor the Sanger section uses. A pair that cuts in the right places but
+leaves the VHH out of frame with the tags is rejected here rather than at the bench.
+On the bundled vectors with a VHH amplicon, PstI + BstEII comes out on top, which is
+the classic nanobody strategy.
+
+There is deliberately no "insert length must be a multiple of 3" check: an empty
+phage-display vector carries a stuffer, so its downstream tag is usually out of frame
+with the leader until a correctly sized VHH is cloned in. Translating the finished
+construct is the only check that means anything.
+
+**Construct** — the verified construct downloads as GenBank, annotated with the
+insert and the cassette parts, so SnapGene or Benchling opens it ready to read, plus
+a protocol summary.
+
 Primers live in `data/primers.csv` (or upload your own CSV with `name,sequence`).
 Only the primers with an exact binding site in the selected vector are offered; the
 others are listed as not applicable, because a primer that does not bind is usually a

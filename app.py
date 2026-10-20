@@ -48,7 +48,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.2230"
+VERSION = "20261020.2320"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -246,6 +246,23 @@ def png_plasmid_map(payload, name, circular, with_sites, window=None):
 def dna_for(seq, sites, add_stop, gc_max):
     return vc.reverse_translate(seq, avoid_sites=dict(sites), add_stop=add_stop,
                                 gc_max=gc_max)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def pcr_cached(payload, name, fwd, rev, circular):
+    plasmid, _f = load_plasmid_cached(payload, name)
+    return cl.simulate_pcr(plasmid["record"], fwd, rev, circular=circular)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=12)
+def evaluate_pairs_cached(payload, name, insert_dna, enzymes, region, layout):
+    plasmid, _f = load_plasmid_cached(payload, name)
+    cand = cl.recommend_enzymes(plasmid["record"], insert_dna or None, region,
+                                enzymes=list(enzymes) if enzymes else None,
+                                circular=plasmid["topology"] == "circular")
+    pairs = cl.evaluate_pairs(plasmid["record"], insert_dna, cand, layout=layout,
+                              circular=plasmid["topology"] == "circular")
+    return cand, pairs
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
@@ -628,144 +645,372 @@ if section == "cloning":
                                   int(auto_region[1]))
     region = (int(reg_start), int(reg_end))
 
-    # ---- insert ----
-    st.subheader("Insert")
-    staged = current_sequences()
-    src_options = (["From the loaded sequences", "Paste DNA"] if staged
-                   else ["Paste DNA"])
-    src = st.radio("VHH to insert", src_options, horizontal=True)
-    insert_dna = ""
-    if src == "From the loaded sequences":
-        pick = st.selectbox("Sequence", list(staged))
-        insert_dna = dna_for(staged[pick], (), False, 0.60)["dna"]
-        st.caption(f"Back-translated from the protein ({len(insert_dna)} nt, "
-                   "E. coli codons, no stop). Paste your real insert DNA instead if "
-                   "you have it — a different codon usage changes which enzymes cut.")
-    else:
-        if not staged:
-            st.caption("No sequence is loaded. Load some in the analysis or "
-                       "sequencing section to pick one here, or paste the insert DNA "
-                       "directly.")
-        insert_dna = st.text_area("Insert DNA (5'→3')", height=110,
-                                  key="insert_dna_box")
-        insert_dna = re.sub(r"[^ACGTacgt]", "", insert_dna).upper()
-        if insert_dna:
-            st.caption(f"{len(insert_dna)} nt")
+    # ---- the rest of the cloning flow, in sub-tabs ----
+    ctabs = st.tabs(["Insert & PCR", "Enzymes", "Construct", "Primers", "Map"])
 
-    # ---- enzymes ----
-    st.subheader("Enzyme candidates")
-    enzyme_scope = st.radio("Enzymes considered",
-                            ["Common cloning set", "All commercial enzymes"],
-                            horizontal=True)
-    common = ["PstI", "NotI", "BstEII", "NcoI", "SfiI", "XbaI", "EcoRI", "HindIII",
-              "BamHI", "XhoI", "SalI", "NdeI", "KpnI", "SacI", "SpeI", "ApaLI",
-              "AscI", "AgeI", "NheI", "EagI"]
-    enz = common if enzyme_scope == "Common cloning set" else None
+    # ===== Insert & PCR =====
+    with ctabs[0]:
+        staged = current_sequences()
+        modes = ["Amplify from a donor plasmid", "Paste insert DNA"]
+        if staged:
+            modes.insert(1, "From the loaded sequences")
+        mode = st.radio("Where the insert comes from", modes)
 
-    with st.spinner("Scanning restriction sites…"):
-        cand = cl.recommend_enzymes(plasmid["record"], insert_dna or None, region,
-                                    enzymes=enz,
-                                    circular=plasmid["topology"] == "circular")
-    if cand.empty:
-        st.info("No enzyme from this set cuts the backbone.")
-    else:
-        usable = cand[cand["usable"]]
-        st.dataframe(
-            cand[["enzyme", "site", "backbone_cuts", "position", "in_region",
-                  "insert_cuts", "overhang", "verdict"]].head(25),
-            hide_index=True, **FIT,
-            column_config={"verdict": st.column_config.TextColumn("Verdict",
-                                                                  width="large")})
-        st.caption(
-            f"{len(usable)} enzyme(s) cut the backbone once inside the window and "
-            "leave the insert intact. An enzyme flagged as cutting the insert is "
-            "still shown: in VHH cloning that is sometimes by design — BstEII, for "
-            "instance, has its site in FR4 at the 3' end of the domain — so read the "
-            "position before discarding it.")
+        insert_dna, insert_label = "", "insert"
 
-        pairs = cl.enzyme_pairs(cand)
-        if len(pairs):
-            st.markdown("**Pairs for directional cloning**")
-            st.dataframe(pairs, hide_index=True, **FIT,
-                         column_config={"note": st.column_config.TextColumn(
-                             "Note", width="large")})
+        if mode == "Amplify from a donor plasmid":
+            st.markdown("The donor is the plasmid that already carries the VHH. "
+                        "Pick the primers and the app returns the amplicon, which "
+                        "becomes the insert.")
+            dcol = st.columns([2, 1])
+            with dcol[0]:
+                donor_choice = st.selectbox("Donor plasmid",
+                                            list(bundled) + ["Upload my own…"],
+                                            index=len(bundled),
+                                            key="donor_choice")
+            donor_payload, donor_name = None, donor_choice
+            if donor_choice == "Upload my own…":
+                dup = st.file_uploader(
+                    "Donor plasmid (SnapGene .dna, GenBank or FASTA)",
+                    type=["dna", "gb", "gbk", "genbank", "fasta", "fa", "txt"],
+                    key="donor_upload")
+                if dup is not None:
+                    donor_payload, donor_name = dup.getvalue(), dup.name
+            else:
+                donor_payload = bundled[donor_choice].read_bytes()
 
-    # ---- primers ----
-    st.subheader("Primers")
-    own = st.file_uploader("Your own primer list (CSV with name,sequence)",
-                           type=["csv"], key="primer_upload")
-    if own is not None:
-        primers = pd.read_csv(io.BytesIO(own.getvalue()))
-        primers["sequence"] = primers["sequence"].astype(str).str.upper()
-        if "note" not in primers.columns:
-            primers["note"] = ""
-        st.caption(f"{len(primers)} primer(s) loaded from your file — nothing is "
-                   "stored.")
-    else:
-        primers = cl.load_primers()
+            if donor_payload is None:
+                st.info("Upload the donor plasmid to continue.")
+            else:
+                donor, donor_features = load_plasmid_cached(donor_payload, donor_name)
+                st.caption(f"{donor['name']} — {len(donor['record'].seq)} bp, "
+                           f"{donor['topology']}")
+                vhh_hits = donor_features[donor_features["kind"] == "vhh"] \
+                    if "kind" in donor_features else donor_features.iloc[0:0]
+                if len(vhh_hits):
+                    h = vhh_hits.iloc[0]
+                    st.success(f"A VHH scaffold is present at {h['start']}–{h['end']} "
+                               f"({len(h['protein'])} aa).")
+                else:
+                    st.warning("No VHH scaffold detected in this donor — it may be an "
+                               "empty vector, or the domain may be non-canonical.")
 
-    primer_rows = tuple((r["name"], r["sequence"], str(r.get("note", "")))
-                        for _, r in primers.iterrows())
-    full_report = primer_report_cached(payload, display_name, primer_rows)
+                donor_primers = cl.load_primers()
+                prow = tuple((r["name"], r["sequence"], str(r.get("note", "")))
+                             for _, r in donor_primers.iterrows())
+                drep = primer_report_cached(donor_payload, donor_name, prow)
+                binds = drep[drep["binds"]] if len(drep) else drep
+                fwd_opts = (list(binds[binds["orientation"] == "forward"]["primer"])
+                            if len(binds) else [])
+                rev_opts = (list(binds[binds["orientation"] == "reverse"]["primer"])
+                            if len(binds) else [])
 
-    # Only primers that actually anneal to this vector are offered. A primer that
-    # does not bind is not a user error — pHEN6 simply has no gIII for the GIII
-    # primer to sit in — so it is listed as not applicable rather than hidden.
-    binding = full_report[full_report["binds"]] if len(full_report) else full_report
-    applicable = list(dict.fromkeys(binding["primer"])) if len(binding) else []
-    missing = [p for p in primers["name"] if p not in applicable]
-
-    if not applicable:
-        st.warning(f"None of the {len(primers)} primer(s) has an exact match in "
-                   f"{plasmid['name']}.")
-    else:
-        chosen = st.multiselect(f"Primers that bind {plasmid['name']}", applicable,
-                                default=applicable)
-        report = binding[binding["primer"].isin(chosen)]
-        if len(report):
-            st.dataframe(
-                report[["primer", "sequence", "orientation", "start", "end", "tm",
-                        "note"]],
-                hide_index=True, **FIT,
-                column_config={"note": st.column_config.TextColumn("Note",
-                                                                   width="large"),
-                               "tm": st.column_config.NumberColumn("Tm (°C)",
-                                                                   format="%.1f")})
-            st.caption(
-                "Orientation is relative to the plus strand: a *forward* primer "
-                "extends towards higher coordinates, a *reverse* primer towards "
-                "lower ones. A primer sitting downstream of the insert only reads "
-                "back into it when used in the reverse orientation — i.e. as the "
-                "reverse complement of the sequence shown here.")
-
-            for _, r in report.iterrows():
-                if r["orientation"] == "forward" and r["start"] > region[1]:
+                st.markdown("**Primers**")
+                st.caption(
+                    "Only primers with an exact site in this donor are listed, split "
+                    "by the direction they would extend. A primer that sits "
+                    "downstream of the insert appears under *reverse* only if its "
+                    "sequence is already the reverse-complement form — otherwise "
+                    "enter that form below.")
+                pcol = st.columns(2)
+                with pcol[0]:
+                    fwd_pick = st.selectbox(
+                        "Forward primer", fwd_opts + ["Type my own…"],
+                        index=0 if fwd_opts else len(fwd_opts))
+                    fwd_seq = (donor_primers.loc[donor_primers["name"] == fwd_pick,
+                                                 "sequence"].iloc[0]
+                               if fwd_pick in fwd_opts else
+                               st.text_input("Forward sequence (5'→3')",
+                                             key="fwd_custom"))
+                with pcol[1]:
+                    rev_pick = st.selectbox(
+                        "Reverse primer", rev_opts + ["Type my own…"],
+                        index=0 if rev_opts else len(rev_opts))
+                    rev_seq = (donor_primers.loc[donor_primers["name"] == rev_pick,
+                                                 "sequence"].iloc[0]
+                               if rev_pick in rev_opts else
+                               st.text_input("Reverse sequence (5'→3')",
+                                             key="rev_custom"))
+                if not rev_opts:
                     st.info(
-                        f"**{r['primer']}** binds at {int(r['start'])}, downstream of "
-                        "the cloning window, in the forward orientation — it extends "
-                        "away from the insert. To read back into it, use its reverse "
-                        "complement.")
+                        "None of the listed primers binds this donor in the reverse "
+                        "orientation. A primer noted as the plus-strand sequence "
+                        "downstream of the insert has to be entered as its reverse "
+                        "complement to prime back towards the VHH.")
 
-    if missing:
-        st.caption(f"Not applicable to {plasmid['name']}: {', '.join(missing)} — "
-                   "no exact binding site in this vector.")
+                fwd_seq = re.sub(r"[^ACGTacgt]", "", str(fwd_seq or "")).upper()
+                rev_seq = re.sub(r"[^ACGTacgt]", "", str(rev_seq or "")).upper()
 
-    # ---- map ----
-    st.subheader("Map")
-    usable_sites = (tuple((r["enzyme"], r["site"], tuple(r["cut_positions"]))
-                          for _, r in cand[cand["usable"]].iterrows())
-                    if not cand.empty else ())
-    try:
-        img_map = png_plasmid_map(payload, display_name,
-                                  circular_view == "Whole plasmid", usable_sites,
-                                  (max(1, region[0] - 160),
-                                   min(stats["length"], region[1] + 160)))
-        st.image(img_map, **FIT)
-        st.caption("Usable enzyme sites are marked in red; features from the file in "
-                   "blue, motifs detected here in orange, a VHH scaffold in green.")
-    except Exception as exc:
-        st.warning(f"Map unavailable: {exc}")
-    plt.close("all")
+                if fwd_seq and rev_seq:
+                    pcr = pcr_cached(donor_payload, donor_name, fwd_seq, rev_seq,
+                                     donor["topology"] == "circular")
+                    for w in pcr["warnings"]:
+                        st.warning(w)
+                    if pcr["product"]:
+                        insert_dna = pcr["product"]
+                        insert_label = f"{donor['name']} amplicon"
+                        mcols = st.columns(4)
+                        mcols[0].metric("Amplicon", f"{pcr['length']} bp")
+                        mcols[1].metric("Forward site",
+                                        f"{pcr['forward_site'][0]}–"
+                                        f"{pcr['forward_site'][1]}")
+                        mcols[2].metric("Reverse site",
+                                        f"{pcr['reverse_site'][0]}–"
+                                        f"{pcr['reverse_site'][1]}")
+                        mcols[3].metric("Products", pcr["n_products"])
+                        if pcr["forward_tail"] or pcr["reverse_tail"]:
+                            st.caption(
+                                f"5' tails carried into the product — forward: "
+                                f"`{pcr['forward_tail'] or '—'}`, reverse: "
+                                f"`{pcr['reverse_tail'] or '—'}`")
+                        with st.expander("Amplicon sequence"):
+                            st.code(insert_dna, language="text")
+                        st.download_button(
+                            "Amplicon (FASTA)",
+                            f">{insert_label}\n" + "\n".join(
+                                insert_dna[i:i + 60]
+                                for i in range(0, len(insert_dna), 60)) + "\n",
+                            file_name="amplicon.fasta", mime="text/plain")
+                else:
+                    st.info("Pick or type both primers to run the PCR.")
+
+        elif mode == "From the loaded sequences":
+            pick = st.selectbox("Sequence", list(staged))
+            insert_dna = dna_for(staged[pick], (), False, 0.60)["dna"]
+            insert_label = pick
+            st.caption(f"Back-translated from the protein ({len(insert_dna)} nt, "
+                       "E. coli codons, no stop). This carries codons the optimiser "
+                       "chose, not your real clone's — which changes where enzymes "
+                       "cut. Amplify from the donor instead when you have it.")
+        else:
+            insert_dna = st.text_area("Insert DNA (5'→3')", height=120,
+                                      key="insert_dna_box")
+            insert_dna = re.sub(r"[^ACGTacgt]", "", insert_dna).upper()
+            insert_label = "pasted insert"
+            if insert_dna:
+                st.caption(f"{len(insert_dna)} nt")
+
+        st.session_state["cloning_insert"] = insert_dna
+        st.session_state["cloning_insert_label"] = insert_label
+
+    insert_dna = st.session_state.get("cloning_insert", "")
+    insert_label = st.session_state.get("cloning_insert_label", "insert")
+
+    # ===== Enzymes =====
+    with ctabs[1]:
+        enzyme_scope = st.radio("Enzymes considered",
+                                ["Common cloning set", "All commercial enzymes"],
+                                horizontal=True)
+        common = ("PstI", "NotI", "BstEII", "NcoI", "SfiI", "XbaI", "EcoRI",
+                  "HindIII", "BamHI", "XhoI", "SalI", "NdeI", "KpnI", "SacI",
+                  "SpeI", "ApaLI", "AscI", "AgeI", "NheI", "EagI")
+        enz = common if enzyme_scope == "Common cloning set" else ()
+
+        layout = st.selectbox(
+            "Expected cassette layout", list(sg.VECTORS), index=0,
+            help="Which tags the finished construct should carry — used to check "
+                 "the translated cassette.")
+        st.session_state["cloning_layout"] = layout
+
+        if not insert_dna:
+            st.info("Define an insert in the first tab to rank enzymes against it.")
+            cand = cl.recommend_enzymes(plasmid["record"], None, region,
+                                        enzymes=list(enz) if enz else None,
+                                        circular=plasmid["topology"] == "circular")
+            pairs_eval = pd.DataFrame()
+        else:
+            with st.spinner("Cutting, ligating and translating every candidate pair…"):
+                cand, pairs_eval = evaluate_pairs_cached(
+                    payload, display_name, insert_dna, enz, region, layout)
+
+        if cand.empty:
+            st.info("No enzyme from this set cuts the backbone.")
+        else:
+            st.markdown("**Single enzymes**")
+            st.dataframe(
+                cand[["enzyme", "site", "backbone_cuts", "position", "in_region",
+                      "insert_cuts", "overhang", "verdict"]].head(25),
+                hide_index=True, **FIT,
+                column_config={"verdict": st.column_config.TextColumn(
+                    "Verdict", width="large")})
+            st.caption(
+                "An enzyme flagged as cutting the insert is still shown: in VHH "
+                "cloning that is often by design — BstEII has its site in FR4 at the "
+                "3' end of the domain — so read the position before discarding it.")
+
+        if len(pairs_eval):
+            ok_pairs = pairs_eval[pairs_eval["cassette_ok"]]
+            st.markdown("**Pairs, each actually assembled and translated**")
+            st.dataframe(
+                pairs_eval[["enzyme_5", "enzyme_3", "construct_bp", "removed_bp",
+                            "inserted_bp", "cassette_ok", "vhh_len", "tags_found",
+                            "premature_stops", "verdict"]],
+                hide_index=True, **FIT,
+                column_config={"verdict": st.column_config.TextColumn(
+                    "Verdict", width="large")})
+            st.caption(
+                f"{len(ok_pairs)} of {len(pairs_eval)} pair(s) give a construct whose "
+                "expression cassette reads back correctly. This is not a ranking by "
+                "cut position: each pair is cut, joined and translated, so a pair "
+                "that leaves the VHH out of frame with the tags is rejected here "
+                "rather than at the bench.")
+            st.session_state["cloning_pairs"] = pairs_eval.to_dict("records")
+        elif insert_dna:
+            st.warning("No pair of enzymes from this set gives a workable construct. "
+                       "Widen the enzyme set, or check that the insert really carries "
+                       "the sites you expect.")
+            st.session_state["cloning_pairs"] = []
+
+    # ===== Construct =====
+    with ctabs[2]:
+        records = st.session_state.get("cloning_pairs", [])
+        layout = st.session_state.get("cloning_layout", "pMES3")
+        workable = [r for r in records if r["cassette_ok"]]
+        if not workable:
+            st.info("No verified construct yet — define an insert and pick an enzyme "
+                    "set in the previous tabs.")
+        else:
+            labels = [f"{r['enzyme_5']} + {r['enzyme_3']} — {r['construct_bp']} bp, "
+                      f"VHH {r['vhh_len']} aa" for r in workable]
+            idx = st.selectbox("Construct", range(len(labels)),
+                               format_func=lambda i: labels[i])
+            chosen_pair = workable[idx]
+            check = cl.verify_construct(chosen_pair["construct"], layout)
+
+            cm = st.columns(4)
+            cm[0].metric("Construct", f"{chosen_pair['construct_bp']} bp")
+            cm[1].metric("VHH", f"{check['vhh_len']} aa")
+            cm[2].metric("Tags", check["tags_found"] or "none")
+            cm[3].metric("Premature stops", check["premature_stops"])
+
+            if check["ok"]:
+                st.success("The expression cassette reads back in frame, from the "
+                           "leader through the VHH to the tags.")
+            for w in check["warnings"]:
+                st.warning(w)
+
+            st.markdown("**Translated cassette**")
+            cassette = check["cassette_aa"]
+            st.code("\n".join(cassette[i:i + 60]
+                              for i in range(0, len(cassette), 60)), language="text")
+
+            built = cl.assemble(plasmid["record"], insert_dna,
+                                chosen_pair["enzyme_5"], chosen_pair["enzyme_3"],
+                                circular=plasmid["topology"] == "circular")
+            name = f"{plasmid['name']}_{insert_label}".replace(" ", "_")[:24]
+            rec = cl.construct_record(
+                chosen_pair["construct"], name,
+                built.get("insert_start", 1), built.get("insert_end", 1),
+                layout=layout, circular=plasmid["topology"] == "circular")
+
+            dcols = st.columns(2)
+            with dcols[0]:
+                st.download_button("Construct (GenBank)", cl.record_to_genbank(rec),
+                                   file_name=f"{name}.gb", mime="text/plain",
+                                   type="primary", **FIT)
+            with dcols[1]:
+                st.download_button(
+                    "Construct (FASTA)",
+                    f">{name}\n" + "\n".join(
+                        chosen_pair["construct"][i:i + 60]
+                        for i in range(0, len(chosen_pair["construct"]), 60)) + "\n",
+                    file_name=f"{name}.fasta", mime="text/plain", **FIT)
+            st.caption("The GenBank file carries the insert and the cassette parts as "
+                       "features, so SnapGene or Benchling will open it annotated. "
+                       "The assembly is a top-strand design check — it assumes the "
+                       "ends ligate, it does not predict efficiency.")
+
+            with st.expander("Protocol summary"):
+                st.markdown(f"""
+1. **Digest** the donor amplicon ({len(insert_dna)} bp) and **{plasmid['name']}**
+   with **{chosen_pair['enzyme_5']}** and **{chosen_pair['enzyme_3']}**.
+2. The backbone loses **{chosen_pair['removed_bp']} bp** between the two sites; the
+   insert contributes **{chosen_pair['inserted_bp']} bp**.
+3. **Ligate** and transform. The expected construct is **{chosen_pair['construct_bp']} bp**
+   and encodes {check['vhh_len']} aa of VHH followed by {check['tags_found'] or 'no tag'}.
+4. **Screen** colonies by colony PCR or sequencing — the sequencing section of this
+   app reads the .ab1 files back and confirms the cassette.
+""")
+
+    # ===== Primers =====
+    with ctabs[3]:
+        own = st.file_uploader("Your own primer list (CSV with name,sequence)",
+                               type=["csv"], key="primer_upload")
+        if own is not None:
+            primers = pd.read_csv(io.BytesIO(own.getvalue()))
+            primers["sequence"] = primers["sequence"].astype(str).str.upper()
+            if "note" not in primers.columns:
+                primers["note"] = ""
+            st.caption(f"{len(primers)} primer(s) loaded from your file — nothing is "
+                       "stored.")
+        else:
+            primers = cl.load_primers()
+
+        primer_rows = tuple((r["name"], r["sequence"], str(r.get("note", "")))
+                            for _, r in primers.iterrows())
+        full_report = primer_report_cached(payload, display_name, primer_rows)
+
+        # Only primers that actually anneal to this vector are offered. A primer that
+        # does not bind is not a user error — pHEN6 simply has no gIII for the GIII
+        # primer to sit in — so it is listed as not applicable rather than hidden.
+        binding = full_report[full_report["binds"]] if len(full_report) else full_report
+        applicable = list(dict.fromkeys(binding["primer"])) if len(binding) else []
+        missing = [p for p in primers["name"] if p not in applicable]
+
+        if not applicable:
+            st.warning(f"None of the {len(primers)} primer(s) has an exact match in "
+                       f"{plasmid['name']}.")
+        else:
+            chosen = st.multiselect(f"Primers that bind {plasmid['name']}", applicable,
+                                    default=applicable)
+            report = binding[binding["primer"].isin(chosen)]
+            if len(report):
+                st.dataframe(
+                    report[["primer", "sequence", "orientation", "start", "end", "tm",
+                            "note"]],
+                    hide_index=True, **FIT,
+                    column_config={"note": st.column_config.TextColumn("Note",
+                                                                       width="large"),
+                                   "tm": st.column_config.NumberColumn("Tm (°C)",
+                                                                       format="%.1f")})
+                st.caption(
+                    "Orientation is relative to the plus strand: a *forward* primer "
+                    "extends towards higher coordinates, a *reverse* primer towards "
+                    "lower ones. A primer sitting downstream of the insert only reads "
+                    "back into it when used in the reverse orientation — i.e. as the "
+                    "reverse complement of the sequence shown here.")
+
+                for _, r in report.iterrows():
+                    if r["orientation"] == "forward" and r["start"] > region[1]:
+                        st.info(
+                            f"**{r['primer']}** binds at {int(r['start'])}, downstream of "
+                            "the cloning window, in the forward orientation — it extends "
+                            "away from the insert. To read back into it, use its reverse "
+                            "complement.")
+
+        if missing:
+            st.caption(f"Not applicable to {plasmid['name']}: {', '.join(missing)} — "
+                       "no exact binding site in this vector.")
+
+
+    # ===== Map =====
+    with ctabs[4]:
+        st.subheader("Map")
+        usable_sites = (tuple((r["enzyme"], r["site"], tuple(r["cut_positions"]))
+                              for _, r in cand[cand["usable"]].iterrows())
+                        if not cand.empty else ())
+        try:
+            img_map = png_plasmid_map(payload, display_name,
+                                      circular_view == "Whole plasmid", usable_sites,
+                                      (max(1, region[0] - 160),
+                                       min(stats["length"], region[1] + 160)))
+            st.image(img_map, **FIT)
+            st.caption("Usable enzyme sites are marked in red; features from the file in "
+                       "blue, motifs detected here in orange, a VHH scaffold in green.")
+        except Exception as exc:
+            st.warning(f"Map unavailable: {exc}")
+        plt.close("all")
+
 
     footer()
     st.stop()

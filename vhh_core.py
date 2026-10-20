@@ -1225,7 +1225,12 @@ ECOLI_CODONS = {
 DEFAULT_AVOID_SITES = {
     "NdeI": "CATATG", "XhoI": "CTCGAG", "EcoRI": "GAATTC", "BamHI": "GGATCC",
     "HindIII": "AAGCTT", "NcoI": "CCATGG", "NotI": "GCGGCCGC", "SalI": "GTCGAC",
-    "BsaI": "GGTCTC", "BsmBI": "CGTCTC", "SapI": "GCTCTTC",
+    "BsaI": "GGTCTC", "BsmBI": "CGTCTC", "SapI": "GCTCTTC", "PstI": "CTGCAG",
+    "XbaI": "TCTAGA", "SpeI": "ACTAGT", "KpnI": "GGTACC", "SacI": "GAGCTC",
+    # BstEII is deliberately offered: its site sits in the VHH FR4 and is used
+    # on purpose in the classic nanobody cloning strategy, so removing it is a
+    # choice, not a default.
+    "BstEII": "GGTNACC",
 }
 
 
