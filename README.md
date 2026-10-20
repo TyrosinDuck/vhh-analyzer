@@ -129,6 +129,24 @@ def _my_descriptor(seq, ctx):
 
 A feature that raises returns `NaN` rather than breaking the run.
 
+## What the app reports
+
+| Tab | Contents |
+|---|---|
+| Properties | physico-chemical descriptors, developability flags, custom features |
+| Plots | secondary-structure composition, titration curves, per-residue profiles |
+| CDR / Framework | region table, coloured sequences, both annotation methods explained |
+| Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
+| Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
+| Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
+| Download | CSV, figures as PNG, and a complete PDF report |
+
+Two of these deserve a word of caution. The **hallmark score** is indicative: IMGT 49
+is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs sit
+between the two profiles. **Germline identity** measures similarity to the closest
+germline gene — it is a first-pass humanness indicator, not an immunogenicity
+prediction.
+
 ## Making the tool citable
 
 Once it is stable, connect the GitHub repository to [Zenodo](https://zenodo.org) and cut

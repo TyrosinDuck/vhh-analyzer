@@ -6,6 +6,7 @@ matplotlib>=3.7
 pyfamsa>=0.5
 pymsaviz>=0.4
 streamlit>=1.30
+reportlab>=4.0
 # ANARCI needs the HMMER binary, which comes from packages.txt.
 # Remove this line (and packages.txt) to run with the regex annotator only.
 anarci>=2024.0

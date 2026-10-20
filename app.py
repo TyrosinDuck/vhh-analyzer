@@ -35,7 +35,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261020.1535"
+VERSION = "20261020.1610"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -79,6 +79,18 @@ CACHE_MAX_ENTRIES = 8
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
+def hallmark_data(seq: str, annotation: dict | None = None):
+    """Hallmark tetrad for one sequence (cached: ANARCI numbering is not free)."""
+    return vc.hallmarks(seq, annotation)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
+def germline_data(seq: str):
+    """Closest germline per species; two ANARCI passes, worth caching."""
+    return vc.germline(seq)
 
 
 if CACHE_TTL:
@@ -206,7 +218,8 @@ if errors:
         st.warning(f"**{name}** — annotation failed: {msg}. "
                    "Physico-chemical values are still reported below.")
 
-tabs = st.tabs(["Properties", "Plots", "CDR / Framework", "Alignment", "Download"])
+tabs = st.tabs(["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
+                "Liabilities", "Alignment", "Download"])
 
 # --- Properties ------------------------------------------------------------ #
 with tabs[0]:
@@ -320,8 +333,72 @@ Assumes a canonical scaffold. Where both methods run, a disagreement usually mea
 non-canonical framework — which is itself worth knowing.
 """)
 
-# --- Alignment ------------------------------------------------------------- #
+# --- Hallmarks & germline --------------------------------------------------- #
 with tabs[3]:
+    st.markdown(
+        "The four FR2 positions that distinguish a camelid VHH from a conventional "
+        "VH, and the closest germline genes.")
+    hm_rows, gl_rows = [], []
+    for name, seq in sequences.items():
+        try:
+            hm = hallmark_data(seq, annotations.get(name))
+            hm_rows.append({"name": name, "tetrad": hm["tetrad"],
+                            "camelid score": f"{hm['camelid_score']}/4",
+                            **{f"IMGT {p['IMGT']}": f"{p['residue']} ({p['verdict']})"
+                               for p in hm["positions"]},
+                            "source": hm["source"]})
+        except Exception as exc:
+            st.warning(f"**{name}** — hallmarks unavailable: {exc}")
+        for sp, g in germline_data(seq).items():
+            if g:
+                gl_rows.append({"name": name, "species": sp, "V gene": g["v_gene"],
+                                "V identity (%)": g["v_identity"],
+                                "J gene": g["j_gene"],
+                                "J identity (%)": g["j_identity"]})
+
+    if hm_rows:
+        st.dataframe(pd.DataFrame(hm_rows), hide_index=True, **FIT)
+        st.caption("A score of 4/4 is the canonical camelid profile. IMGT 49 is shared "
+                   "with VH3, so 3/4 with a G at 49 is common and still a genuine VHH. "
+                   "Engineered or humanised constructs sit between the two profiles.")
+
+    if gl_rows:
+        st.subheader("Closest germline")
+        st.dataframe(pd.DataFrame(gl_rows), hide_index=True, **FIT)
+        st.caption("Identity to the closest human germline is a first-pass humanness "
+                   "indicator, not an immunogenicity prediction — a sequence can be "
+                   "germline-like and still contain a T-cell epitope.")
+    elif not hm_rows:
+        st.info("Germline assignment needs ANARCI, which is not available here.")
+
+# --- Liabilities ------------------------------------------------------------ #
+with tabs[4]:
+    st.markdown(
+        "Motifs that are known chemical or manufacturability liabilities, with their "
+        "position and the region they fall in.")
+    any_liab = False
+    for name, seq in sequences.items():
+        liab = vc.find_liabilities(seq, annotations.get(name))
+        with st.container(border=True):
+            st.markdown(f"**{name}** — {len(liab)} motif(s)")
+            if liab.empty:
+                st.markdown("No liability motif detected.")
+            else:
+                any_liab = True
+                st.dataframe(
+                    liab[["liability", "motif", "position", "region", "severity",
+                          "note"]],
+                    hide_index=True, **FIT,
+                    column_config={"note": st.column_config.TextColumn("Note",
+                                                                       width="large")})
+    if any_liab:
+        st.caption("A motif inside a CDR may affect binding; the same motif in a "
+                   "framework is mainly a stability or heterogeneity concern. "
+                   "Severity is a heuristic ranking, not an experimental measurement — "
+                   "an NG in a loop that never sees stress may never deamidate.")
+
+# --- Alignment ------------------------------------------------------------- #
+with tabs[5]:
     if len(sequences) < 2:
         st.info("Submit at least two sequences to see an alignment.")
     else:
@@ -336,10 +413,27 @@ with tabs[3]:
                    "first sequence submitted.")
         st.download_button("Download alignment (FASTA)", aln_text,
                            file_name="alignment.fasta", mime="text/plain")
+
+        st.subheader("Pairwise identity")
+        fig_id = vc.plot_identity(vc.identity_matrix(sequences),
+                                  "Full-length identity (%)")
+        cols_id = st.columns(2)
+        with cols_id[0]:
+            st.pyplot(fig_id, **FIT)
+        fig_id3 = None
+        if annotations and any(a["CDR3"]["seq"] for a in annotations.values()):
+            mat3 = vc.identity_matrix(sequences, annotations, region="CDR3")
+            if len(mat3) >= 2:
+                fig_id3 = vc.plot_identity(mat3, "CDR3 identity (%)")
+                with cols_id[1]:
+                    st.pyplot(fig_id3, **FIT)
+        st.caption("Two clones from the same panning can share 90%+ full-length "
+                   "identity while having unrelated CDR3s — the second matrix is the "
+                   "one that tells you whether they are really the same binder.")
         plt.close("all")
 
 # --- Download -------------------------------------------------------------- #
-with tabs[4]:
+with tabs[6]:
     st.markdown("Export the full results table, including every region sequence, "
                 "custom feature and flag.")
     st.download_button("Results (CSV)", df.to_csv(index=False),
@@ -351,6 +445,45 @@ with tabs[4]:
                        file_name="charge.png", mime="image/png")
     st.download_button("Profiles (PNG)", fig_to_png(fig_prof),
                        file_name="profiles.png", mime="image/png")
+
+    st.divider()
+    st.markdown("### Full PDF report")
+    st.markdown(
+        "Everything in one document: properties, developability flags, regions, "
+        "hallmarks, germline, liabilities and all figures. Building it takes a few "
+        "seconds, so it is generated on demand.")
+
+    if st.button("Build PDF report", type="secondary"):
+        figures = {"Secondary structure": fig_ss, "Charge": fig_charge,
+                   "Charge and hydropathy profiles": fig_prof}
+        if len(sequences) >= 2:
+            try:
+                with tempfile.TemporaryDirectory() as tmp:
+                    fig_msa_pdf, _ = vc.plot_msa(sequences, annotations, workdir=tmp)
+                figures["Multiple sequence alignment"] = fig_msa_pdf
+                figures["Pairwise identity"] = vc.plot_identity(
+                    vc.identity_matrix(sequences), "Full-length identity (%)")
+                mat3 = vc.identity_matrix(sequences, annotations, region="CDR3")
+                if len(mat3) >= 2:
+                    figures["CDR3 identity"] = vc.plot_identity(
+                        mat3, "CDR3 identity (%)")
+            except Exception as exc:
+                st.warning(f"Alignment figures skipped: {exc}")
+
+        with st.spinner("Building the report…"):
+            with tempfile.TemporaryDirectory() as tmp:
+                pdf_path = vc.build_pdf_report(
+                    f"{tmp}/vhh_report.pdf", df, sequences, annotations,
+                    figures=figures, ph=ph, version=VERSION, author=AUTHOR)
+                st.session_state["pdf_bytes"] = pdf_path.read_bytes()
+        plt.close("all")
+
+    if st.session_state.get("pdf_bytes"):
+        st.download_button("Download report (PDF)", st.session_state["pdf_bytes"],
+                           file_name="vhh_report.pdf", mime="application/pdf",
+                           type="primary")
+
+    st.divider()
     st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
 
 footer()

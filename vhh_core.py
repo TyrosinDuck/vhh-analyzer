@@ -332,6 +332,254 @@ def annotate_anarci(seq: str, scheme: str = "imgt") -> dict:
                 "seq": "".join(out[r]["seq"])} for r in REGIONS}
 
 
+# --------------------------------------------------------------------------- #
+# VHH hallmarks and germline assignment
+# --------------------------------------------------------------------------- #
+
+# The four FR2 positions that distinguish a camelid VHH from a conventional VH.
+# IMGT 42/49/50/52 are Kabat 37/44/45/47. In a human VH3 these are V/G/L/W; the
+# camelid substitutions replace the VH–VL interface with a hydrophilic surface.
+HALLMARK_POSITIONS = [
+    # IMGT, Kabat, camelid-preferred, VH3 consensus, note
+    (42, 37, set("FYLH"), "V", "VH–VL interface; F/Y is the classic VHH signature"),
+    (49, 44, set("EQDG"), "G", "least discriminating — G also occurs in VH3"),
+    (50, 45, set("RCLP"), "L", "R is the classic VHH signature"),
+    (52, 47, set("GLFWS"), "W", "W indicates a VH-like interface"),
+]
+
+
+def imgt_position_map(seq: str) -> dict[int, str]:
+    """{IMGT position: residue} for one sequence. Requires ANARCI."""
+    from anarci import anarci
+
+    numbered, _d, _h = anarci([("q", clean_sequence(seq))], scheme="imgt", output=False)
+    if numbered[0] is None:
+        raise ValueError("ANARCI could not number this sequence")
+    return {num: aa for (num, _ins), aa in numbered[0][0][0] if aa != "-"}
+
+
+def hallmarks(seq: str, annotation: dict | None = None) -> dict:
+    """Read the four FR2 hallmark residues and score them camelid vs VH-like.
+
+    Uses IMGT numbering when ANARCI is available, otherwise reads the positions
+    off the regex FR2 block (14 residues starting at the WxRQ motif, Kabat
+    36–49). Returns the per-position detail plus a 0–4 ``camelid_score``.
+
+    The score is an indication, not a classification: position 49 in particular
+    is shared with VH3, and engineered or humanised constructs sit in between.
+    """
+    residues: dict[int, str] = {}
+    source = "regex FR2 offsets"
+    try:
+        pos_map = imgt_position_map(seq)
+        residues = {imgt: pos_map.get(imgt) for imgt, *_ in HALLMARK_POSITIONS}
+        source = "ANARCI / IMGT numbering"
+    except Exception:
+        ann = annotation or annotate_regex(seq)
+        fr2 = ann["FR2"]["seq"]
+        for imgt, kabat, *_ in HALLMARK_POSITIONS:
+            idx = kabat - 36                       # FR2 starts at Kabat 36
+            residues[imgt] = fr2[idx] if 0 <= idx < len(fr2) else None
+
+    rows, score = [], 0
+    for imgt, kabat, camelid, vh3, note in HALLMARK_POSITIONS:
+        aa = residues.get(imgt)
+        is_camelid = bool(aa) and aa in camelid and aa != vh3
+        score += int(is_camelid)
+        rows.append({
+            "IMGT": imgt, "Kabat": kabat, "residue": aa or "?",
+            "VH3": vh3, "camelid": "/".join(sorted(camelid)),
+            "verdict": "camelid" if is_camelid else ("VH-like" if aa == vh3 else "other"),
+            "note": note,
+        })
+    return {"positions": rows, "camelid_score": score, "source": source,
+            "tetrad": "".join(residues.get(p) or "?" for p, *_ in HALLMARK_POSITIONS)}
+
+
+def germline(seq: str, species: tuple[str, ...] = ("alpaca", "human")) -> dict:
+    """Closest germline V and J gene per species, with percent identity.
+
+    Running the assignment once per species gives both the camelid germline the
+    sequence derives from and its identity to the closest human germline — the
+    latter being the usual first-pass humanness indicator.
+    """
+    from anarci import anarci
+
+    seq = clean_sequence(seq)
+    out = {}
+    for sp in species:
+        try:
+            _n, details, _h = anarci([("q", seq)], scheme="imgt", output=False,
+                                     assign_germline=True, allowed_species=[sp])
+            d = details[0][0]
+            g = d.get("germlines", {})
+            (_s, v_gene), v_id = g["v_gene"]
+            (_s2, j_gene), j_id = g["j_gene"]
+            out[sp] = {"v_gene": v_gene, "v_identity": round(100 * v_id, 1),
+                       "j_gene": j_gene, "j_identity": round(100 * j_id, 1)}
+        except Exception:
+            out[sp] = None
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Sequence liabilities
+# --------------------------------------------------------------------------- #
+
+LIABILITY_PATTERNS = [
+    ("N-glycosylation", r"N[^P][ST]", "high",
+     "N-x-S/T sequon — potential glycosylation, heterogeneity in eukaryotic expression"),
+    ("Deamidation", r"N[GS]", "high", "NG/NS — fast asparagine deamidation"),
+    ("Deamidation (slow)", r"N[AHNT]", "low", "slower deamidation context"),
+    ("Isomerisation", r"D[GS]", "medium", "DG/DS — aspartate isomerisation"),
+    ("Fragmentation", r"DP", "medium", "DP — acid-labile peptide bond"),
+    ("Oxidation (Met)", r"M", "low", "methionine — oxidation under stress"),
+    ("Oxidation (Trp)", r"W", "low", "tryptophan — oxidation, especially in CDRs"),
+    ("Integrin binding", r"RGD", "medium", "RGD motif — potential integrin binding"),
+    ("Hydrophobic patch", r"[FILVWY]{4,}", "medium",
+     "four or more consecutive hydrophobic residues"),
+]
+
+# The two cysteines forming the canonical intradomain disulfide
+CANONICAL_CYS_REGIONS = {"FR1", "FR3"}
+
+
+def region_of(position: int, annotation: dict | None) -> str:
+    """Region containing a 1-based residue position, or '?' without annotation."""
+    if not annotation:
+        return "?"
+    for region in REGIONS:
+        r = annotation[region]
+        if r["start"] and r["start"] <= position <= r["end"]:
+            return region
+    return "?"
+
+
+def find_liabilities(seq: str, annotation: dict | None = None) -> pd.DataFrame:
+    """Locate sequence liabilities, with their position and region.
+
+    A motif in a CDR does not carry the same weight as the same motif in a
+    framework: in a CDR it may alter binding, in a framework it is mostly a
+    stability or heterogeneity concern. The region column is what makes this
+    table actionable rather than a count.
+    """
+    seq = clean_sequence(seq)
+    rows = []
+    for label, pattern, severity, note in LIABILITY_PATTERNS:
+        for m in re.finditer(f"(?=({pattern}))", seq):      # overlapping matches
+            motif = m.group(1)
+            start = m.start() + 1
+            end = start + len(motif) - 1
+            region = region_of(start, annotation)
+            rows.append({
+                "liability": label, "motif": motif,
+                # always a string: a mixed int/str column breaks Arrow
+                # serialisation in the Streamlit dataframe widget
+                "position": str(start) if start == end else f"{start}–{end}",
+                "region": region,
+                "severity": severity,
+                "in_CDR": region.startswith("CDR"),
+                "note": note,
+            })
+
+    # Cysteines: the canonical pair is expected, anything else is flagged
+    cys = [i + 1 for i, a in enumerate(seq) if a == "C"]
+    if len(cys) > 2:
+        for pos in cys:
+            region = region_of(pos, annotation)
+            if region not in CANONICAL_CYS_REGIONS:
+                rows.append({
+                    "liability": "Extra cysteine", "motif": "C", "position": str(pos),
+                    "region": region, "severity": "high", "in_CDR": region.startswith("CDR"),
+                    "note": "outside the canonical FR1/FR3 pair — possible free thiol "
+                            "or additional disulfide",
+                })
+    elif len(cys) < 2:
+        rows.append({
+            "liability": "Missing cysteine", "motif": "-", "position": "-",
+            "region": "-", "severity": "high", "in_CDR": False,
+            "note": f"only {len(cys)} Cys — the canonical intradomain disulfide is incomplete",
+        })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    order = {"high": 0, "medium": 1, "low": 2}
+    return (df.assign(_s=df["severity"].map(order))
+              .sort_values(["_s", "liability"]).drop(columns="_s")
+              .reset_index(drop=True))
+
+
+# --------------------------------------------------------------------------- #
+# Pairwise identity
+# --------------------------------------------------------------------------- #
+
+def pairwise_identity(a: str, b: str) -> float:
+    """Percent identity of two sequences, from a global pairwise alignment.
+
+    Identity is expressed over the alignment length excluding positions that are
+    a gap in both sequences, which is the usual convention for comparing
+    antibody domains of unequal length.
+    """
+    from Bio import Align
+
+    aligner = Align.PairwiseAligner(scoring="blastp")
+    aligner.mode = "global"
+    aln = aligner.align(clean_sequence(a), clean_sequence(b))[0]
+    top, bottom = str(aln[0]), str(aln[1])
+    pairs = [(x, y) for x, y in zip(top, bottom) if not (x == "-" and y == "-")]
+    if not pairs:
+        return float("nan")
+    return round(100 * sum(x == y for x, y in pairs) / len(pairs), 1)
+
+
+def identity_matrix(seqs: dict[str, str], annotations: dict | None = None,
+                    region: str | None = None) -> pd.DataFrame:
+    """Square matrix of pairwise percent identity.
+
+    ``region`` restricts the comparison to one annotated region, typically
+    ``"CDR3"``: two clones from the same panning can share 95% identity overall
+    while having unrelated CDR3s, so the full-length figure alone is misleading.
+    """
+    names = list(seqs)
+    if region:
+        if not annotations:
+            raise ValueError("Region-restricted identity needs annotations")
+        subject = {n: annotations[n][region]["seq"] for n in names
+                   if n in annotations and annotations[n][region]["seq"]}
+        names = list(subject)
+    else:
+        subject = {n: seqs[n] for n in names}
+
+    mat = pd.DataFrame(index=names, columns=names, dtype=float)
+    for i, a in enumerate(names):
+        mat.loc[a, a] = 100.0
+        for b in names[i + 1:]:
+            val = pairwise_identity(subject[a], subject[b])
+            mat.loc[a, b] = mat.loc[b, a] = val
+    return mat
+
+
+def plot_identity(mat: pd.DataFrame, title: str = "Pairwise identity (%)"):
+    """Heatmap of an identity matrix, annotated with the values."""
+    n = len(mat)
+    fig, ax = plt.subplots(figsize=(1.1 * n + 3, 0.9 * n + 2.4))
+    data = mat.to_numpy(dtype=float)
+    im = ax.imshow(data, cmap="viridis", vmin=min(50, np.nanmin(data)), vmax=100)
+    ax.set_xticks(range(n), mat.columns, rotation=45, ha="right", fontsize=8)
+    ax.set_yticks(range(n), mat.index, fontsize=8)
+    for i in range(n):
+        for j in range(n):
+            v = data[i, j]
+            if not np.isnan(v):
+                ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=8,
+                        color="white" if v < 85 else "black")
+    ax.set_title(title, fontsize=10)
+    fig.colorbar(im, ax=ax, shrink=0.75, label="% identity")
+    fig.tight_layout()
+    return fig
+
+
 def annotate(seq: str, method: str | None = None) -> tuple[dict, str]:
     """Dispatch to ANARCI or the regex annotator.
 
@@ -613,3 +861,245 @@ def analyze(seqs: dict[str, str], ph: float | None = None,
         rows.append(row)
 
     return pd.DataFrame(rows), annotations, errors
+
+
+# --------------------------------------------------------------------------- #
+# PDF report
+# --------------------------------------------------------------------------- #
+
+SEVERITY_COLORS = {"high": "#c44e52", "medium": "#dd8452", "low": "#8c8c8c"}
+
+
+def _fig_bytes(fig, dpi: int = 200) -> bytes:
+    import io
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    return buf.getvalue()
+
+
+def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
+                     annotations: dict, figures: dict | None = None,
+                     ph: float | None = None, version: str = "",
+                     author: str = "", with_hallmarks: bool = True,
+                     with_liabilities: bool = True) -> Path:
+    """Render a complete analysis report as a PDF.
+
+    ``figures`` maps a caption to a matplotlib figure; they are embedded in the
+    order given. Returns the path written.
+    """
+    import io
+    from datetime import datetime
+
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (Image, PageBreak, Paragraph, SimpleDocTemplate,
+                                    Spacer, Table, TableStyle)
+
+    ph = DEFAULTS["ph"] if ph is None else ph
+    path = Path(path)
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontSize=8.5, leading=11)
+    mono = ParagraphStyle("mono", parent=body, fontName="Courier", fontSize=7.4,
+                          leading=10, alignment=TA_LEFT)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=4)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, spaceBefore=10)
+    h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontSize=9.5, spaceBefore=7)
+    small = ParagraphStyle("small", parent=body, fontSize=7, textColor=colors.grey)
+
+    doc = SimpleDocTemplate(
+        str(path), pagesize=A4,
+        leftMargin=16 * mm, rightMargin=16 * mm,
+        topMargin=14 * mm, bottomMargin=16 * mm,
+        title="VHH analysis report", author=author or "VHH Analyzer")
+
+    def table(data, widths=None, font=7.2, header=True):
+        t = Table(data, colWidths=widths, repeatRows=1 if header else 0, hAlign="LEFT")
+        style = [
+            ("FONTSIZE", (0, 0), (-1, -1), font),
+            ("LEADING", (0, 0), (-1, -1), font + 2.5),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cccccc")),
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ]
+        if header:
+            style += [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f5")),
+                      ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")]
+        t.setStyle(TableStyle(style))
+        return t
+
+    def df_table(frame, widths=None, font=7.2):
+        data = [list(frame.columns)] + frame.astype(str).values.tolist()
+        return table(data, widths, font)
+
+    story = []
+
+    # ---- Header -----------------------------------------------------------
+    story.append(Paragraph("VHH analysis report", h1))
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    meta = f"Generated {stamp} · {len(seqs)} sequence(s) · net charge at pH {ph}"
+    if version:
+        meta += f" · VHH Analyzer {version}"
+    if author:
+        meta += f" · {author}"
+    story += [Paragraph(meta, small), Spacer(1, 7)]
+
+    # ---- Physico-chemical summary -----------------------------------------
+    story.append(Paragraph("Physico-chemical properties", h2))
+    cols = [c for c in ["name", "length", "mw_kda", "pI", "ext_coeff_reduced",
+                        "A280_0.1pct", "instability_index", "aliphatic_index",
+                        "gravy", "aromaticity", "net_charge", "n_Cys"]
+            if c in df.columns]
+    header = ["Name", "Len", "MW kDa", "pI", "e280", "A280 1mg/mL", "Instab.",
+              "Aliph.", "GRAVY", "Arom.", f"Charge", "Cys"]
+    summary = [header[:len(cols)]] + df[cols].astype(str).values.tolist()
+    story += [table(summary, font=6.8), Spacer(1, 4),
+              Paragraph("All values are theoretical, computed from the sequence alone "
+                        "(ProtParam). Instability index below 40 predicts a stable "
+                        "protein; GRAVY above -0.2 flags a relatively hydrophobic, "
+                        "aggregation-prone candidate.", small)]
+
+    # ---- Per-sequence sections --------------------------------------------
+    for name, seq in seqs.items():
+        story += [PageBreak(), Paragraph(name, h2)]
+        row = df[df["name"] == name]
+        row = row.iloc[0] if len(row) else None
+        ann = annotations.get(name)
+
+        if row is not None:
+            facts = [["Length", f"{row['length']} aa", "MW",
+                      f"{row['mw_kda']} kDa"],
+                     ["Theoretical pI", f"{row['pI']}", f"Net charge (pH {ph})",
+                      f"{row['net_charge']:+}"],
+                     ["e280 (reduced)", f"{row['ext_coeff_reduced']} M-1cm-1",
+                      "A280 at 1 mg/mL", f"{row['A280_0.1pct']}"],
+                     ["Instability index", f"{row['instability_index']}",
+                      "Aliphatic index", f"{row['aliphatic_index']}"],
+                     ["GRAVY", f"{row['gravy']}", "Aromaticity",
+                      f"{row['aromaticity']}"]]
+            story.append(table(facts, widths=[34 * mm, 42 * mm, 36 * mm, 42 * mm],
+                               header=False))
+
+            flags = stability_flags(row, ph=ph)
+            story.append(Paragraph("Developability flags", h3))
+            story.append(Paragraph(
+                "<br/>".join("• " + f for f in flags) if flags
+                else "No flag raised.", body))
+
+        # Sequence with regions
+        if ann:
+            story.append(Paragraph("Regions", h3))
+            reg_rows = [["Region", "Range", "Length", "Sequence"]]
+            for region in REGIONS:
+                r = ann[region]
+                if r["seq"]:
+                    reg_rows.append([region, f"{r['start']}–{r['end']}",
+                                     str(len(r["seq"])), r["seq"]])
+            story.append(table(reg_rows, widths=[16 * mm, 20 * mm, 14 * mm, 104 * mm]))
+            if row is not None and "annotation_method" in row:
+                story.append(Paragraph(f"Annotation method: {row['annotation_method']}",
+                                       small))
+
+        story.append(Paragraph("Sequence", h3))
+        wrapped = "<br/>".join(seq[i:i + 70] for i in range(0, len(seq), 70))
+        story.append(Paragraph(wrapped, mono))
+
+        # Hallmarks and germline
+        if with_hallmarks:
+            try:
+                hm = hallmarks(seq, ann)
+                story.append(Paragraph(
+                    f"VHH hallmarks — tetrad {hm['tetrad']}, "
+                    f"{hm['camelid_score']}/4 camelid ({hm['source']})", h3))
+                hrows = [["IMGT", "Kabat", "Residue", "VH3", "Camelid", "Verdict"]]
+                hrows += [[str(p["IMGT"]), str(p["Kabat"]), p["residue"], p["VH3"],
+                           p["camelid"], p["verdict"]] for p in hm["positions"]]
+                story.append(table(hrows, widths=[16 * mm, 16 * mm, 20 * mm,
+                                                  16 * mm, 28 * mm, 26 * mm]))
+                story.append(Paragraph(
+                    "Indicative only: IMGT 49 is shared with VH3, and engineered or "
+                    "humanised constructs sit between the two profiles.", small))
+            except Exception as exc:
+                story.append(Paragraph(f"Hallmarks unavailable: {exc}", small))
+
+            gl = germline(seq)
+            if any(gl.values()):
+                grows = [["Species", "Closest V gene", "V identity", "J gene", "J identity"]]
+                for sp, g in gl.items():
+                    if g:
+                        grows.append([sp, g["v_gene"], f"{g['v_identity']} %",
+                                      g["j_gene"], f"{g['j_identity']} %"])
+                story.append(Paragraph("Closest germline", h3))
+                story.append(table(grows, widths=[24 * mm, 36 * mm, 26 * mm,
+                                                  30 * mm, 26 * mm]))
+                story.append(Paragraph(
+                    "Identity to the closest human germline is a first-pass humanness "
+                    "indicator, not an immunogenicity prediction.", small))
+
+        # Liabilities
+        if with_liabilities:
+            liab = find_liabilities(seq, ann)
+            story.append(Paragraph("Sequence liabilities", h3))
+            if liab.empty:
+                story.append(Paragraph("None detected.", body))
+            else:
+                lrows = [["Liability", "Motif", "Position", "Region", "Severity"]]
+                lrows += liab[["liability", "motif", "position", "region",
+                               "severity"]].astype(str).values.tolist()
+                t = table(lrows, widths=[44 * mm, 20 * mm, 24 * mm, 22 * mm, 22 * mm])
+                extra = []
+                for i, sev in enumerate(liab["severity"], start=1):
+                    extra.append(("TEXTCOLOR", (4, i), (4, i),
+                                  colors.HexColor(SEVERITY_COLORS.get(sev, "#333333"))))
+                t.setStyle(TableStyle(extra))
+                story.append(t)
+                story.append(Paragraph(
+                    "A motif inside a CDR may affect binding; the same motif in a "
+                    "framework is mainly a stability or heterogeneity concern. "
+                    "Severity is a heuristic, not an experimental measurement.", small))
+
+    # ---- Figures ----------------------------------------------------------
+    if figures:
+        from reportlab.lib.pagesizes import A4 as _A4
+
+        avail = _A4[0] - 32 * mm
+        for caption, fig in figures.items():
+            if fig is None:
+                continue
+            story.append(PageBreak())
+            story.append(Paragraph(caption, h2))
+            png = _fig_bytes(fig)
+            img = Image(io.BytesIO(png))
+            ratio = img.imageHeight / img.imageWidth
+            img.drawWidth = avail
+            img.drawHeight = avail * ratio
+            max_h = _A4[1] - 60 * mm
+            if img.drawHeight > max_h:                 # keep tall figures on one page
+                img.drawHeight, img.drawWidth = max_h, max_h / ratio
+            story.append(img)
+
+    # ---- Caveats ----------------------------------------------------------
+    story += [PageBreak(), Paragraph("Notes and caveats", h2), Paragraph(
+        "• Every value in this report is theoretical, derived from the amino-acid "
+        "sequence alone. Confirm the isoelectric point by IEF or cIEF and the "
+        "extinction coefficient against a measured A280 before using them "
+        "quantitatively.<br/>"
+        "• Secondary-structure fractions are composition-based propensities, not a "
+        "structure prediction. Use DSSP on a model for real secondary structure.<br/>"
+        "• CDR boundaries depend on the method: IMGT windows via ANARCI are tighter "
+        "than the regex anchors, so CDR1 and CDR2 lengths are not comparable between "
+        "the two.<br/>"
+        "• Liability motifs and developability flags are triage heuristics. They "
+        "indicate where to look, not what will happen.<br/>"
+        "• Germline identity reflects similarity to the closest germline gene; it is "
+        "not an immunogenicity prediction.", body)]
+
+    footer_bits = [b for b in ["VHH Analyzer", version, author] if b]
+    story += [Spacer(1, 8), Paragraph(" · ".join(footer_bits), small)]
+
+    doc.build(story)
+    return path
