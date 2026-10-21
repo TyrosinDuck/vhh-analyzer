@@ -37,12 +37,18 @@ __all__ = [
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS",
     "pairwise_scores", "cluster_families", "plot_family_dendrogram",
-    "FAMILY_DEFAULTS",
+    "FAMILY_DEFAULTS", "imgt_numbering", "imgt_region",
+    "aggregation_profile", "aggregation_regions", "aggregation_summary",
+    "plot_aggregation", "weakest_windows", "SOLUBILITY_WEIGHTS",
+    "APR_THRESHOLD",
+    "humanness", "human_germlines", "disulfides",
+    "suggest_repairs", "apply_repairs", "LIABILITY_REPAIRS",
+    "CONSERVED_IMGT",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21c"
+__version__ = "2026.10.21d"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1310,6 +1316,557 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
         ax.spines[side].set_visible(False)
     fig.tight_layout()
     return fig, dd
+
+
+
+# ---------------------------------------------------------------------------
+# IMGT numbering, exposed for the modules that need positions rather than regions
+# ---------------------------------------------------------------------------
+
+def imgt_numbering(seq: str) -> list[tuple[int, str, str, int]]:
+    """``[(imgt_number, insertion_code, residue, residue_index_1based), ...]``.
+
+    ``annotate_anarci`` throws the numbering away once it has the regions, but
+    humanness and disulfide analysis both need to talk about IMGT positions, so
+    this returns it. Needs ANARCI.
+    """
+    from anarci import anarci
+
+    seq = clean_sequence(seq)
+    numbered, _details, _ = anarci([("query", seq)], scheme="imgt", output=False)
+    if numbered[0] is None:
+        raise ValueError("ANARCI could not number this sequence")
+    numbering, start, _end = numbered[0][0]
+    out, idx = [], start
+    for (num, ins), aa in numbering:
+        if aa == "-":
+            continue
+        out.append((int(num), (ins or " ").strip(), aa, idx + 1))
+        idx += 1
+    return out
+
+
+def imgt_region(num: int) -> str:
+    """Region of an IMGT position number."""
+    for region, (lo, hi) in IMGT_CDR.items():
+        if lo <= num <= hi:
+            return region
+    return "FR1" if num < 27 else "FR2" if num < 56 else "FR3" if num < 105 else "FR4"
+
+
+# ---------------------------------------------------------------------------
+# Aggregation-prone regions
+# ---------------------------------------------------------------------------
+# What this is, and what it is not.
+#
+# The published sequence-only solubility predictors (CamSol intrinsic,
+# AGGRESCAN, TANGO) use coefficients fitted to experimental data. This module
+# does NOT reproduce any of them: the numbers here are a transparent composite
+# of four quantities that are each individually well established as determinants
+# of aggregation propensity, combined with weights that are a judgement call.
+#
+# So read the profile for WHERE along the sequence the aggregation-prone stretches
+# are, and compare sequences against each other. Do not read the absolute value
+# as a predicted solubility — for a validated number, run the sequence through
+# the CamSol or AGGRESCAN server.
+#
+# The four components, per residue:
+#   charge       |net charge| at the working pH. Charged residues of either sign
+#                oppose aggregation, so the absolute value is what counts.
+#   hydrophobic  Kyte & Doolittle hydropathy. Exposed hydrophobic stretches are
+#                the classic driver of aggregation.
+#   beta         Chou-Fasman beta-sheet propensity. An aggregation-prone region is
+#                typically a short beta-prone segment.
+#   gatekeeper   P, D, E, K, R. Residues that flank and interrupt aggregation-prone
+#                segments in natural sequences.
+
+SOLUBILITY_WEIGHTS = {"charge": 1.0, "hydrophobic": 0.6, "beta": 0.8,
+                      "gatekeeper": 0.5}
+GATEKEEPERS = set("PDEKR")
+APR_THRESHOLD = -0.3      # smoothed score below this marks an aggregation-prone window
+
+
+def aggregation_profile(seq: str, ph: float | None = None,
+                        window: int | None = None,
+                        weights: dict | None = None) -> pd.DataFrame:
+    """Per-residue aggregation-propensity profile, smoothed over a window.
+
+    Returns one row per residue with each component and the combined ``score``:
+    **positive leans soluble, negative leans aggregation-prone**. ``raw`` is the
+    unsmoothed value, ``score`` the sliding-window mean.
+    """
+    import numpy as np
+
+    seq = clean_sequence(seq)
+    window = DEFAULTS["profile_window"] if window is None else window
+    w = {**SOLUBILITY_WEIGHTS, **(weights or {})}
+    del ph   # formal charges are used, not pH-dependent ones; see CHARGE above
+
+    # CHARGE is the formal charge at neutral pH used by the profile plots; the
+    # absolute value is what matters here, since either sign opposes aggregation.
+    charge = np.array([abs(CHARGE.get(a, 0)) for a in seq], float)
+    hydro = np.array([KD[a] for a in seq], float) / 4.5          # to roughly [-1, 1]
+    # CHOU_FASMAN stores propensities x100 (P-beta 1.09 is held as 109), so
+    # rescale before centring on 1.0 = no preference.
+    beta = np.array([CHOU_FASMAN[a][1] for a in seq], float) / 100.0 - 1.0
+    gate = np.array([1.0 if a in GATEKEEPERS else 0.0 for a in seq], float)
+
+    raw = (w["charge"] * charge - w["hydrophobic"] * hydro
+           - w["beta"] * beta + w["gatekeeper"] * gate)
+    smooth = sliding(raw, window)
+    return pd.DataFrame({
+        "position": range(1, len(seq) + 1), "residue": list(seq),
+        "charge": charge.round(3), "hydropathy": hydro.round(3),
+        "beta_propensity": beta.round(3), "gatekeeper": gate,
+        "raw": raw.round(3), "score": np.round(smooth, 3),
+    })
+
+
+def aggregation_regions(profile: pd.DataFrame, annotation: dict | None = None,
+                        threshold: float = APR_THRESHOLD,
+                        min_length: int = 3) -> pd.DataFrame:
+    """Contiguous stretches whose smoothed score stays below ``threshold``."""
+    rows, run = [], []
+    for _, r in profile.iterrows():
+        if r["score"] < threshold:
+            run.append(r)
+        elif run:
+            rows.append(run)
+            run = []
+    if run:
+        rows.append(run)
+
+    out = []
+    for run in rows:
+        if len(run) < min_length:
+            continue
+        start, end = int(run[0]["position"]), int(run[-1]["position"])
+        regions = sorted({region_of(int(r["position"]), annotation) for r in run})
+        out.append({
+            "start": start, "end": end, "length": end - start + 1,
+            "range": f"{start}-{end}",
+            "sequence": "".join(r["residue"] for r in run),
+            "region": "/".join(regions),
+            "in_CDR": any(x.startswith("CDR") for x in regions),
+            "min_score": round(min(float(r["score"]) for r in run), 3),
+            "mean_score": round(sum(float(r["score"]) for r in run) / len(run), 3),
+        })
+    return pd.DataFrame(out)
+
+
+def aggregation_summary(profile: pd.DataFrame, regions: pd.DataFrame) -> dict:
+    """Headline numbers for the profile."""
+    worst = profile.loc[profile["score"].idxmin()] if len(profile) else None
+    return {
+        "mean_score": round(float(profile["score"].mean()), 3) if len(profile) else None,
+        "min_score": round(float(profile["score"].min()), 3) if len(profile) else None,
+        "worst_position": int(worst["position"]) if worst is not None else None,
+        "n_regions": int(len(regions)),
+        "residues_in_regions": int(regions["length"].sum()) if len(regions) else 0,
+        "fraction_prone": round(float(regions["length"].sum()) / len(profile), 3)
+                          if len(profile) and len(regions) else 0.0,
+    }
+
+
+def weakest_windows(profile: pd.DataFrame, annotation: dict | None = None,
+                    n: int = 3, width: int = 7) -> pd.DataFrame:
+    """The ``n`` lowest-scoring windows, whether or not they cross the threshold.
+
+    A well-behaved VHH often has no region below the threshold at all, which
+    would leave the table empty and tell you nothing. These are its weakest
+    spots regardless, which is what you actually want to compare between
+    candidates.
+    """
+    if not len(profile):
+        return pd.DataFrame()
+    scores = profile["score"].to_numpy()
+    seq = "".join(profile["residue"])
+    taken, rows = set(), []
+    order = sorted(range(len(scores)), key=lambda i: scores[i])
+    for centre in order:
+        if len(rows) >= n:
+            break
+        if any(abs(centre - t) < width for t in taken):
+            continue          # keep the windows from overlapping each other
+        taken.add(centre)
+        lo = max(0, centre - width // 2)
+        hi = min(len(seq), lo + width)
+        regions = sorted({region_of(i + 1, annotation) for i in range(lo, hi)})
+        rows.append({
+            "rank": len(rows) + 1,
+            "centre": centre + 1,
+            "range": f"{lo + 1}-{hi}",
+            "sequence": seq[lo:hi],
+            "region": "/".join(regions),
+            "in_CDR": any(x.startswith("CDR") for x in regions),
+            "score": round(float(scores[centre]), 3),
+            "below_threshold": bool(scores[centre] < APR_THRESHOLD),
+        })
+    return pd.DataFrame(rows)
+
+
+def plot_aggregation(profile: pd.DataFrame, annotation: dict | None = None,
+                     threshold: float = APR_THRESHOLD,
+                     title: str = "Aggregation-prone regions"):
+    """Profile with aggregation-prone stretches shaded and CDR bands marked."""
+    import numpy as np
+
+    fig, ax = plt.subplots(figsize=(10, 3.4))
+    x = profile["position"].to_numpy()
+    y = profile["score"].to_numpy()
+
+    if annotation:
+        for region, colour in REGION_COLORS.items():
+            info = annotation.get(region) or {}
+            if info.get("start") and info.get("end") and region.startswith("CDR"):
+                ax.axvspan(info["start"] - 0.5, info["end"] + 0.5, color=colour,
+                           alpha=0.22, lw=0, zorder=0)
+                ax.text((info["start"] + info["end"]) / 2, 1.02, region,
+                        transform=ax.get_xaxis_transform(), ha="center",
+                        fontsize=7.5, color="0.3")
+
+    ax.axhline(0, color="0.5", lw=0.8)
+    ax.axhline(threshold, color="crimson", lw=0.9, ls="--")
+    ax.plot(x, y, color="#1f3b73", lw=1.5, zorder=3)
+    ax.fill_between(x, y, threshold, where=(y < threshold), color="crimson",
+                    alpha=0.3, zorder=2, interpolate=True)
+    ax.set_xlabel("Residue")
+    ax.set_ylabel("← aggregation-prone    soluble →", fontsize=8.5)
+    ax.set_title(title, fontsize=10)
+    ax.set_xlim(x.min() - 1, x.max() + 1)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    fig.tight_layout()
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Humanness
+# ---------------------------------------------------------------------------
+# Percent identity to the closest human germline V gene, computed position by
+# position in IMGT numbering rather than by alignment, using the IMGT-gapped
+# germline sequences that ship with ANARCI.
+#
+# This is the usual first-pass humanness indicator and nothing more. It is NOT
+# an immunogenicity prediction: immunogenicity depends on T-cell epitopes,
+# formulation, dose and route, none of which is in the sequence alone.
+
+_HUMAN_V: dict | None = None
+
+
+def human_germlines(family: str | None = None) -> dict:
+    """IMGT-gapped human heavy-chain V germlines from ANARCI's own data."""
+    global _HUMAN_V
+    if _HUMAN_V is None:
+        from anarci.germlines import all_germlines
+        _HUMAN_V = dict(all_germlines["V"]["H"]["human"])
+    if family:
+        return {k: v for k, v in _HUMAN_V.items() if k.startswith(family)}
+    return dict(_HUMAN_V)
+
+
+def humanness(seq: str, family: str | None = "IGHV3",
+              annotation: dict | None = None) -> dict:
+    """Identity to the closest human germline, with the divergent positions.
+
+    Identity is computed over **framework positions only**, because CDR
+    divergence from a human germline is expected and not something you would
+    ever "fix". ``family`` restricts the search ("IGHV3" is the family VHHs
+    belong to); pass ``None`` to search all human heavy V genes.
+
+    The returned ``divergences`` table is the actionable part: one row per
+    framework position where the VHH differs from the closest human germline,
+    flagged for whether it is one of the four hallmark positions and whether the
+    substitution is conservative.
+    """
+    numbering = imgt_numbering(seq)
+    by_imgt = {num: aa for num, ins, aa, _i in numbering if not ins}
+    idx_of = {num: i for num, ins, _aa, i in numbering if not ins}
+    hallmark_imgt = {h[0] for h in HALLMARK_POSITIONS}
+
+    best, best_id = None, -1.0
+    scores = {}
+    for gene, gl in human_germlines(family).items():
+        match = total = 0
+        for num, aa in by_imgt.items():
+            if num > len(gl):
+                continue
+            g = gl[num - 1]
+            if g == "-" or imgt_region(num).startswith("CDR"):
+                continue
+            total += 1
+            match += (g == aa)
+        if total:
+            pct = 100 * match / total
+            scores[gene] = round(pct, 1)
+            if pct > best_id:
+                best, best_id = gene, pct
+
+    if best is None:
+        return {"gene": None, "identity": None, "divergences": pd.DataFrame(),
+                "by_region": pd.DataFrame(), "all_scores": scores}
+
+    gl = human_germlines(family)[best]
+    rows, per_region = [], {}
+    for num, aa in sorted(by_imgt.items()):
+        if num > len(gl):
+            continue
+        g = gl[num - 1]
+        if g == "-":
+            continue
+        region = imgt_region(num)
+        stat = per_region.setdefault(region, {"match": 0, "total": 0})
+        stat["total"] += 1
+        stat["match"] += (g == aa)
+        if g != aa and not region.startswith("CDR"):
+            rows.append({
+                "imgt": num, "region": region,
+                "position": idx_of.get(num),
+                "vhh": aa, "human_germline": g,
+                "hallmark": num in hallmark_imgt,
+                "conservative": _blosum(aa, g) > 0 if _blosum_ready() else None,
+            })
+
+    divergences = pd.DataFrame(rows)
+    by_region = pd.DataFrame([
+        {"region": r, "identity": round(100 * v["match"] / v["total"], 1),
+         "positions": v["total"]}
+        for r, v in sorted(per_region.items())
+    ])
+    return {"gene": best, "identity": round(best_id, 1),
+            "divergences": divergences, "by_region": by_region,
+            "all_scores": dict(sorted(scores.items(), key=lambda kv: -kv[1])),
+            "n_divergent": int(len(divergences)),
+            "n_hallmark": int(divergences["hallmark"].sum()) if len(divergences) else 0}
+
+
+def _blosum_ready() -> bool:
+    """BLOSUM62 is loaded lazily by the family aligner; make sure it is there."""
+    _family_aligner()
+    return _BLOSUM62 is not None
+
+
+# ---------------------------------------------------------------------------
+# Disulfides
+# ---------------------------------------------------------------------------
+# The canonical VHH disulfide is IMGT 23-104. Camelid VHHs with long CDR3s
+# frequently carry a second, non-canonical pair, most often between FR2
+# (IMGT 50) or CDR1 and a cysteine in CDR3. That pair is a stabiliser, not a
+# liability, which is the opposite of how a lone extra cysteine should be read -
+# hence this analysis, which the liabilities table on its own cannot give you.
+
+CANONICAL_PAIR = (23, 104)
+EXTRA_PAIR_REGIONS = {("CDR1", "CDR3"), ("FR2", "CDR3"), ("CDR2", "CDR3"),
+                      ("CDR1", "CDR2")}
+
+
+def disulfides(seq: str, annotation: dict | None = None) -> dict:
+    """Cysteine inventory: the canonical pair, plausible extra pairs, orphans.
+
+    Pairing is inferred from position alone - there is no structure here, so a
+    "plausible pair" means two cysteines sitting in regions known to pair in
+    real VHHs, not a verified bond.
+    """
+    seq = clean_sequence(seq)
+    try:
+        numbering = imgt_numbering(seq)
+        imgt_of = {i: num for num, ins, _aa, i in numbering if not ins}
+    except Exception:
+        imgt_of = {}
+
+    cys = []
+    for i, aa in enumerate(seq, start=1):
+        if aa != "C":
+            continue
+        num = imgt_of.get(i)
+        cys.append({"position": i, "imgt": num,
+                    "region": imgt_region(num) if num else region_of(i, annotation),
+                    "canonical": num in CANONICAL_PAIR if num else False})
+
+    canonical = [c for c in cys if c["canonical"]]
+    extra = [c for c in cys if not c["canonical"]]
+
+    pairs, orphans = [], []
+    if len(extra) == 2:
+        a, b = extra
+        key = tuple(sorted((a["region"], b["region"])))
+        plausible = key in {tuple(sorted(k)) for k in EXTRA_PAIR_REGIONS}
+        pairs.append({
+            "cys_1": a["position"], "cys_2": b["position"],
+            "imgt_1": a["imgt"], "imgt_2": b["imgt"],
+            "regions": f"{a['region']} / {b['region']}",
+            "plausible": plausible,
+            "note": "regions that pair in real VHHs - likely an additional, "
+                    "stabilising disulfide" if plausible else
+                    "an unusual region combination - treat as unverified",
+        })
+    elif len(extra) == 1:
+        orphans = extra
+    elif len(extra) > 2:
+        orphans = extra
+
+    if len(canonical) == 2:
+        verdict = "canonical disulfide present"
+    elif len(canonical) == 1:
+        verdict = f"canonical disulfide incomplete - only IMGT {canonical[0]['imgt']} found"
+    else:
+        verdict = "canonical IMGT 23-104 disulfide not found"
+    if pairs and pairs[0]["plausible"]:
+        verdict += "; plus a plausible additional pair"
+    elif len(extra) == 1:
+        verdict += "; one extra cysteine with no partner - likely a free thiol"
+    elif len(extra) > 2:
+        verdict += f"; {len(extra)} extra cysteines - pairing cannot be inferred from sequence"
+
+    return {"cysteines": pd.DataFrame(cys), "n_cys": len(cys),
+            "canonical": pd.DataFrame(canonical), "extra": pd.DataFrame(extra),
+            "pairs": pd.DataFrame(pairs), "orphans": pd.DataFrame(orphans),
+            "verdict": verdict,
+            "has_extra_pair": bool(pairs and pairs[0]["plausible"]),
+            "n_orphan": len(orphans)}
+
+
+# ---------------------------------------------------------------------------
+# Suggested repairs for liabilities
+# ---------------------------------------------------------------------------
+# One conservative substitution per liability, so the table stops being merely
+# descriptive. Two rules of thumb are built in: a substitution inside a CDR is
+# flagged because it risks affinity, and a motif that has no single clean fix
+# says so instead of offering one.
+
+# liability label -> list of (offset within the motif, from, to, rationale)
+LIABILITY_REPAIRS = {
+    "N-glycosylation": [(2, "ST", "A", "breaks the N-x-S/T sequon at the +2 residue"),
+                        (0, "N", "Q", "removes the acceptor asparagine")],
+    "Deamidation (high)": [(1, "G", "A", "the +1 glycine is what makes NG fast"),
+                           (0, "N", "Q", "removes the deamidation site")],
+    "Deamidation (moderate)": [(0, "N", "Q", "removes the deamidation site")],
+    "Isomerisation (high)": [(1, "G", "A", "the +1 glycine is what makes DG fast"),
+                             (0, "D", "E", "aspartate to glutamate blocks succinimide")],
+    "Isomerisation (moderate)": [(0, "D", "E", "aspartate to glutamate")],
+    "Oxidation (Met)": [(0, "M", "L", "isosteric, not oxidisable")],
+    "Oxidation (Trp)": [(0, "W", "F", "keeps the aromatic, loses the indole")],
+    "Fragmentation": [(0, "D", "E", "removes the acid-labile Asp-Pro bond")],
+    "Integrin binding": [(2, "D", "E", "breaks the RGD motif")],
+    "Free cysteine": [(0, "C", "S", "isosteric, no free thiol"),
+                      (0, "C", "A", "if serine is not tolerated")],
+}
+
+# Structurally conserved IMGT positions. Offering a substitution here would
+# "repair" a liability by breaking the fold: Cys23/Cys104 form the canonical
+# disulfide, Trp41 packs the FR2 core, and Trp118 opens the FR4 WGxG motif. The
+# oxidation rules match Met and Trp anywhere, so without this guard the table
+# cheerfully suggests W41F and W118F.
+CONSERVED_IMGT = {
+    23: "canonical disulfide cysteine",
+    41: "conserved FR2 tryptophan, packs the domain core",
+    104: "canonical disulfide cysteine",
+    118: "conserved FR4 tryptophan of the WGxG motif",
+}
+
+NO_CLEAN_FIX = {
+    "Hydrophobic patch": "a hydrophobic stretch has no single-residue fix - it needs "
+                         "redesign of the segment, or acceptance with a formulation "
+                         "strategy",
+    "Missing cysteine": "restoring the canonical disulfide means putting a cysteine "
+                        "back at IMGT 23 or 104, which is a decision about the "
+                        "scaffold rather than a substitution",
+}
+
+
+def suggest_repairs(seq: str, liabilities: pd.DataFrame,
+                    annotation: dict | None = None,
+                    include_cdr: bool = True) -> pd.DataFrame:
+    """One row per suggested substitution, derived from a liabilities table."""
+    seq = clean_sequence(seq)
+    imgt_of: dict[int, int] = {}
+    try:
+        imgt_of = {i: num for num, ins, _aa, i in imgt_numbering(seq) if not ins}
+    except Exception:
+        pass        # no ANARCI: the conserved-position guard is simply unavailable
+
+    rows = []
+    for _, lb in liabilities.iterrows():
+        label = lb["liability"]
+        start = int(lb.get("position") or 0)
+        if label in NO_CLEAN_FIX:
+            rows.append({"liability": label, "motif": lb.get("motif", ""),
+                         "position": start or None,
+                         "region": lb.get("region", "?"),
+                         "in_CDR": bool(lb.get("in_CDR", False)),
+                         "substitution": "-", "repaired_motif": "-",
+                         "rationale": NO_CLEAN_FIX[label], "applicable": False})
+            continue
+        for offset, frm, to, why in LIABILITY_REPAIRS.get(label, []):
+            pos = start + offset
+            if not (1 <= pos <= len(seq)) or seq[pos - 1] not in frm:
+                continue
+            region = region_of(pos, annotation)
+            in_cdr = region.startswith("CDR")
+            if in_cdr and not include_cdr:
+                continue
+            conserved = CONSERVED_IMGT.get(imgt_of.get(pos, -1))
+            if conserved:
+                rows.append({
+                    "liability": label, "motif": str(lb.get("motif", "") or ""),
+                    "position": pos, "region": region, "in_CDR": in_cdr,
+                    "substitution": "-", "repaired_motif": "-",
+                    "rationale": f"no substitution offered: IMGT "
+                                 f"{imgt_of[pos]} is the {conserved}",
+                    "applicable": False,
+                })
+                continue
+            motif = str(lb.get("motif", "") or "")
+            repaired = (motif[:offset] + to + motif[offset + 1:]) if motif else to
+            rows.append({
+                "liability": label, "motif": motif, "position": pos,
+                "region": region, "in_CDR": in_cdr,
+                "substitution": f"{seq[pos - 1]}{pos}{to}",
+                "repaired_motif": repaired,
+                "rationale": why + (" - inside a CDR, so this may cost affinity"
+                                    if in_cdr else ""),
+                "applicable": True,
+            })
+    out = pd.DataFrame(rows)
+    if len(out):
+        # position must be part of the key: every refused row carries
+        # substitution "-", so without it one conserved-position warning
+        # silently swallows the others.
+        out = out.drop_duplicates(subset=["substitution", "liability", "position"])
+        out = out.sort_values(["position", "liability"]).reset_index(drop=True)
+    return out
+
+
+def apply_repairs(seq: str, substitutions: list[str]) -> tuple[str, list[str]]:
+    """Apply substitutions written as ``N55Q``; returns ``(sequence, problems)``.
+
+    A substitution whose original residue does not match is refused rather than
+    applied silently, and two substitutions at the same position are refused as
+    a pair - that conflict is a decision for you, not for this function.
+    """
+    import re as _re
+
+    seq = clean_sequence(seq)
+    chars, problems, seen = list(seq), [], {}
+    for sub in substitutions:
+        m = _re.fullmatch(r"([A-Z])(\d+)([A-Z])", sub.strip().upper())
+        if not m:
+            problems.append(f"{sub}: not of the form N55Q")
+            continue
+        frm, pos, to = m.group(1), int(m.group(2)), m.group(3)
+        if not 1 <= pos <= len(chars):
+            problems.append(f"{sub}: position outside the sequence")
+            continue
+        if seq[pos - 1] != frm:
+            problems.append(f"{sub}: residue {pos} is {seq[pos - 1]}, not {frm}")
+            continue
+        if pos in seen and seen[pos] != to:
+            problems.append(f"{sub}: conflicts with {seen[pos]} already set at {pos}")
+            continue
+        chars[pos - 1] = to
+        seen[pos] = to
+    return "".join(chars), problems
+
 
 
 def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],

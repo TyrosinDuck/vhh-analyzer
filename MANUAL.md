@@ -251,6 +251,33 @@ prediction.
 Both need ANARCI. Without it, the hallmarks fall back to reading the positions off the
 regex FR2 block, and the germline table is absent.
 
+**Humanness, position by position.** Underneath the germline table, percent
+identity to the closest human germline V gene — computed **over framework
+positions only**, because CDR divergence from a human germline is expected and is
+not something you would ever try to fix.
+
+The identity is computed position by position in IMGT numbering against the
+IMGT-gapped germline sequences that ship with ANARCI, not by a fresh alignment.
+On a typical VHH it agrees with ANARCI's own independent germline assignment to
+within 0.1%, which is a useful cross-check that the numbering is right.
+
+What makes it actionable is the divergence table: one row per framework position
+where the VHH differs from the closest human germline, with the IMGT number, the
+region, both residues, whether the substitution is conservative, and whether the
+position is one of the four hallmarks.
+
+That last flag is the whole point. FR2 typically comes out around 65% human while
+FR1 and FR3 sit near 90% — not because FR2 is unusual, but because FR2 is where
+the hallmarks live. Reverting them raises the humanness number and simultaneously
+removes the hydrophilic camelid surface that lets a VHH stay soluble without a
+light chain. The other divergent positions are the cheap ones; the hallmarks are
+a real trade-off, and the table separates them so you can see which is which.
+
+**A limit worth repeating.** This is a first-pass humanness indicator and nothing
+more. It is not an immunogenicity prediction: immunogenicity depends on T-cell
+epitopes, dose, route and formulation, none of which is in the sequence. A
+germline-like sequence can carry an epitope; a divergent one can be silent.
+
 ### 3.7 Liabilities
 
 Chemical and manufacturability liabilities, **scored** and placed along the sequence.
@@ -316,7 +343,89 @@ recognition site, or a cluster of sites inside a CDR.
 
 Everything downloads as a single CSV.
 
-### 3.8 Alignment
+**Cysteines and disulfides.** The liability table flags every cysteine outside
+the canonical FR1/FR3 pair as a possible free thiol. That is the right default and
+it is wrong in one common case: camelid VHHs with long CDR3s frequently carry a
+**second, stabilising** disulfide, most often between CDR1 or FR2 and CDR3. Read
+as a liability, a stabiliser becomes a problem to fix — which would be exactly
+backwards.
+
+This section tells the two apart. It numbers every cysteine in IMGT, identifies
+the canonical IMGT 23/104 pair, and then looks at what is left: two extra
+cysteines in regions that pair in real VHHs are reported as a plausible additional
+disulfide, one extra cysteine as an orphan thiol, three or more as something that
+cannot be resolved from sequence.
+
+Pairing here is inferred from **position alone**. There is no structure in this
+app, so "plausible pair" means two cysteines sitting where real VHHs pair them,
+not a verified bond. A non-reducing gel or a structure is what confirms it.
+
+**Suggested repairs.** One conservative substitution per liability, so the table
+stops being merely descriptive: NG fixed at the glycine rather than the
+asparagine, DG likewise, sequons broken at the +2 residue, M→L, free Cys→Ser, and
+so on. Each row carries its rationale.
+
+Three behaviours are worth knowing about.
+
+*Conserved positions are refused.* The oxidation rules match every Met and Trp in
+the sequence, which includes the conserved FR2 tryptophan (IMGT 41) and the FR4
+tryptophan of the WGxG motif (IMGT 118). Substituting either would "repair" a
+liability by breaking the fold, so those rows appear in a separate table with the
+reason, and no substitution is offered. The canonical disulfide cysteines are
+treated the same way.
+
+*CDR positions are flagged, not hidden.* A liability in a CDR is often one you
+keep — fixing it may cost the affinity you selected for. The rows say so, and the
+default selection is the framework-only subset.
+
+*Substitutions that do not match are refused rather than applied.* Each one is
+written `N55Q`, and if residue 55 is not an asparagine the substitution is
+rejected with a message instead of silently doing something else. Two conflicting
+substitutions at the same position are refused as a pair, because that conflict is
+your decision.
+
+Applying a selection shows the repaired sequence, the new liability score with the
+delta, and a FASTA download. The recomputed score reuses the original region
+boundaries, which is correct for substitutions; re-run the full analysis on the
+repaired sequence before trusting anything else about it.
+
+### 3.8 Aggregation-prone regions
+
+Where along the sequence the aggregation-prone stretches are. A stretch becomes
+aggregation-prone when it is hydrophobic, β-prone and carries no charged residue
+to interrupt it, and the profile combines exactly those quantities: the absolute
+charge per residue, Kyte–Doolittle hydropathy, Chou–Fasman β-sheet propensity, and
+a gatekeeper term for P/D/E/K/R. Positive leans soluble, negative leans
+aggregation-prone.
+
+**This is not CamSol, AGGRESCAN or TANGO.** Those fit their coefficients to
+experimental data. The weights here are a transparent judgement call and sit in
+`SOLUBILITY_WEIGHTS` in `vhh_core.py` for you to change. The consequence is
+specific: read **where** the weak spots are, and compare candidates against each
+other, but do not read the absolute value as a predicted solubility. For a
+validated number, run the sequence through one of those servers.
+
+With that said, the profile behaves the way it should on controls. A poly-isoleucine
+stretch scores about −1.0, a poly-lysine stretch about +2.0, and a well-behaved VHH
+comes out around +0.3 with its weakest spots on the known hydrophobic framework
+segments. Give it a deliberately hydrophobic CDR3 and CDR3 goes straight to the
+top of the list.
+
+**Two controls.** The *smoothing window* (default 9) sets how long a stretch has
+to be to register; the *threshold* (default −0.3) sets what counts as
+aggregation-prone.
+
+**Two tables.** *Regions below the threshold* is the headline, but a good VHH
+often has none at all — which would leave the tab empty and tell you nothing. So
+*weakest windows* always lists the three lowest-scoring windows whether or not
+they cross the threshold, with their region and whether they fall in a CDR. That
+is the table to compare candidates on.
+
+In the summary, `Mean` is higher-is-better and `Worst` is the single lowest
+window. `Worst` is usually what decides whether a candidate behaves: one bad patch
+is enough.
+
+### 3.9 Alignment
 
 With two or more sequences: a FAMSA alignment rendered with `pymsaviz`, with the CDR
 bands of the first sequence marked, downloadable as aligned FASTA.
@@ -324,9 +433,9 @@ bands of the first sequence marked, downloadable as aligned FASTA.
 Underneath, **two identity matrices**: full-length and CDR3-only. The second is the
 one that matters when triaging panning output. Two clones can share 90%+ full-length
 identity while having unrelated CDR3s — they are the same scaffold, not the same
-binder. To turn that observation into actual groups, use **Clonal families** (§3.9).
+binder. To turn that observation into actual groups, use **Clonal families** (§3.10).
 
-### 3.9 Clonal families
+### 3.10 Clonal families
 
 This is the tab for triaging panning output. The first question after a screening is
 not how good each clone is, but **how many different clones you actually have** — a
@@ -385,7 +494,7 @@ true siblings with a heavily mutated CDR3 can be split. And sequences whose CDR3
 could not be annotated are left out rather than guessed at — they are listed
 explicitly when that happens.
 
-### 3.10 DNA
+### 3.11 DNA
 
 Back-translation into *E. coli* codon-optimised DNA.
 
@@ -407,7 +516,52 @@ motifs. It does **not** model mRNA secondary structure near the ribosome binding
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
 
-### 3.11 Download
+### 3.12 Constructs
+
+Assemble a VHH into the construct you will actually order, and get the mass, pI
+and DNA of the finished protein rather than of the bare domain. The practical
+reason: a VHH is 13 kDa with a pI near 8.6, and the same VHH with a FLAG tag is a
+different protein on a gel and on an ion-exchange column. Four aspartates will
+move the pI by two units, and you would rather know that before ordering than
+after the purification misbehaves.
+
+**Formats.** *Monovalent* is one VHH with whatever tags you add. *Bivalent* is the
+same VHH twice, which raises apparent affinity through avidity, not affinity.
+*Biparatopic* is two different VHHs against the same target, which needs
+non-overlapping epitopes — picking the same VHH twice there makes a bivalent
+construct and the app says so.
+
+**Linkers.** A list from a direct fusion up to (GGGGS)4, plus rigid (EAAAK)
+helices for when you want fixed spacing rather than a floppy tether. (GGGGS)3 is
+the default for a bivalent construct — long enough for both domains to bind
+independently. Fusing two VHHs with no linker raises a warning, because the
+domains will interfere and that is almost never what you want.
+
+**Tags.** His6, His8, HA, c-Myc, FLAG, Strep-II, Avi, the original SpyTag, and TEV,
+thrombin and sortase sites. Each carries a short note. The sortase motif has to be
+last — LPETG is cleaved between T and G, so anything after it is lost — and the app
+warns if you put something after it.
+
+**What is deliberately missing, and why.** SpyTag2 and SpyTag3 are not in the
+list, and neither are the camelid hinges. Only the original SpyTag is included.
+Writing the others from memory would risk handing you a sequence that is one
+residue wrong, which you would discover only after the synthesised gene arrived.
+The *Custom pieces* expander takes any peptide you paste, with a label, at either
+end — that is the honest way to handle a sequence this app cannot vouch for, and
+it is where those belong.
+
+**Verify everything anyway.** Tag sequences differ between vectors and between
+papers. The app says so on every run, and it means it: a one-residue difference
+will not show up until the protein does not work.
+
+**What you get.** A schematic drawn to scale with VHHs, linkers and tags
+distinguished; length, mass, pI and A280 each with the delta against the bare VHH;
+a segment table giving every piece's exact coordinates; the full property set; the
+protein sequence; and codon-optimised DNA for the whole construct, with the same
+restriction-site avoidance as the DNA tab and the same round-trip verification —
+the DNA is translated back and compared to the construct before it is shown.
+
+### 3.13 Download
 
 The results table as CSV, the figures as 300 dpi PNG, and a full PDF report.
 

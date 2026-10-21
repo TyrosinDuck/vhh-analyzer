@@ -32,7 +32,7 @@ which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
-| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks and germline, liabilities, alignment, clonal families, codon-optimised DNA, PDF report |
+| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
@@ -243,10 +243,15 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | CDR / Framework | region table, coloured sequences, both annotation methods explained |
 | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
+| Humanness | framework-only identity to the closest human germline V gene, computed position by position in IMGT numbering, with every divergent position listed and the hallmarks flagged |
 | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
+| Disulfides | the canonical IMGT 23/104 pair, plausible additional CDR1–CDR3 or FR2–CDR3 pairs, and orphan thiols told apart |
+| Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
+| Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
 | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
 | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
+| Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
 | Download | CSV, figures as PNG, and a complete PDF report |
 
 Three of these deserve a word of caution. The **Chou–Fasman plot** is a

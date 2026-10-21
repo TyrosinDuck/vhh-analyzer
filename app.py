@@ -34,6 +34,7 @@ import streamlit as st
 
 import cloning as cl
 import generator as gn
+import constructs as ctm
 import sanger as sg
 import vhh_core as vc
 
@@ -50,7 +51,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.1215"
+VERSION = "20261021.1520"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -64,14 +65,16 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21c", "sanger": "2026.10.21b",
-                    "cloning": "2026.10.21b", "generator": "2026.10.21b"}
+REQUIRED_MODULES = {"vhh_core": "2026.10.21d", "sanger": "2026.10.21b",
+                    "cloning": "2026.10.21b", "generator": "2026.10.21b",
+                    "constructs": "2026.10.21d"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
                                   ("sanger", REQUIRED_MODULES["sanger"], sg),
                                   ("cloning", REQUIRED_MODULES["cloning"], cl),
-                                  ("generator", REQUIRED_MODULES["generator"], gn))
+                                  ("generator", REQUIRED_MODULES["generator"], gn),
+                                  ("constructs", REQUIRED_MODULES["constructs"], ctm))
           if getattr(mod, "__version__", None) != want]
 if _stale:
     st.error("Some modules are out of date — update " + ", ".join(_stale) +
@@ -273,6 +276,41 @@ def png_family_dendrogram(seqs, anns, cutoff, linkage_method, same_length):
         return None
     fig, _ = vc.plot_family_dendrogram(result)
     return fig_to_png(fig, close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def aggregation_for(seq, ann, window, threshold):
+    profile = vc.aggregation_profile(seq, window=window)
+    regions = vc.aggregation_regions(profile, ann, threshold=threshold)
+    return (profile, regions, vc.aggregation_summary(profile, regions),
+            vc.weakest_windows(profile, ann))
+
+
+@st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
+def png_aggregation(seq, ann, window, threshold, title):
+    profile, _r, _s, _w = aggregation_for(seq, ann, window, threshold)
+    return fig_to_png(vc.plot_aggregation(profile, ann, threshold=threshold,
+                                          title=title), close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def humanness_for(seq, family):
+    return vc.humanness(seq, family=family)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def disulfides_for(seq, ann):
+    return vc.disulfides(seq, ann)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def repairs_for(seq, liabilities, ann, include_cdr):
+    return vc.suggest_repairs(seq, liabilities, ann, include_cdr=include_cdr)
+
+
+@st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
+def png_construct(construct, title):
+    return fig_to_png(ctm.plot_construct(construct, title), close=True)
 
 
 def png_identity(seqs, anns, region):
@@ -1146,7 +1184,8 @@ if errors:
 # Named rather than indexed: inserting a tab in the middle of an indexed list
 # silently reassigns every panel after it.
 TAB_LABELS = ["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
-              "Liabilities", "Alignment", "Clonal families", "DNA", "Download"]
+              "Liabilities", "Aggregation", "Alignment", "Clonal families",
+              "DNA", "Constructs", "Download"]
 tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
 
 # --- Properties ------------------------------------------------------------ #
@@ -1327,6 +1366,61 @@ with tabs["Hallmarks & germline"]:
     elif not hm_rows:
         st.info("Germline assignment needs ANARCI, which is not available here.")
 
+    st.divider()
+    st.subheader("Humanness, position by position")
+    st.markdown(
+        "Percent identity to the closest human germline V gene, computed over "
+        "**framework positions only** — CDR divergence from a human germline is "
+        "expected and is not something you would ever try to fix. The divergent "
+        "positions are listed because they are the candidate humanising "
+        "mutations.")
+    hcol = st.columns([1, 2])
+    with hcol[0]:
+        family = st.selectbox(
+            "Germline family", ["IGHV3", "all human heavy V"], index=0,
+            help="IGHV3 is the family VHHs belong to, so it is the fair "
+                 "comparison. Searching all families rarely changes the answer.")
+    fam_arg = None if family == "all human heavy V" else family
+
+    for name, seq in sequences.items():
+        try:
+            h = humanness_for(seq, fam_arg)
+        except Exception as exc:
+            st.warning(f"**{name}** — humanness unavailable: {exc}")
+            continue
+        if not h["gene"]:
+            st.warning(f"**{name}** — no germline could be compared.")
+            continue
+        with st.expander(f"**{name}** — {h['identity']}% to {h['gene']} "
+                         f"({h['n_divergent']} divergent framework positions, "
+                         f"{h['n_hallmark']} of them hallmarks)",
+                         expanded=len(sequences) == 1):
+            m = st.columns(3)
+            m[0].metric("Framework identity", f"{h['identity']}%")
+            m[1].metric("Closest human gene", h["gene"])
+            m[2].metric("Divergent FR positions", h["n_divergent"])
+            if len(h["by_region"]):
+                st.dataframe(h["by_region"], hide_index=True, **FIT)
+            if len(h["divergences"]):
+                st.dataframe(h["divergences"], hide_index=True, **FIT)
+                st.download_button(
+                    f"Divergences — {name} (CSV)",
+                    h["divergences"].to_csv(index=False),
+                    file_name=f"humanness_{name}.csv", mime="text/csv",
+                    key=f"dl_human_{name}")
+            st.caption(
+                "The rows flagged `hallmark` are the four FR2 positions that make "
+                "this a VHH rather than a VH. They are the real decision: "
+                "reverting them raises the humanness number and simultaneously "
+                "removes the camelid surface that keeps a VHH soluble without a "
+                "light chain. The other rows are the cheap ones.")
+
+    st.info(
+        "This is a first-pass humanness indicator and nothing more. "
+        "Immunogenicity depends on T-cell epitopes, dose, route and formulation, "
+        "none of which is in the sequence — a germline-like sequence can still "
+        "carry an epitope, and a divergent one can be silent.", icon="⚠️")
+
 # --- Liabilities ------------------------------------------------------------ #
 with tabs["Liabilities"]:
     st.markdown(
@@ -1424,6 +1518,196 @@ with tabs["Liabilities"]:
                    if not df.empty], ignore_index=True).to_csv(index=False)
         if any(not d.empty for d in liab_by_seq.values()) else "",
         file_name="liabilities.csv", mime="text/csv")
+
+    # ---- disulfides -------------------------------------------------------- #
+    st.divider()
+    st.subheader("Cysteines and disulfides")
+    st.markdown(
+        "The table above flags every cysteine outside the canonical FR1/FR3 pair "
+        "as a possible free thiol. That is the right default, but it is wrong in "
+        "one common case: camelid VHHs with long CDR3s often carry a **second, "
+        "stabilising** disulfide, typically between CDR1 or FR2 and CDR3. This "
+        "section tells the two situations apart.")
+    for name, seq in sequences.items():
+        try:
+            ds = disulfides_for(seq, annotations.get(name))
+        except Exception as exc:
+            st.warning(f"**{name}** — cysteine analysis unavailable: {exc}")
+            continue
+        icon = "✅" if ds["n_orphan"] == 0 else "⚠️"
+        with st.expander(f"{icon} **{name}** — {ds['n_cys']} cysteine(s): "
+                         f"{ds['verdict']}", expanded=len(sequences) == 1):
+            if len(ds["cysteines"]):
+                st.dataframe(ds["cysteines"], hide_index=True, **FIT)
+            if len(ds["pairs"]):
+                st.dataframe(ds["pairs"], hide_index=True, **FIT)
+            if ds["has_extra_pair"]:
+                st.success(
+                    "Read the extra cysteines as a stabilising pair rather than a "
+                    "liability — but remember this is inferred from position "
+                    "alone. Only a structure or a non-reducing gel confirms a bond.")
+            elif ds["n_orphan"]:
+                st.warning(
+                    "An unpaired cysteine is a real risk: scrambling, dimerisation "
+                    "through an intermolecular bond, and heterogeneity on "
+                    "purification. The repair table below offers C→S.")
+
+    # ---- suggested repairs ------------------------------------------------- #
+    st.divider()
+    st.subheader("Suggested repairs")
+    st.markdown(
+        "One conservative substitution per liability, so the table above becomes "
+        "actionable. Substitutions inside a CDR are flagged separately because "
+        "they risk affinity — a liability you keep is often the right call.")
+    rep_cols = st.columns([1, 1, 2])
+    with rep_cols[0]:
+        rep_include_cdr = st.checkbox("Include CDR positions", value=True)
+    rep_target = (list(sequences)[0] if len(sequences) == 1 else
+                  rep_cols[1].selectbox("Sequence", list(sequences),
+                                        key="repair_target"))
+
+    rep_seq = sequences[rep_target]
+    rep_ann = annotations.get(rep_target)
+    repairs = repairs_for(rep_seq, liab_by_seq[rep_target], rep_ann,
+                          bool(rep_include_cdr))
+    doable = repairs[repairs["applicable"]] if len(repairs) else repairs
+    refused = repairs[~repairs["applicable"]] if len(repairs) else repairs
+
+    if not len(repairs):
+        st.success("Nothing to repair — no liability with a known substitution.")
+    else:
+        st.dataframe(doable, hide_index=True, **FIT,
+                     column_config={"rationale": st.column_config.TextColumn(
+                         "Rationale", width="large")})
+        if len(refused):
+            st.caption("Offered no substitution, deliberately:")
+            st.dataframe(refused[["liability", "position", "region", "rationale"]],
+                         hide_index=True, **FIT,
+                         column_config={"rationale":
+                                        st.column_config.TextColumn("Reason",
+                                                                    width="large")})
+
+        picked = st.multiselect(
+            "Apply substitutions", list(doable["substitution"]),
+            default=[r["substitution"] for _, r in doable.iterrows()
+                     if not r["in_CDR"]],
+            help="Defaults to the framework-only set, which is the safe subset. "
+                 "Two substitutions at the same position are refused rather than "
+                 "silently resolved.")
+        if picked:
+            repaired, problems = vc.apply_repairs(rep_seq, picked)
+            for p in problems:
+                st.error(p)
+            before = liab_by_seq[rep_target]["score"].sum()
+            # the original annotation is reused on purpose: substitutions do not
+            # move the region boundaries, and re-annotating would hide a repair
+            # that accidentally broke an anchor.
+            after_df = liabilities_for(repaired, rep_ann, include_added)
+            rm = st.columns(3)
+            rm[0].metric("Liability score", f"{after_df['score'].sum():.0f}",
+                         delta=f"{after_df['score'].sum() - before:+.0f}",
+                         delta_color="inverse")
+            rm[1].metric("Motifs", len(after_df),
+                         delta=len(after_df) - len(liab_by_seq[rep_target]),
+                         delta_color="inverse")
+            rm[2].metric("Substitutions", len(picked))
+            st.code(repaired, language="text")
+            st.download_button(
+                "Repaired sequence (FASTA)",
+                f">{rep_target}_repaired {' '.join(picked)}\n{repaired}\n",
+                file_name=f"{rep_target}_repaired.fasta", mime="text/plain")
+            st.caption(
+                "The score after repair is recomputed with the **original** "
+                "region boundaries, which is correct for substitutions but would "
+                "not be if you changed the length. Re-run the full analysis on "
+                "the repaired sequence before trusting anything else about it.")
+
+# --- Aggregation ----------------------------------------------------------- #
+with tabs["Aggregation"]:
+    st.markdown(
+        "Where along the sequence the aggregation-prone stretches are. A "
+        "stretch becomes aggregation-prone when it is hydrophobic, β-prone and "
+        "carries no charged residue to interrupt it — the three quantities this "
+        "profile combines, plus a gatekeeper term for P/D/E/K/R.")
+    st.warning(
+        "**This is not CamSol, AGGRESCAN or TANGO.** Those fit their "
+        "coefficients to experimental data; the weights here are a transparent "
+        "judgement call, listed in `SOLUBILITY_WEIGHTS`. So read **where** the "
+        "weak spots are and compare candidates against each other — do not read "
+        "the absolute value as a predicted solubility. For a validated number, "
+        "run the sequence through one of those servers.", icon="⚠️")
+
+    agg_cols = st.columns(3)
+    with agg_cols[0]:
+        agg_window = st.slider("Smoothing window", 3, 15,
+                               int(vc.DEFAULTS["profile_window"]), step=2,
+                               help="Wider smoothing finds longer stretches and "
+                                    "hides short ones.")
+    with agg_cols[1]:
+        agg_threshold = st.slider("Aggregation-prone threshold", -1.0, 0.5,
+                                  float(vc.APR_THRESHOLD), step=0.05,
+                                  help="A window scoring below this is called "
+                                       "aggregation-prone. Negative leans prone, "
+                                       "positive leans soluble.")
+    with agg_cols[2]:
+        agg_show_all = st.checkbox("Plot every sequence", value=len(sequences) <= 4,
+                                   help="Untick with many sequences; the summary "
+                                        "table is computed either way.")
+
+    agg_summary, agg_regions_all = [], []
+    for name, seq in sequences.items():
+        profile, regions, summary, weakest = aggregation_for(
+            seq, annotations.get(name), int(agg_window), float(agg_threshold))
+        agg_summary.append({"name": name, **summary})
+        if len(regions):
+            agg_regions_all.append(regions.assign(sequence=name))
+
+    st.dataframe(pd.DataFrame(agg_summary), hide_index=True, **FIT,
+                 column_config={
+                     "mean_score": st.column_config.NumberColumn("Mean", format="%.3f"),
+                     "min_score": st.column_config.NumberColumn("Worst", format="%.3f"),
+                     "worst_position": st.column_config.NumberColumn("At residue"),
+                     "n_regions": st.column_config.NumberColumn("Regions"),
+                     "residues_in_regions": st.column_config.NumberColumn("Residues"),
+                     "fraction_prone": st.column_config.NumberColumn(
+                         "Fraction", format="%.2f")})
+    st.caption("`Mean` higher is better. `Worst` is the single lowest-scoring "
+               "window, which is usually what decides whether a candidate "
+               "behaves — one bad patch is enough.")
+
+    for name, seq in sequences.items():
+        profile, regions, summary, weakest = aggregation_for(
+            seq, annotations.get(name), int(agg_window), float(agg_threshold))
+        with st.expander(f"**{name}** — worst window {summary['min_score']:+.2f} "
+                         f"at residue {summary['worst_position']}, "
+                         f"{summary['n_regions']} region(s) below threshold",
+                         expanded=agg_show_all and len(sequences) <= 4):
+            if agg_show_all:
+                st.image(png_aggregation(seq, annotations.get(name),
+                                         int(agg_window), float(agg_threshold),
+                                         f"{name} — aggregation-prone regions"),
+                         **FIT)
+            st.markdown("**Weakest windows**")
+            st.dataframe(weakest, hide_index=True, **FIT)
+            if len(regions):
+                st.markdown("**Regions below the threshold**")
+                st.dataframe(regions, hide_index=True, **FIT)
+            else:
+                st.success("No window crosses the threshold. The weakest-window "
+                           "table above is still the one to compare candidates on.")
+
+    dl_agg = st.columns(2)
+    dl_agg[0].download_button(
+        "Summary (CSV)", pd.DataFrame(agg_summary).to_csv(index=False),
+        file_name="aggregation_summary.csv", mime="text/csv")
+    dl_agg[1].download_button(
+        "Regions (CSV)",
+        pd.concat(agg_regions_all, ignore_index=True).to_csv(index=False)
+        if agg_regions_all else "",
+        file_name="aggregation_regions.csv", mime="text/csv",
+        disabled=not agg_regions_all)
+    plt.close("all")
+
 
 # --- Alignment ------------------------------------------------------------- #
 with tabs["Alignment"]:
@@ -1605,6 +1889,154 @@ with tabs["DNA"]:
         "sequence through your synthesis vendor's checker before ordering.")
     st.button("🧬 Use these in the cloning section", key="to_cloning", **FIT,
               on_click=go_to, args=("cloning",))
+
+# --- Constructs ------------------------------------------------------------- #
+with tabs["Constructs"]:
+    st.markdown(
+        "Assemble a VHH into the construct you will actually order — monovalent, "
+        "bivalent or biparatopic, with a linker and tags — and get the mass, pI "
+        "and DNA of the finished protein rather than of the bare domain.")
+    st.warning(ctm.VERIFY_NOTICE, icon="⚠️")
+
+    fmt_cols = st.columns([1, 1, 1])
+    with fmt_cols[0]:
+        fmt = st.selectbox("Format", list(ctm.FORMATS),
+                           help="\n\n".join(f"**{k}** — {v['note']}"
+                                             for k, v in ctm.FORMATS.items()))
+    n_needed = ctm.FORMATS[fmt]["n_vhh"]
+    with fmt_cols[1]:
+        first = st.selectbox("VHH", list(sequences), key="ctor_first")
+    second = None
+    if n_needed == 2:
+        with fmt_cols[2]:
+            if fmt == "bivalent":
+                st.caption("Bivalent uses the same VHH twice.")
+                second = first
+            else:
+                second = st.selectbox(
+                    "Second VHH", list(sequences),
+                    index=min(1, len(sequences) - 1), key="ctor_second")
+                if second == first:
+                    st.caption("Two copies of the same VHH is a bivalent "
+                               "construct, not a biparatopic one.")
+
+    lk_cols = st.columns([1, 1])
+    with lk_cols[0]:
+        linker_name = st.selectbox(
+            "Linker between VHHs", list(ctm.LINKERS),
+            index=list(ctm.LINKERS).index("(GGGGS)3"),
+            disabled=n_needed == 1)
+        st.caption(ctm.LINKERS[linker_name]["note"])
+    with lk_cols[1]:
+        tag_linker = st.text_input(
+            "Linker before each tag", value="GS",
+            help="Leave empty to fuse tags directly. Two or three residues is "
+                 "usual and often just the cloning scar.")
+
+    tag_cols = st.columns(2)
+    with tag_cols[0]:
+        n_tag_names = st.multiselect(
+            "N-terminal tags",
+            [k for k, v in ctm.TAGS.items() if v["ends"] in ("N", "both")],
+            help="Applied in the order you pick them, reading N to C.")
+    with tag_cols[1]:
+        c_tag_names = st.multiselect(
+            "C-terminal tags",
+            [k for k, v in ctm.TAGS.items() if v["ends"] in ("C", "both")],
+            default=["His6"])
+
+    with st.expander("Custom pieces — SpyTag2/3, a camelid hinge, anything else"):
+        st.markdown(
+            "Two things are deliberately missing from the tag list above: "
+            "**SpyTag2 and SpyTag3**, and the **camelid hinges**. Only the "
+            "original SpyTag is included. Writing the others from memory would "
+            "risk handing you a sequence that is one residue wrong, which you "
+            "would discover only after the gene arrived — so paste the exact "
+            "sequence from your own construct here instead.")
+        cu = st.columns(2)
+        custom_n = cu[0].text_input("Custom N-terminal peptide", value="")
+        custom_n_label = cu[0].text_input("Its label", value="custom-N")
+        custom_c = cu[1].text_input("Custom C-terminal peptide", value="")
+        custom_c_label = cu[1].text_input("Its label", value="custom-C")
+
+    chosen = [(first, sequences[first])]
+    if n_needed == 2 and second:
+        chosen.append((second, sequences[second]))
+
+    n_tags = [(k, ctm.TAGS[k]["seq"]) for k in n_tag_names]
+    c_tags = [(k, ctm.TAGS[k]["seq"]) for k in c_tag_names]
+    if custom_n.strip():
+        n_tags.append((custom_n_label or "custom-N", custom_n))
+    if custom_c.strip():
+        c_tags.append((custom_c_label or "custom-C", custom_c))
+
+    try:
+        built = ctm.build_construct(
+            chosen, linker=ctm.LINKERS[linker_name]["seq"] if n_needed == 2 else "",
+            n_tags=n_tags, c_tags=c_tags, tag_linker=tag_linker, ph=ph)
+    except Exception as exc:
+        st.error(f"Could not assemble the construct: {exc}")
+        built = None
+
+    if built:
+        for w in built["warnings"][1:]:        # [0] is the verify notice, shown above
+            st.warning(w, icon="⚠️")
+
+        st.image(png_construct(built, f"{first} — {fmt}"), **FIT)
+
+        props = built["properties"].iloc[0]
+        base = built["per_vhh"].iloc[0]
+        pm = st.columns(4)
+        pm[0].metric("Length", f"{built['length']} aa",
+                     delta=f"{built['length'] - int(base['length']):+d} vs the VHH")
+        pm[1].metric("Mass", f"{props['mw_kda']:.2f} kDa",
+                     delta=f"{props['mw_kda'] - base['mw_kda']:+.2f}")
+        pm[2].metric("pI", f"{props['pI']:.2f}",
+                     delta=f"{props['pI'] - base['pI']:+.2f}")
+        pm[3].metric("A280 (1 mg/mL)", f"{props['A280_0.1pct']:.3f}",
+                     help="Divide a measured A280 by this to get mg/mL — the "
+                          "number changes with the tags, which is exactly why "
+                          "you want it for the construct and not the bare VHH.")
+
+        st.markdown("**Segments**")
+        st.dataframe(built["segments"], hide_index=True, **FIT)
+
+        st.markdown("**Full properties**")
+        st.dataframe(built["properties"], hide_index=True, **FIT)
+
+        st.markdown("**Protein sequence**")
+        st.code(built["sequence"], language="text")
+
+        with st.expander("Codon-optimised DNA for the whole construct"):
+            avoid_ct = st.multiselect(
+                "Restriction sites to avoid", sorted(vc.DEFAULT_AVOID_SITES),
+                default=sorted(vc.DEFAULT_AVOID_SITES), key="ctor_avoid")
+            stop_ct = st.checkbox("Append a stop codon (TAA)", value=True,
+                                  key="ctor_stop")
+            dna_ct = ctm.construct_dna(built, avoid=set(avoid_ct),
+                                       add_stop=bool(stop_ct))
+            if dna_ct["back_translation_ok"]:
+                st.success("Round trip verified: translating this DNA gives back "
+                           "the construct exactly.")
+            else:
+                st.error("The DNA does not translate back to the construct — do "
+                         "not order this. Please report it.")
+            st.code(dna_ct["dna"], language="text")
+            st.download_button(
+                "Construct DNA (FASTA)",
+                f">{first}_{fmt}\n{dna_ct['dna']}\n",
+                file_name=f"{first}_{fmt}.fasta", mime="text/plain")
+
+        dlc = st.columns(2)
+        dlc[0].download_button(
+            "Construct protein (FASTA)",
+            f">{first}_{fmt}\n{built['sequence']}\n",
+            file_name=f"{first}_{fmt}_protein.fasta", mime="text/plain")
+        dlc[1].download_button(
+            "Segments (CSV)", built["segments"].to_csv(index=False),
+            file_name=f"{first}_{fmt}_segments.csv", mime="text/csv")
+    plt.close("all")
+
 
 # --- Download -------------------------------------------------------------- #
 with tabs["Download"]:
