@@ -15,6 +15,13 @@ and how far you should trust it.
 frameworks, read VHHs out of Sanger chromatograms, and plan a restriction cloning
 between two plasmids.
 
+**It is built around VHHs, but it accepts any protein.** Each submitted sequence is
+classified, and the analyses that are not VHH-specific — mass, pI, extinction
+coefficient, charge, hydrophobicity, secondary-structure propensity, aggregation,
+chemical liabilities, codon-optimised DNA, fusion constructs — run on all of them.
+Only the VHH-specific tabs are skipped for the rest. A mixed submission works: see
+§3.1c.
+
 **It does not** predict structure, affinity, expression yield or immunogenicity.
 Every value it reports is derived from sequence alone. Treat the output as triage —
 it tells you where to look, not what will happen at the bench.
@@ -65,10 +72,14 @@ Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The
 exists because the keyboard shortcut is not discoverable; both do the same thing,
 which is to commit what you typed.
 
-**Limits.** Up to 50 sequences per run, each between 60 and 400 amino acids. Anything
-outside that is rejected with a message naming the offending sequence — a sequence
-longer than 400 aa is almost certainly not a single domain, and the app would rather
-say so than silently produce nonsense.
+**Limits.** Up to 50 sequences per run, each between 25 and 1500 amino acids, and
+12 000 residues in total across the submission. Anything outside that is rejected
+with a message naming the offending sequence.
+
+The total-residue ceiling is the one that may surprise you: one long protein is
+cheap to analyse, fifty of them are not, and on Community Cloud the instance is
+shared with whoever else is using the app at that moment. Split a large submission
+rather than working around it.
 
 A sequence containing a non-standard residue (B, X, Z, a stop…) is rejected by name.
 Fix or remove it rather than letting it through.
@@ -135,6 +146,50 @@ A check worth running: generate a set and send it through the analysis. On the b
 matrix every generated sequence annotates cleanly and scores 4/4 on the hallmarks,
 with molecular weights around 13.5–14 kDa — which is the sanity test that the matrix
 and the assembly are behaving.
+
+### 3.1c What kind of sequence is this?
+
+Every submitted sequence is classified before anything else runs, because the app
+has to know which analyses legitimately apply to it. There is no structure here, so
+the decision is made from the sequence alone:
+
+1. **ANARCI numbering succeeds** → the sequence is an immunoglobulin variable
+   domain, and ANARCI also reports whether the chain is heavy (H) or light (K/L).
+2. For a **heavy-chain** domain, the FR2 hallmark tetrad separates a VHH from a
+   conventional VH.
+3. **ANARCI fails** → not a variable domain. Everything generic still applies.
+
+That gives six verdicts, shown in the `type` column of the Properties table:
+
+| Verdict | What happens |
+|---|---|
+| **VHH** | everything runs |
+| **V domain, VHH/VH ambiguous** | everything runs, with a caution — 1/4 hallmarks usually means a humanised VHH or a VH-like construct |
+| **Conventional VH** | VHH-specific tabs skipped |
+| **Light-chain V domain** | VHH-specific tabs skipped |
+| **Contains a V domain** | VHH-specific tabs skipped — a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
+| **Other protein** | VHH-specific tabs skipped |
+
+When anything other than a VHH is submitted, a notice at the top names each
+sequence and says why it was classified that way. The tabs that skip them —
+**CDR / Framework**, **Hallmarks & germline** including humanness, **Clonal
+families**, and the disulfide section of **Liabilities** — say so rather than
+quietly showing a shorter list.
+
+**Two behaviours worth knowing.**
+
+*Cysteines are judged differently.* For a VHH the app expects exactly one
+intradomain disulfide between FR1 and FR3, and flags anything else as a possible
+free thiol. That rule is wrong for any other protein — lysozyme's eight cysteines
+form four ordinary disulfides and are not eight liabilities. So for a non-VHH the
+app falls back to the only thing that holds generally: an odd number of cysteines
+guarantees at least one unpaired thiol; an even number tells you nothing without a
+structure.
+
+*The alignment defaults to the VHHs.* Aligning a 1200-residue protein against
+120-residue VHHs produces a figure that is mostly gaps, and a logo to match. So the
+**Alignment** tab aligns the VHH subset by default, with a checkbox to include
+everything. If nothing in the submission is a VHH, it aligns what you gave it.
 
 ### 3.2 Sidebar settings
 

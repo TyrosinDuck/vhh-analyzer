@@ -36,7 +36,9 @@ __all__ = [
     "register_feature", "compute_features", "FEATURE_REGISTRY",
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
     "plot_logo",
-    "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS",
+    "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS", "MIN_LENGTH",
+    "classify", "classify_all", "VHH_KINDS", "KIND_VHH", "KIND_VH",
+    "KIND_VL", "KIND_AMBIGUOUS", "KIND_FUSION", "KIND_OTHER",
     "pairwise_scores", "cluster_families", "plot_family_dendrogram",
     "FAMILY_DEFAULTS", "imgt_numbering", "imgt_region",
     "aggregation_profile", "aggregation_regions", "aggregation_summary",
@@ -49,11 +51,13 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21e"
+__version__ = "2026.10.21g"
 
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
+
+MIN_LENGTH = 25          # below this ProtParam figures stop meaning much
 
 DEFAULTS = {
     "ph": 7.4,                 # pH used for net-charge calculations
@@ -61,7 +65,9 @@ DEFAULTS = {
     "chou_fasman_window": 5,   # sliding window for the Chou-Fasman profile
     "annotation_method": "auto",  # "auto" | "anarci" | "regex"
     "max_sequences": 50,       # guard rail for the web front-end
-    "max_length": 400,         # a VHH is ~110-135 aa; reject obvious non-VHH input
+    "max_length": 1500,        # any protein is accepted, not only VHHs; this is
+                               # a guard rail for the shared web instance
+    "max_total_residues": 12000,   # ceiling on one submission, all sequences
 }
 
 AA20 = set("ACDEFGHIKLMNPQRSTVWY")
@@ -148,11 +154,11 @@ def parse_input(text: str, max_sequences: int | None = None,
             raise ValueError(f"{name}: {exc}") from None
         if len(s) > max_length:
             raise ValueError(
-                f"{name}: {len(s)} aa exceeds the {max_length} aa limit "
-                "(this tool expects single-domain antibodies)"
+                f"{name}: {len(s)} aa exceeds the {max_length} aa limit"
             )
-        if len(s) < 60:
-            raise ValueError(f"{name}: {len(s)} aa is too short to be a VHH domain")
+        if len(s) < MIN_LENGTH:
+            raise ValueError(
+                f"{name}: {len(s)} aa is below the {MIN_LENGTH} aa minimum")
         key, n = name, 2
         while key in cleaned:
             key, n = f"{name}_{n}", n + 1
@@ -164,7 +170,134 @@ def parse_input(text: str, max_sequences: int | None = None,
         raise ValueError(
             f"{len(cleaned)} sequences submitted, limit is {max_sequences} per run"
         )
+    total = sum(len(v) for v in cleaned.values())
+    ceiling = DEFAULTS["max_total_residues"]
+    if total > ceiling:
+        # one long sequence is cheap, fifty of them is not, and the Streamlit
+        # instance is shared with whoever else is using the app right now
+        raise ValueError(
+            f"{total} residues submitted in total, limit is {ceiling} per run — "
+            "split the submission or shorten the longest sequences")
     return cleaned
+
+
+# ---------------------------------------------------------------------------
+# What kind of sequence is this?
+# ---------------------------------------------------------------------------
+# The app accepts any protein, not only VHHs, and has to decide per sequence
+# which analyses apply. There is no structure here, so the decision is made from
+# the sequence alone:
+#
+#   1. ANARCI numbering succeeds  -> it is an immunoglobulin variable domain,
+#      and ANARCI also reports whether the chain is heavy (H) or light (K/L).
+#   2. For a heavy-chain domain, the FR2 hallmark tetrad separates VHH from a
+#      conventional VH.
+#   3. ANARCI fails -> not a V domain. Everything generic still applies; the
+#      VHH-specific analyses do not.
+#
+# A V domain that covers only part of a longer sequence is reported as such
+# rather than silently treated as a VHH: a 900-residue protein carrying a VHH
+# domain is a fusion, and running CDR analysis on the whole thing would be
+# meaningless.
+
+KIND_VHH = "VHH"
+KIND_VH = "Conventional VH"
+KIND_VL = "Light-chain V domain"
+KIND_AMBIGUOUS = "V domain, VHH/VH ambiguous"
+KIND_FUSION = "Contains a V domain"
+KIND_OTHER = "Other protein"
+
+VHH_KINDS = {KIND_VHH, KIND_AMBIGUOUS}
+DOMAIN_COVERAGE = 0.80      # fraction of the sequence the V domain must cover
+
+
+def classify(seq: str, method: str | None = None) -> dict:
+    """Decide what a sequence is, and therefore which analyses apply.
+
+    Returns ``kind`` (one of the ``KIND_*`` constants), ``is_vhh``, the
+    ``chain`` ANARCI reported, the ``hallmark_score`` out of 4, the ``coverage``
+    of the sequence by the V domain, the ``method`` the decision came from, and
+    a one-line ``note`` for display.
+    """
+    seq = clean_sequence(seq)
+    out = {"length": len(seq), "chain": None, "hallmark_score": None,
+           "coverage": None, "evalue": None, "method": "ANARCI"}
+
+    try:
+        from anarci import anarci
+        numbered, details, _ = anarci([("q", seq)], scheme="imgt", output=False)
+    except Exception:
+        # No ANARCI: fall back to the regex annotator, which only ever
+        # recognises a VHH-like domain. It cannot tell VH from VHH, nor find a
+        # light chain, so the verdict is deliberately coarser.
+        out["method"] = "regex anchors"
+        try:
+            annotate_regex(seq)
+            score = hallmarks(seq).get("camelid_score")
+            out["hallmark_score"] = score
+            out["kind"] = KIND_VHH if (score or 0) >= 2 else KIND_AMBIGUOUS
+            out["note"] = ("recognised by regex anchors; without ANARCI this "
+                           "cannot be told apart from a conventional VH")
+        except Exception:
+            out["kind"] = KIND_OTHER
+            out["note"] = ("no VHH anchors found; generic analyses only "
+                           "(install ANARCI for a reliable verdict)")
+        out["is_vhh"] = out["kind"] in VHH_KINDS
+        return out
+
+    if numbered[0] is None:
+        out.update({"kind": KIND_OTHER, "is_vhh": False,
+                    "note": "ANARCI finds no immunoglobulin variable domain — "
+                            "generic analyses only"})
+        return out
+
+    _numbering, start, end = numbered[0][0]
+    detail = details[0][0]
+    chain = detail.get("chain_type")
+    coverage = (end - start + 1) / len(seq)
+    out.update({"chain": chain, "coverage": round(coverage, 3),
+                "evalue": detail.get("evalue")})
+
+    if coverage < DOMAIN_COVERAGE:
+        out.update({
+            "kind": KIND_FUSION, "is_vhh": False,
+            "note": f"a {chain}-chain V domain spans residues {start + 1}-{end + 1} "
+                    f"({coverage:.0%} of the sequence) — this looks like a fusion "
+                    f"or a multi-domain protein, so the VHH analyses are skipped",
+        })
+        return out
+
+    if chain in ("K", "L"):
+        out.update({"kind": KIND_VL, "is_vhh": False,
+                    "note": f"ANARCI numbers this as a {chain} light-chain "
+                            "variable domain, not a VHH"})
+        return out
+
+    score = hallmarks(seq).get("camelid_score")
+    out["hallmark_score"] = score
+    if (score or 0) >= 2:
+        out.update({"kind": KIND_VHH, "is_vhh": True,
+                    "note": f"heavy-chain V domain with {score}/4 camelid "
+                            "hallmarks"})
+    elif score == 1:
+        out.update({"kind": KIND_AMBIGUOUS, "is_vhh": True,
+                    "note": "heavy-chain V domain with only 1/4 camelid "
+                            "hallmarks — humanised VHH or VH-like construct; "
+                            "VHH analyses are still run, read them with that in "
+                            "mind"})
+    else:
+        out.update({"kind": KIND_VH, "is_vhh": False,
+                    "note": "heavy-chain V domain with a VH-like FR2 tetrad — "
+                            "a conventional VH, so the VHH analyses are skipped"})
+    return out
+
+
+def classify_all(seqs: dict[str, str], method: str | None = None) -> pd.DataFrame:
+    """``classify`` over a batch, as a table."""
+    rows = []
+    for name, seq in seqs.items():
+        rows.append({"name": name, **classify(seq, method=method)})
+    return pd.DataFrame(rows)
 
 
 # --------------------------------------------------------------------------- #
@@ -495,6 +628,13 @@ PROTEASE_RULES = [
 CANONICAL_CYS_REGIONS = {"FR1", "FR3"}
 
 
+
+# Every liabilities table carries these columns, even when it is empty: callers
+# do arithmetic on `score` and a bare empty DataFrame has no columns at all,
+# which turns "this sequence is clean" into a KeyError.
+LIABILITY_COLUMNS = ["liability", "motif", "position", "range", "region",
+                     "in_CDR", "score", "risk", "source", "note"]
+
 def risk_category(score: float) -> str:
     """Low / Medium / High, on the notebook's thresholds."""
     low, high = RISK_THRESHOLDS
@@ -540,10 +680,25 @@ def find_liabilities(seq: str, annotation: dict | None = None,
                 "source": source, "note": note,
             })
 
-    # Cysteines: the canonical FR1/FR3 pair is expected, anything else is a
-    # candidate free thiol.
+    # Cysteines. The canonical-pair logic below is specific to a VHH: it assumes
+    # exactly one intradomain disulfide, between FR1 and FR3. Applied to any other
+    # protein it is simply wrong — lysozyme's eight cysteines form four ordinary
+    # disulfides and are not eight free thiols. So without an annotation (which is
+    # what "not a VHH" looks like here) fall back to the only thing that holds for
+    # any protein: an odd number of cysteines guarantees one unpaired thiol, an
+    # even number tells you nothing without a structure.
     cys = [i + 1 for i, a in enumerate(seq) if a == "C"]
-    if len(cys) > 2:
+    if annotation is None:
+        if len(cys) % 2 == 1:
+            rows.append({
+                "liability": "Unpaired cysteine", "motif": "C",
+                "position": cys[-1], "range": str(cys[-1]), "region": "-",
+                "in_CDR": False, "score": 8.0, "risk": risk_category(8),
+                "source": "added",
+                "note": f"{len(cys)} cysteines — an odd count means at least one "
+                        "free thiol",
+            })
+    elif len(cys) > 2:
         for pos in cys:
             region = region_of(pos, annotation)
             if region not in CANONICAL_CYS_REGIONS:
@@ -564,7 +719,7 @@ def find_liabilities(seq: str, annotation: dict | None = None,
                     "incomplete",
         })
 
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows, columns=LIABILITY_COLUMNS)
     if df.empty:
         return df
     order = {"High": 0, "Medium": 1, "Low": 2}
@@ -1005,10 +1160,13 @@ def plot_msa(seqs: dict[str, str], annotations: dict | None = None,
     mv = MsaViz(str(aln_path), wrap_length=wrap_length, show_consensus=True,
                 show_grid=True, color_scheme="Clustal", show_count=True)
 
-    if annotations:
+    # The CDR bands refer to the first sequence, which may have no annotation at
+    # all now that the app accepts proteins that are not VHHs. Fall back to the
+    # first sequence that does have one, and draw no bands if none does.
+    ref = next((n for n in seqs if n in (annotations or {})), None)
+    if annotations and ref:
         records = dict(ln.split("\n", 1) for ln in
                        aln_path.read_text().lstrip(">").split("\n>"))
-        ref = list(seqs)[0]
         aligned_ref = records[ref].replace("\n", "")
         for region in ("CDR1", "CDR2", "CDR3"):
             r = annotations[ref].get(region)
@@ -1060,8 +1218,8 @@ def plot_logo(seqs: dict[str, str], annotations: dict | None = None,
 
     # CDR spans of the first sequence, in alignment columns, for the shading
     spans = {}
-    if annotations:
-        ref = list(seqs)[0]
+    ref = next((n for n in seqs if n in (annotations or {})), None)
+    if annotations and ref:
         ref_aligned = records.get(ref, "")
         for region in ("CDR1", "CDR2", "CDR3"):
             info = (annotations.get(ref) or {}).get(region) or {}

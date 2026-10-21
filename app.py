@@ -51,7 +51,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.1600"
+VERSION = "20261021.1800"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -65,7 +65,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21e", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.21g", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
@@ -131,6 +131,12 @@ def _analyze_one(name: str, seq: str, ph: float, method: str):
     """
     frame, anns, errs = vc.analyze({name: seq}, ph=ph, method=method)
     return frame.iloc[0].to_dict(), anns.get(name), errs.get(name)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def classify_cached(seq: str, method: str):
+    """What kind of sequence this is — ANARCI numbering, so worth caching."""
+    return vc.classify(seq, method=method)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
@@ -1055,8 +1061,10 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
 
 st.title("🔬 Sequence analysis")
 st.markdown(
-    "Physico-chemical characterization, CDR/framework annotation and alignment of "
-    "single-domain antibodies. Paste one or more sequences, in FASTA or raw form.")
+    "Physico-chemical characterization, CDR/framework annotation and alignment. "
+    "Built around VHHs, but **any protein is accepted** — each sequence is "
+    "classified, and the VHH-specific analyses only run on the ones that are "
+    "VHHs. Paste one or more sequences, in FASTA or raw form.")
 
 col_in, col_act = st.columns([3, 1])
 with col_act:
@@ -1193,10 +1201,45 @@ except ValueError as exc:
 
 df, annotations, errors = analyze_with_progress(sequences, ph, method)
 
-if errors:
-    for name, msg in errors.items():
+# What is each sequence? The app accepts any protein, so every VHH-specific
+# analysis has to know which sequences it legitimately applies to.
+kinds = {name: classify_cached(seq, method) for name, seq in sequences.items()}
+vhh_names = [n for n in sequences if kinds[n]["is_vhh"]]
+other_names = [n for n in sequences if not kinds[n]["is_vhh"]]
+vhh_sequences = {n: sequences[n] for n in vhh_names}
+vhh_annotations = {n: annotations[n] for n in vhh_names if n in annotations}
+
+df.insert(1, "type", [kinds[n]["kind"] for n in df["name"]])
+
+if other_names:
+    st.info(
+        f"**{len(other_names)} of {len(sequences)} sequence(s) are not VHHs.** "
+        "They are characterised like any protein — mass, pI, extinction, charge, "
+        "aggregation, liabilities, DNA — but the VHH-specific tabs skip them.\n\n"
+        + "\n".join(f"- **{n}** — {kinds[n]['kind']}: {kinds[n]['note']}"
+                     for n in other_names), icon="ℹ️")
+
+# An annotation failure on something that is not a VHH is the expected outcome,
+# not an error worth alarming anyone about.
+real_errors = {n: m for n, m in errors.items() if kinds[n]["is_vhh"]}
+if real_errors:
+    for name, msg in real_errors.items():
         st.warning(f"**{name}** — annotation failed: {msg}. "
                    "Physico-chemical values are still reported below.")
+
+
+def vhh_only_notice(what: str) -> bool:
+    """Guard for a VHH-specific panel. True when there is something to show."""
+    if not vhh_names:
+        st.info(f"{what} applies to VHHs, and none of the submitted sequences is "
+                "one. The generic tabs — Properties, Plots, Liabilities, "
+                "Aggregation, DNA, Constructs — cover them all.")
+        return False
+    if other_names:
+        st.caption("Showing the "
+                   f"{len(vhh_names)} VHH sequence(s); "
+                   f"{len(other_names)} other sequence(s) are not analysed here.")
+    return True
 
 # Named rather than indexed: inserting a tab in the middle of an indexed list
 # silently reassigns every panel after it.
@@ -1207,9 +1250,9 @@ tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
 
 # --- Properties ------------------------------------------------------------ #
 with tabs["Properties"]:
-    main_cols = ["name", "length", "mw_kda", "pI", "ext_coeff_reduced", "A280_0.1pct",
-                 "instability_index", "aliphatic_index", "gravy", "aromaticity",
-                 "net_charge", "n_Cys"]
+    main_cols = ["name", "type", "length", "mw_kda", "pI", "ext_coeff_reduced",
+                 "A280_0.1pct", "instability_index", "aliphatic_index", "gravy",
+                 "aromaticity", "net_charge", "n_Cys"]
     st.dataframe(
         df[main_cols].style.format(precision=2).background_gradient(
             subset=["gravy", "instability_index"], cmap="RdYlGn_r"),
@@ -1294,18 +1337,19 @@ with tabs["Plots"]:
 
 # --- CDR / Framework ------------------------------------------------------- #
 with tabs["CDR / Framework"]:
-    if not annotations:
+    _cdr_ok = vhh_only_notice("CDR and framework annotation")
+    if _cdr_ok and not vhh_annotations:
         st.warning("No sequence could be annotated.")
-    else:
+    elif _cdr_ok:
         rows = [{"name": n,
                  "method": df.loc[df["name"] == n, "annotation_method"].iloc[0],
-                 "CDR1": annotations[n]["CDR1"]["seq"],
-                 "CDR2": annotations[n]["CDR2"]["seq"],
-                 "CDR3": annotations[n]["CDR3"]["seq"],
-                 "CDR1 len": len(annotations[n]["CDR1"]["seq"]),
-                 "CDR2 len": len(annotations[n]["CDR2"]["seq"]),
-                 "CDR3 len": len(annotations[n]["CDR3"]["seq"])}
-                for n in annotations]
+                 "CDR1": vhh_annotations[n]["CDR1"]["seq"],
+                 "CDR2": vhh_annotations[n]["CDR2"]["seq"],
+                 "CDR3": vhh_annotations[n]["CDR3"]["seq"],
+                 "CDR1 len": len(vhh_annotations[n]["CDR1"]["seq"]),
+                 "CDR2 len": len(vhh_annotations[n]["CDR2"]["seq"]),
+                 "CDR3 len": len(vhh_annotations[n]["CDR3"]["seq"])}
+                for n in vhh_annotations]
         st.dataframe(pd.DataFrame(rows), hide_index=True, **FIT)
 
         st.subheader("Annotated sequences")
@@ -1316,14 +1360,14 @@ with tabs["CDR / Framework"]:
             'border-radius:3px">CDR2</span> '
             '<span style="background:#4daf4a;color:#fff;padding:1px 6px;'
             'border-radius:3px">CDR3</span>', unsafe_allow_html=True)
-        st.markdown("".join(vc.render_annotated_html(n, annotations[n])
-                            for n in annotations), unsafe_allow_html=True)
+        st.markdown("".join(vc.render_annotated_html(n, vhh_annotations[n])
+                            for n in vhh_annotations), unsafe_allow_html=True)
 
         with st.expander("Framework regions"):
             st.dataframe(pd.DataFrame(
-                [{"name": n, **{r: annotations[n][r]["seq"]
+                [{"name": n, **{r: vhh_annotations[n][r]["seq"]
                                 for r in ("FR1", "FR2", "FR3", "FR4")}}
-                 for n in annotations]), hide_index=True, **FIT)
+                 for n in vhh_annotations]), hide_index=True, **FIT)
 
         with st.expander("How the two annotation methods work"):
             st.markdown("""
@@ -1349,8 +1393,9 @@ non-canonical framework — which is itself worth knowing.
 with tabs["Hallmarks & germline"]:
     st.markdown("The four FR2 positions that distinguish a camelid VHH from a "
                 "conventional VH, and the closest germline genes.")
+    _has_vhh = vhh_only_notice("Hallmark and germline analysis")
     hm_rows, gl_rows = [], []
-    for name, seq in sequences.items():
+    for name, seq in vhh_sequences.items():
         try:
             hm = hallmark_data(seq, annotations.get(name))
             hm_rows.append({"name": name, "tetrad": hm["tetrad"],
@@ -1399,7 +1444,7 @@ with tabs["Hallmarks & germline"]:
                  "comparison. Searching all families rarely changes the answer.")
     fam_arg = None if family == "all human heavy V" else family
 
-    for name, seq in sequences.items():
+    for name, seq in vhh_sequences.items():
         try:
             h = humanness_for(seq, fam_arg)
         except Exception as exc:
@@ -1539,13 +1584,14 @@ with tabs["Liabilities"]:
     # ---- disulfides -------------------------------------------------------- #
     st.divider()
     st.subheader("Cysteines and disulfides")
+    _ = vhh_only_notice("IMGT-numbered disulfide analysis")
     st.markdown(
         "The table above flags every cysteine outside the canonical FR1/FR3 pair "
         "as a possible free thiol. That is the right default, but it is wrong in "
         "one common case: camelid VHHs with long CDR3s often carry a **second, "
         "stabilising** disulfide, typically between CDR1 or FR2 and CDR3. This "
         "section tells the two situations apart.")
-    for name, seq in sequences.items():
+    for name, seq in vhh_sequences.items():
         try:
             ds = disulfides_for(seq, annotations.get(name))
         except Exception as exc:
@@ -1604,13 +1650,23 @@ with tabs["Liabilities"]:
                                         st.column_config.TextColumn("Reason",
                                                                     width="large")})
 
+        # Several liabilities offer alternatives at the SAME position (a free
+        # cysteine can go to S or to A). Selecting both by default would make
+        # every one of them collide, so the default keeps the first — the
+        # preferred — option per position.
+        _seen_pos, _default = set(), []
+        for _, r in doable.iterrows():
+            if r["in_CDR"] or r["position"] in _seen_pos:
+                continue
+            _seen_pos.add(r["position"])
+            _default.append(r["substitution"])
         picked = st.multiselect(
             "Apply substitutions", list(doable["substitution"]),
-            default=[r["substitution"] for _, r in doable.iterrows()
-                     if not r["in_CDR"]],
-            help="Defaults to the framework-only set, which is the safe subset. "
-                 "Two substitutions at the same position are refused rather than "
-                 "silently resolved.")
+            default=_default,
+            help="Defaults to one substitution per position, frameworks only — "
+                 "the safe subset. Alternatives at the same position are listed "
+                 "but not pre-selected, and picking two of them is refused "
+                 "rather than silently resolved.")
         if picked:
             repaired, problems = vc.apply_repairs(rep_seq, picked)
             for p in problems:
@@ -1728,13 +1784,30 @@ with tabs["Aggregation"]:
 
 # --- Alignment ------------------------------------------------------------- #
 with tabs["Alignment"]:
-    if len(sequences) < 2:
-        st.info("Submit at least two sequences to see an alignment.")
+    # Aligning a 1200-residue protein against 120-residue VHHs produces a mostly
+    # empty figure, so the default is the VHH subset — unless there are no VHHs,
+    # in which case aligning the others is the only thing that makes sense.
+    if other_names and vhh_names:
+        align_all = st.checkbox(
+            f"Include the {len(other_names)} non-VHH sequence(s)", value=False,
+            help="Off by default: mixing sequences of very different lengths "
+                 "gives an alignment that is mostly gaps, and a logo to match.")
+    else:
+        align_all = not vhh_names
+    aln_seqs = sequences if align_all else vhh_sequences
+    aln_anns = annotations if align_all else vhh_annotations
+    if other_names and not align_all and vhh_names:
+        st.caption(f"Aligning the {len(vhh_names)} VHH sequence(s) only.")
+
+    if len(aln_seqs) < 2:
+        st.info("Submit at least two sequences to see an alignment. "
+                + ("Tick the box above to include the non-VHH sequences."
+                   if other_names and not align_all else ""))
     else:
         with st.spinner("Aligning…"):
             # pymsaviz reads from a path, so the aligned FASTA is written to a
             # temporary directory that is removed as soon as the figure exists.
-            img_msa, aln_text = png_msa(sequences, annotations)
+            img_msa, aln_text = png_msa(aln_seqs, aln_anns)
         st.image(img_msa, **FIT)
         st.caption("FAMSA alignment rendered with pymsaviz. CDR bands refer to the "
                    "first sequence submitted.")
@@ -1744,9 +1817,10 @@ with tabs["Alignment"]:
         st.subheader("Pairwise identity")
         cols_id = st.columns(2)
         with cols_id[0]:
-            st.image(png_identity(sequences, None, None), **FIT)
-        if annotations and any(a["CDR3"]["seq"] for a in annotations.values()):
-            img_id3 = png_identity(sequences, annotations, "CDR3")
+            st.image(png_identity(aln_seqs, None, None), **FIT)
+        if aln_anns and any((a.get("CDR3") or {}).get("seq")
+                            for a in aln_anns.values()):
+            img_id3 = png_identity(aln_seqs, aln_anns, "CDR3")
             if img_id3:
                 with cols_id[1]:
                     st.image(img_id3, **FIT)
@@ -1782,7 +1856,7 @@ with tabs["Alignment"]:
                 index=0)
 
         with st.spinner("Drawing the logo…"):
-            img_logo, logo_matrix = png_logo(sequences, annotations, logo_type,
+            img_logo, logo_matrix = png_logo(aln_seqs, aln_anns, logo_type,
                                              int(logo_wrap), logo_scheme)
         st.image(img_logo, **FIT)
         st.caption("CDR bands refer to the first sequence submitted, mapped onto "
@@ -1802,9 +1876,12 @@ with tabs["Clonal families"]:
         "CDR3 answers that, because CDR3 is what differs between independent "
         "lineages while the frameworks stay nearly constant.")
 
-    if len(sequences) < 2:
-        st.info("Submit at least two sequences to group them into families.")
-    elif not any((a.get("CDR3") or {}).get("seq") for a in annotations.values()):
+    if not vhh_only_notice("Clonal family grouping"):
+        pass
+    elif len(vhh_sequences) < 2:
+        st.info("Submit at least two VHH sequences to group them into families.")
+    elif not any((a.get("CDR3") or {}).get("seq")
+                 for a in vhh_annotations.values()):
         st.warning("No CDR3 could be annotated, so there is nothing to group on.")
     else:
         fam_cols = st.columns([2, 1, 1])
@@ -1830,7 +1907,7 @@ with tabs["Clonal families"]:
                      "plausible sibling, not a new lineage.")
 
         with st.spinner("Grouping…"):
-            fam = families_for(sequences, annotations, float(cutoff),
+            fam = families_for(vhh_sequences, vhh_annotations, float(cutoff),
                                linkage_method, bool(same_length))
 
         n_seqs = len(fam["assignment"])
@@ -1857,7 +1934,8 @@ with tabs["Clonal families"]:
             "`representative` is the family's most frequent CDR3 — a reasonable "
             "default pick for the clone to carry forward.")
 
-        img_dendro = png_family_dendrogram(sequences, annotations, float(cutoff),
+        img_dendro = png_family_dendrogram(vhh_sequences, vhh_annotations,
+                                           float(cutoff),
                                            linkage_method, bool(same_length))
         if img_dendro:
             st.subheader("Dendrogram")
@@ -1885,8 +1963,9 @@ with tabs["Clonal families"]:
                               mime="text/csv")
 
         with st.expander("One representative per family, as FASTA"):
-            reps = {r: sequences[r] for r in fam["families"]["representative"]
-                    if r in sequences}
+            reps = {r: vhh_sequences[r]
+                    for r in fam["families"]["representative"]
+                    if r in vhh_sequences}
             fasta = "".join(f">{k}\n{v}\n" for k, v in reps.items())
             st.code(fasta or "—", language="text")
             st.download_button("Download representatives (FASTA)", fasta,

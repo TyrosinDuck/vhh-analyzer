@@ -32,7 +32,7 @@ which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
-| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment, clonal families, codon-optimised DNA, construct builder, PDF report |
+| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, VHH-specific analyses for VHHs — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
@@ -239,6 +239,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 
 | Tab | Contents |
 |---|---|
+| Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else — so VHH-specific analyses only run where they mean something |
 | Properties | physico-chemical descriptors, developability flags, custom features |
 | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | CDR / Framework | region table, coloured sequences, both annotation methods explained |
