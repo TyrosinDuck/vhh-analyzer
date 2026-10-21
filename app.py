@@ -33,6 +33,7 @@ import pandas as pd
 import streamlit as st
 
 import cloning as cl
+import generator as gn
 import sanger as sg
 import vhh_core as vc
 
@@ -49,7 +50,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.0700"
+VERSION = "20261021.1145"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -63,13 +64,14 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21", "sanger": "2026.10.21",
-                    "cloning": "2026.10.21"}
+REQUIRED_MODULES = {"vhh_core": "2026.10.21b", "sanger": "2026.10.21b",
+                    "cloning": "2026.10.21b", "generator": "2026.10.21b"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
                                   ("sanger", REQUIRED_MODULES["sanger"], sg),
-                                  ("cloning", REQUIRED_MODULES["cloning"], cl))
+                                  ("cloning", REQUIRED_MODULES["cloning"], cl),
+                                  ("generator", REQUIRED_MODULES["generator"], gn))
           if getattr(mod, "__version__", None) != want]
 if _stale:
     st.error("Some modules are out of date — update " + ", ".join(_stale) +
@@ -213,6 +215,46 @@ def png_profiles(seqs, anns, window):
 def png_chou_fasman(name, seq, window, ann):
     return fig_to_png(vc.plot_chou_fasman(seq, name, window=window, annotation=ann),
                       close=True)
+
+
+@st.cache_resource
+def generator_matrix():
+    """The position-frequency matrix and its provenance, loaded once."""
+    return gn.load_matrix(), gn.load_meta()
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=8)
+def generate_cached(n, seed, framework_mode, cdr_alphabet, lengths, hallmarks,
+                    framework_cys):
+    matrix, meta = generator_matrix()
+    return gn.generate_many(n, matrix, meta, seed=seed,
+                            framework_mode=framework_mode,
+                            cdr_alphabet=cdr_alphabet,
+                            cdr_lengths=dict(lengths) if lengths else None,
+                            enforce_hallmarks=hallmarks,
+                            framework_cys=framework_cys)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def liabilities_for(seq, ann, include_added):
+    return vc.find_liabilities(seq, ann, include_added=include_added)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def proteases_for(seq, ann):
+    return vc.find_protease_sites(seq, ann)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_liability_map(liabs, anns, lengths):
+    fig = vc.plot_liability_map(liabs, anns, lengths)
+    return fig_to_png(fig, close=True) if fig else None
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_liability_profile(liabs):
+    fig = vc.plot_liability_profile(liabs)
+    return fig_to_png(fig, close=True) if fig else None
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -979,9 +1021,94 @@ with col_in:
     st.button("Analyze", type="primary", **FIT)
     st.caption("Click Analyze, or press ⌘ + Enter (Ctrl + Enter on Windows/Linux).")
 
+# --- Synthetic sequence generator ------------------------------------------- #
+with st.expander("🎲 Generate synthetic VHH sequences"):
+    matrix, gmeta = generator_matrix()
+    report = gn.matrix_report(matrix, gmeta)
+    st.markdown(
+        "Frameworks are sampled position by position from a real IMGT "
+        "position-frequency matrix, so they look like natural frameworks. CDRs are "
+        "drawn at random, with lengths taken from the same reference set.")
+    st.caption(
+        f"Reference: **{report['source']}** — {report['n_sequences']} unique VHH "
+        f"sequences, {report['n_positions']} IMGT positions, median support "
+        f"{report['median_support']} sequences per position.")
+    st.caption(
+        f"*{gmeta.get('source_title', '')}* — "
+        f"[doi:{gmeta.get('source_doi', '')}]"
+        f"(https://doi.org/{gmeta.get('source_doi', '')}) · "
+        f"[database]({gmeta.get('source_url', '')}). "
+        "Please cite it if you publish work based on these sequences. What is "
+        "bundled here is an aggregate frequency matrix, not the sequences "
+        "themselves.")
+
+    gc1, gc2, gc3 = st.columns(3)
+    with gc1:
+        n_gen = st.number_input("How many", 1, 200, 10, 1)
+        seed = st.number_input("Random seed", 0, 10**6, 0, 1,
+                               help="The same seed always gives the same set.")
+    with gc2:
+        fw_mode = st.radio("Frameworks", ["sample", "consensus"],
+                           help="'sample' draws each position from its frequency "
+                                "column and gives a different framework every "
+                                "time; 'consensus' takes the most frequent "
+                                "residue, giving one canonical framework.")
+        cdr_alpha = st.radio(
+            "CDR residues", ["natural", "no_cys", "uniform"],
+            help="'natural' uses the reference set's own CDR composition; "
+                 "'no_cys' is uniform over 19 residues; 'uniform' is all 20.")
+    with gc3:
+        keep_hallmarks = st.checkbox("Enforce camelid hallmarks", value=True)
+        allow_fw_cys = st.checkbox("Allow cysteines in frameworks", value=False)
+        fixed_lengths = st.checkbox("Fix the CDR lengths", value=False)
+
+    lengths = {}
+    if fixed_lengths:
+        lc = st.columns(3)
+        for col, region, default in zip(lc, ("CDR1", "CDR2", "CDR3"), (8, 8, 17)):
+            with col:
+                lengths[region] = st.number_input(f"{region} length", 2, 30,
+                                                  default, 1)
+    else:
+        st.caption("CDR lengths are drawn from the reference distribution — "
+                   "CDR1 and CDR2 around 8 residues, CDR3 a mean of 17 with a "
+                   "range of 2 to 30.")
+
+    if st.button("Generate", type="primary"):
+        with st.spinner(f"Generating {int(n_gen)} sequence(s)…"):
+            st.session_state["generated"] = generate_cached(
+                int(n_gen), int(seed), fw_mode, cdr_alpha,
+                tuple(sorted(lengths.items())), keep_hallmarks, allow_fw_cys)
+
+    made = st.session_state.get("generated")
+    if made is not None and len(made):
+        st.dataframe(made[["name", "length", "tetrad", "CDR1_len", "CDR2_len",
+                           "CDR3_len", "sequence"]], hide_index=True, **FIT,
+                     column_config={"sequence": st.column_config.TextColumn(
+                         "Sequence", width="large")})
+        gcols = st.columns(2)
+        with gcols[0]:
+            st.download_button("Download (FASTA)", gn.to_fasta(made),
+                               file_name="synthetic_vhh.fasta", mime="text/plain",
+                               **FIT)
+        with gcols[1]:
+            if st.button("Send to the analysis above", **FIT):
+                st.session_state["pending_seq_text"] = gn.to_fasta(made)
+                st.rerun()
+
+    st.caption(
+        "Two limitations worth knowing. **Positions are sampled independently**, so "
+        "a combination that never co-occurs in nature can come out — the hallmark "
+        "tetrad is the usual casualty, which is why it is enforced by default. And "
+        "**a frequency is only as good as its support**: a position seen in 30 "
+        "reference sequences carries far less information than one seen in 1900. "
+        "These are synthetic sequences for controls and benchmarks; nothing here "
+        "predicts that they fold or bind anything.")
+
 if not text.strip():
-    st.info("Paste sequences above, upload a FASTA file, load the example, or extract "
-            "them from .ab1 chromatograms in the sequencing section.")
+    st.info("Paste sequences above, upload a FASTA file, load the example, generate "
+            "synthetic ones, or extract them from .ab1 chromatograms in the "
+            "sequencing section.")
     footer()
     st.stop()
 
@@ -1182,28 +1309,101 @@ with tabs[3]:
 
 # --- Liabilities ------------------------------------------------------------ #
 with tabs[4]:
-    st.markdown("Motifs that are known chemical or manufacturability liabilities, "
-                "with their position and the region they fall in.")
-    any_liab = False
+    st.markdown(
+        "Chemical and manufacturability liabilities, scored and placed along the "
+        "sequence.")
+
+    include_added = st.checkbox(
+        "Include the motifs added on top of the in-house scale",
+        value=True,
+        help="Fragmentation (DP), RGD and hydrophobic patches are not part of the "
+             "original scoring scale; untick to reproduce its totals exactly.")
+
+    liab_by_seq, prot_by_seq, summaries = {}, {}, []
     for name, seq in sequences.items():
-        liab = vc.find_liabilities(seq, annotations.get(name))
+        liab_by_seq[name] = liabilities_for(seq, annotations.get(name), include_added)
+        prot_by_seq[name] = proteases_for(seq, annotations.get(name))
+        summaries.append(vc.liability_summary(name, liab_by_seq[name],
+                                              prot_by_seq[name]))
+
+    st.dataframe(pd.DataFrame(summaries), hide_index=True, **FIT,
+                 column_config={
+                     "total_score": st.column_config.NumberColumn("Total score",
+                                                                   format="%.1f"),
+                     "n_liabilities": st.column_config.NumberColumn("Motifs"),
+                     "n_high": st.column_config.NumberColumn("High"),
+                     "n_medium": st.column_config.NumberColumn("Medium"),
+                     "n_low": st.column_config.NumberColumn("Low"),
+                     "n_in_CDR": st.column_config.NumberColumn("In a CDR"),
+                     "protease_score": st.column_config.NumberColumn(
+                         "Protease score", format="%.2f"),
+                     "n_protease_sites": st.column_config.NumberColumn(
+                         "Protease sites")})
+
+    img_map = png_liability_map(liab_by_seq, annotations,
+                                {n: len(s) for n, s in sequences.items()})
+    if img_map:
+        st.image(img_map, **FIT)
+    img_profile = png_liability_profile(liab_by_seq)
+    if img_profile:
+        st.image(img_profile, **FIT)
+    plt.close("all")
+
+    st.caption(
+        "Scores come from the in-house scale: N-glycosylation sequon 15, NG and DG "
+        "10, NS/NT/NN and DS/DT/DD 5, free cysteine 8, Met 4, Trp 3; Low below 2, "
+        "Medium below 6, High at or above 6. In its original form each motif is also "
+        "weighted by its solvent exposure and the model confidence taken from a 3D "
+        "structure. **This section is sequence-only, so neither factor is applied** — "
+        "an NG scores 10 whether it is buried or fully exposed. The practical "
+        "consequence is that the categories compress towards the top, and comparing "
+        "sequences with each other tells you more than the category of any single "
+        "motif.")
+
+    st.subheader("Per sequence")
+    for name in sequences:
+        liab = liab_by_seq[name]
+        summary = next(s for s in summaries if s["name"] == name)
         with st.container(border=True):
-            st.markdown(f"**{name}** — {len(liab)} motif(s)")
+            st.markdown(f"**{name}** — score {summary['total_score']:.0f}, "
+                        f"{summary['n_liabilities']} motif(s), "
+                        f"{summary['n_high']} high, {summary['n_in_CDR']} in a CDR")
             if liab.empty:
                 st.markdown("No liability motif detected.")
             else:
-                any_liab = True
                 st.dataframe(
-                    liab[["liability", "motif", "position", "region", "severity",
-                          "note"]], hide_index=True, **FIT,
-                    column_config={"note": st.column_config.TextColumn(
-                        "Note", width="large")})
-    if any_liab:
-        st.caption("A motif inside a CDR may affect binding; the same motif in a "
-                   "framework is mainly a stability or heterogeneity concern. "
-                   "Severity is a heuristic ranking, not an experimental "
-                   "measurement — an NG in a loop that never sees stress may never "
-                   "deamidate.")
+                    liab[["liability", "motif", "range", "region", "in_CDR", "score",
+                          "risk", "source", "note"]],
+                    hide_index=True, **FIT,
+                    column_config={
+                        "range": st.column_config.TextColumn("Position"),
+                        "score": st.column_config.NumberColumn("Score",
+                                                                format="%.1f"),
+                        "note": st.column_config.TextColumn("Note", width="large")})
+
+    with st.expander("Predicted protease cleavage sites"):
+        st.markdown(
+            "Every protein has tryptic sites, so the count on its own means little. "
+            "What is worth looking at is a high-scoring recognition site — Factor Xa "
+            "or enterokinase — or a cluster of sites inside a CDR.")
+        for name in sequences:
+            prot = prot_by_seq[name]
+            st.markdown(f"**{name}** — {len(prot)} site(s), "
+                        f"score {prot['score'].sum():.2f}" if not prot.empty
+                        else f"**{name}** — none")
+            if not prot.empty:
+                in_cdr = prot[prot["in_CDR"]]
+                st.caption(f"{len(in_cdr)} inside a CDR")
+                st.dataframe(prot.head(40), hide_index=True, **FIT,
+                             column_config={"note": st.column_config.TextColumn(
+                                 "Note", width="large")})
+
+    st.download_button(
+        "Liabilities (CSV)",
+        pd.concat([df.assign(sequence=n) for n, df in liab_by_seq.items()
+                   if not df.empty], ignore_index=True).to_csv(index=False)
+        if any(not d.empty for d in liab_by_seq.values()) else "",
+        file_name="liabilities.csv", mime="text/csv")
 
 # --- Alignment ------------------------------------------------------------- #
 with tabs[5]:

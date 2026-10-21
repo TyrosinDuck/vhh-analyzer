@@ -73,6 +73,63 @@ say so than silently produce nonsense.
 A sequence containing a non-standard residue (B, X, Z, a stop…) is rejected by name.
 Fix or remove it rather than letting it through.
 
+### 3.1b Generating synthetic VHHs
+
+The panel **Generate synthetic VHH sequences** builds sequences that look like real
+VHHs without being any of them. Useful for negative controls, for benchmarking a
+pipeline, or for testing this app itself.
+
+**How it works.** Frameworks are sampled position by position from an IMGT
+position-frequency matrix built from real VHHs. CDRs are drawn at random, with
+lengths taken from the same reference set.
+
+**The reference set.** The bundled matrix comes from **PLAbDab-nano** (OPIG,
+University of Oxford): 1958 unique VHH sequences, numbered with ANARCI against the
+alpaca germlines, giving 212 IMGT positions with a median support of 1890 sequences
+per position. The panel states this, along with the support, because a frequency is
+only as good as the number of sequences behind it.
+
+> *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
+> literature*, [doi:10.1093/nar/gkae881](https://doi.org/10.1093/nar/gkae881).
+> PLAbDab-nano is freely available to download and query at
+> <https://opig.stats.ox.ac.uk/webapps/plabdab-nano/>. **Please cite it** if you
+> publish work based on sequences generated here. What this app bundles is an
+> aggregate position-frequency matrix; the sequences themselves are not
+> redistributed.
+
+**Controls.**
+
+| Control | Effect |
+|---|---|
+| Frameworks | `sample` draws each position from its frequency column, giving a different framework each time; `consensus` takes the most frequent residue, giving one canonical framework |
+| CDR residues | `natural` uses the reference set's own CDR composition; `no_cys` is uniform over 19 residues; `uniform` is all 20 |
+| Enforce camelid hallmarks | resamples IMGT 42/49/50/52 until the tetrad is camelid |
+| Allow cysteines in frameworks | off by default, see below |
+| Fix the CDR lengths | otherwise lengths come from the reference distribution — CDR1 and CDR2 around 8, CDR3 a mean of 17 over a range of 2 to 30 |
+| Random seed | the same seed always gives the same set, so a benchmark is reproducible |
+
+Generated sequences download as FASTA, or go straight into the analysis above.
+
+**Three things to know before using the output.**
+
+*Positions are sampled independently.* Real frameworks have correlated positions — a
+residue at one site constrains another — so a combination that never co-occurs in
+nature can come out. The hallmark tetrad is the usual casualty, which is why it is
+enforced by default.
+
+*Cysteines in frameworks are off by default.* About 2% of the reference sequences
+carry a cysteine at IMGT 50, where it pairs with a cysteine in a CDR. With randomly
+generated CDRs that partner does not exist, so such a residue would be left as an
+orphan thiol.
+
+*These are synthetic sequences.* Nothing here predicts that they fold, express or bind
+anything. They are statistically plausible strings, and that is all.
+
+A check worth running: generate a set and send it through the analysis. On the bundled
+matrix every generated sequence annotates cleanly and scores 4/4 on the hallmarks,
+with molecular weights around 13.5–14 kDa — which is the sanity test that the matrix
+and the assembly are behaving.
+
 ### 3.2 Sidebar settings
 
 | Setting | Default | What it changes |
@@ -196,25 +253,68 @@ regex FR2 block, and the germline table is absent.
 
 ### 3.7 Liabilities
 
-Motifs that are known chemical or manufacturability liabilities, each with its
-position, the region it falls in, and a severity.
+Chemical and manufacturability liabilities, **scored** and placed along the sequence.
 
-| Liability | Pattern | Why it matters |
+**The scoring scale.** Each motif carries a base score, and the total per sequence is
+the sum:
+
+| Liability | Motif | Score |
 |---|---|---|
-| N-glycosylation | `N-x-S/T`, x ≠ P | glycosylation and heterogeneity in eukaryotic expression |
-| Deamidation | `NG`, `NS` | fast asparagine deamidation |
-| Deamidation (slow) | `NA`, `NH`, `NN`, `NT` | slower context |
-| Isomerisation | `DG`, `DS` | aspartate isomerisation |
-| Fragmentation | `DP` | acid-labile peptide bond |
-| Oxidation | `M`, `W` | oxidation under stress, especially in CDRs |
-| Integrin binding | `RGD` | potential integrin binding |
-| Hydrophobic patch | four or more consecutive F/I/L/V/W/Y | aggregation |
-| Extra cysteine | a Cys outside the canonical FR1/FR3 pair | free thiol or an extra disulfide |
+| N-glycosylation | `N-x-S/T`, x ≠ P | 15 |
+| Deamidation (high) | `NG` | 10 |
+| Isomerisation (high) | `DG` | 10 |
+| Free cysteine | a Cys outside the canonical FR1/FR3 pair | 8 |
+| Deamidation (moderate) | `NS`, `NT`, `NN` | 5 |
+| Isomerisation (moderate) | `DS`, `DT`, `DD` | 5 |
+| Oxidation (Met) | `M` | 4 |
+| Oxidation (Trp) | `W` | 3 |
 
-**The region column is what makes this usable.** The same NG motif means different
+Risk categories follow the same scale: **Low** below 2, **Medium** below 6, **High**
+at 6 or above.
+
+Three further motifs — fragmentation (`DP`), integrin binding (`RGD`) and hydrophobic
+patches of four or more consecutive F/I/L/V/W/Y — are **additions**, marked as such in
+the `source` column. Untick *Include the motifs added on top of the in-house scale* to
+reproduce the original totals exactly.
+
+**An important limitation.** In its original form each motif is also weighted by its
+**solvent exposure** (SASA) and by the **model confidence** (pLDDT), both taken from a
+3D structure. This section is sequence-only, so neither factor is applied: an `NG`
+scores 10 whether it is buried in the core or fully exposed on a loop. Two consequences
+follow, and they matter:
+
+- the categories **compress towards the top** — almost everything lands in Medium or
+  High, where the structure-weighted version would push buried motifs down to Low;
+- **comparing sequences with each other tells you more than the category of any single
+  motif**. Use the totals to rank a panel, not to declare one motif dangerous.
+
+If you have an AlphaFold model, the structure-weighted analysis is a separate notebook
+and gives a far sharper answer.
+
+**The liability map** places every motif at its residue position, one row per sequence,
+with bubble size proportional to the score and the CDRs shaded behind. This is the view
+that answers the question you actually ask of a panel: *where* do the problems sit, and
+do they fall in a binding loop. The **liability profile** underneath stacks each
+sequence's score by motif type, with the total on top.
+
+**The region column is what makes the table actionable.** The same `NG` means different
 things in FR3 and in CDR3: in a framework it is mainly a stability and heterogeneity
-concern, in a CDR it may alter binding. Severity is a heuristic ranking, not a
-measurement — an NG in a loop that never sees stress may never deamidate.
+concern, in a CDR it may alter binding.
+
+**Free cysteines.** With only the sequence, the app assumes the canonical intradomain
+disulfide joins the FR1 and FR3 cysteines, and flags any Cys outside those regions as a
+candidate free thiol. cAbLys3, which carries a genuine second disulfide between CDR1
+and CDR3, is therefore flagged twice — correctly in the sense that those cysteines are
+extra, and misleadingly in the sense that they are paired. With a structure you would
+measure the SG–SG distances instead.
+
+**Protease sites** sit in an expander: trypsin-like (after K/R, not before P),
+chymotrypsin-like (after F/W/Y, not before P), GluC-like, AspN-like, and the
+high-scoring Factor Xa and enterokinase recognition sites. Every protein has tryptic
+sites, so the count on its own means little. What is worth looking at is a high-scoring
+recognition site, or a cluster of sites inside a CDR.
+
+Everything downloads as a single CSV.
 
 ### 3.8 Alignment
 
@@ -549,8 +649,12 @@ numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the alignm
 figure, `dna_features_viewer` for the plasmid maps, `reportlab` for the PDF, and
 Streamlit for the interface.
 
-The analysis logic lives in three importable modules — `vhh_core.py`, `sanger.py` and
-`cloning.py` — with no dependency on the interface, so a Jupyter notebook can use them
+The synthetic-sequence generator uses a position-frequency matrix derived from
+**PLAbDab-nano** (OPIG, University of Oxford); please cite that resource if you
+publish anything built on the generated sequences.
+
+The analysis logic lives in four importable modules — `vhh_core.py`, `sanger.py`,
+`cloning.py` and `generator.py` — with no dependency on the interface, so a Jupyter notebook can use them
 exactly the same way:
 
 ```python

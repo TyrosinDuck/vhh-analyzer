@@ -40,7 +40,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21"
+__version__ = "2026.10.21b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -431,22 +431,65 @@ def germline(seq: str, species: tuple[str, ...] = ("alpaca", "human")) -> dict:
 # Sequence liabilities
 # --------------------------------------------------------------------------- #
 
-LIABILITY_PATTERNS = [
-    ("N-glycosylation", r"N[^P][ST]", "high",
-     "N-x-S/T sequon — potential glycosylation, heterogeneity in eukaryotic expression"),
-    ("Deamidation", r"N[GS]", "high", "NG/NS — fast asparagine deamidation"),
-    ("Deamidation (slow)", r"N[AHNT]", "low", "slower deamidation context"),
-    ("Isomerisation", r"D[GS]", "medium", "DG/DS — aspartate isomerisation"),
-    ("Fragmentation", r"DP", "medium", "DP — acid-labile peptide bond"),
-    ("Oxidation (Met)", r"M", "low", "methionine — oxidation under stress"),
-    ("Oxidation (Trp)", r"W", "low", "tryptophan — oxidation, especially in CDRs"),
-    ("Integrin binding", r"RGD", "medium", "RGD motif — potential integrin binding"),
-    ("Hydrophobic patch", r"[FILVWY]{4,}", "medium",
+# Scoring scale for chemical liabilities.
+#
+# The base scores and the Low/Medium/High thresholds come from Jonathan's
+# in-silico liability notebook, where each motif is weighted by its solvent
+# exposure (SASA) and the model confidence (pLDDT) taken from an AlphaFold
+# structure. This module is sequence-only, so both of those factors are absent
+# and the score is the base score alone. Two consequences worth keeping in mind:
+# the categories compress towards the top (an NG scores 10 whether it is buried
+# or fully exposed), and the ranking *between* sequences is more informative
+# than the absolute category of any one motif.
+#
+# Entries marked source="added" are not from that notebook; their scores are a
+# judgement call and are meant to be edited.
+
+RISK_THRESHOLDS = (2, 6)          # < 2 Low, < 6 Medium, >= 6 High
+
+LIABILITY_RULES = [
+    # (label, regex, base score, source, note)
+    ("N-glycosylation", r"N[^P][ST]", 15, "notebook",
+     "N-x-S/T sequon — glycosylation and heterogeneity in eukaryotic expression"),
+    ("Deamidation (high)", r"N[G]", 10, "notebook",
+     "NG — fast asparagine deamidation"),
+    ("Deamidation (moderate)", r"N[STN]", 5, "notebook",
+     "NS/NT/NN — slower deamidation context"),
+    ("Isomerisation (high)", r"D[G]", 10, "notebook",
+     "DG — fast aspartate isomerisation"),
+    ("Isomerisation (moderate)", r"D[STD]", 5, "notebook",
+     "DS/DT/DD — slower isomerisation context"),
+    ("Oxidation (Met)", r"M", 4, "notebook", "methionine — oxidation under stress"),
+    ("Oxidation (Trp)", r"W", 3, "notebook",
+     "tryptophan — oxidation, especially in CDRs"),
+    ("Fragmentation", r"DP", 3, "added", "DP — acid-labile peptide bond"),
+    ("Integrin binding", r"RGD", 2, "added",
+     "RGD motif — potential integrin binding"),
+    ("Hydrophobic patch", r"[FILVWY]{4,}", 2, "added",
      "four or more consecutive hydrophobic residues"),
 ]
 
-# The two cysteines forming the canonical intradomain disulfide
+# Proteases, straight from the notebook. Scores are per-site and deliberately
+# small: a VHH has many tryptic sites and that on its own means little.
+PROTEASE_RULES = [
+    ("Trypsin-like", r"[KR](?![P])", 0.5, "cleaves after K/R, not before P"),
+    ("Chymotrypsin-like", r"[FWY](?![P])", 0.5, "cleaves after F/W/Y, not before P"),
+    ("GluC-like", r"E", 0.25, "cleaves after E"),
+    ("AspN-like", r"(?=.D)", 0.25, "cleaves before D"),
+    ("Factor Xa-like", r"[IVL][ED]GR", 5, "IEGR/VDGR-type recognition site"),
+    ("Enterokinase-like", r"DDDDK", 5, "DDDDK recognition site"),
+]
+
+# The canonical intradomain disulfide of a VHH; a Cys anywhere else is a
+# candidate free thiol. With a structure you would check the SG-SG distances
+# instead, which is what the notebook does.
 CANONICAL_CYS_REGIONS = {"FR1", "FR3"}
+
+
+def risk_category(score: float) -> str:
+    """Low / Medium / High, on the notebook's thresholds."""
+    low, high = RISK_THRESHOLDS
+    return "Low" if score < low else ("Medium" if score < high else "High")
 
 
 def region_of(position: int, annotation: dict | None) -> str:
@@ -460,8 +503,9 @@ def region_of(position: int, annotation: dict | None) -> str:
     return "?"
 
 
-def find_liabilities(seq: str, annotation: dict | None = None) -> pd.DataFrame:
-    """Locate sequence liabilities, with their position and region.
+def find_liabilities(seq: str, annotation: dict | None = None,
+                     include_added: bool = True) -> pd.DataFrame:
+    """Locate and score sequence liabilities, with position and region.
 
     A motif in a CDR does not carry the same weight as the same motif in a
     framework: in a CDR it may alter binding, in a framework it is mostly a
@@ -470,49 +514,200 @@ def find_liabilities(seq: str, annotation: dict | None = None) -> pd.DataFrame:
     """
     seq = clean_sequence(seq)
     rows = []
-    for label, pattern, severity, note in LIABILITY_PATTERNS:
-        for m in re.finditer(f"(?=({pattern}))", seq):      # overlapping matches
+
+    for label, pattern, base, source, note in LIABILITY_RULES:
+        if source == "added" and not include_added:
+            continue
+        for m in re.finditer(f"(?=({pattern}))", seq):
             motif = m.group(1)
             start = m.start() + 1
-            end = start + len(motif) - 1
+            end = start + max(len(motif), 1) - 1
             region = region_of(start, annotation)
             rows.append({
-                "liability": label, "motif": motif,
-                # always a string: a mixed int/str column breaks Arrow
-                # serialisation in the Streamlit dataframe widget
-                "position": str(start) if start == end else f"{start}–{end}",
-                "region": region,
-                "severity": severity,
-                "in_CDR": region.startswith("CDR"),
-                "note": note,
+                "liability": label, "motif": motif, "position": start,
+                "range": str(start) if start == end else f"{start}–{end}",
+                "region": region, "in_CDR": region.startswith("CDR"),
+                "score": float(base), "risk": risk_category(base),
+                "source": source, "note": note,
             })
 
-    # Cysteines: the canonical pair is expected, anything else is flagged
+    # Cysteines: the canonical FR1/FR3 pair is expected, anything else is a
+    # candidate free thiol.
     cys = [i + 1 for i, a in enumerate(seq) if a == "C"]
     if len(cys) > 2:
         for pos in cys:
             region = region_of(pos, annotation)
             if region not in CANONICAL_CYS_REGIONS:
                 rows.append({
-                    "liability": "Extra cysteine", "motif": "C", "position": str(pos),
-                    "region": region, "severity": "high", "in_CDR": region.startswith("CDR"),
-                    "note": "outside the canonical FR1/FR3 pair — possible free thiol "
-                            "or additional disulfide",
+                    "liability": "Free cysteine", "motif": "C", "position": pos,
+                    "range": str(pos), "region": region,
+                    "in_CDR": region.startswith("CDR"), "score": 8.0,
+                    "risk": risk_category(8), "source": "notebook",
+                    "note": "outside the canonical FR1/FR3 pair — possible free "
+                            "thiol or additional disulfide",
                 })
     elif len(cys) < 2:
         rows.append({
-            "liability": "Missing cysteine", "motif": "-", "position": "-",
-            "region": "-", "severity": "high", "in_CDR": False,
-            "note": f"only {len(cys)} Cys — the canonical intradomain disulfide is incomplete",
+            "liability": "Missing cysteine", "motif": "-", "position": 0,
+            "range": "-", "region": "-", "in_CDR": False, "score": 8.0,
+            "risk": risk_category(8), "source": "added",
+            "note": f"only {len(cys)} Cys — the canonical intradomain disulfide is "
+                    "incomplete",
         })
 
     df = pd.DataFrame(rows)
     if df.empty:
         return df
-    order = {"high": 0, "medium": 1, "low": 2}
-    return (df.assign(_s=df["severity"].map(order))
-              .sort_values(["_s", "liability"]).drop(columns="_s")
+    order = {"High": 0, "Medium": 1, "Low": 2}
+    return (df.assign(_s=df["risk"].map(order))
+              .sort_values(["_s", "position"]).drop(columns="_s")
               .reset_index(drop=True))
+
+
+def find_protease_sites(seq: str, annotation: dict | None = None) -> pd.DataFrame:
+    """Predicted protease cleavage sites, scored on the notebook's scale.
+
+    Every protein has tryptic sites; the count on its own means little. What is
+    worth looking at is a high-scoring recognition site, or a cluster of sites
+    inside a CDR.
+    """
+    seq = clean_sequence(seq)
+    rows = []
+    for label, pattern, base, note in PROTEASE_RULES:
+        for m in re.finditer(f"(?=({pattern}))", seq):
+            motif = m.group(1) or seq[m.start():m.start() + 2]
+            pos = m.start() + 1
+            if label == "AspN-like":
+                pos = m.start() + 2
+                motif = seq[m.start():m.start() + 2]
+            region = region_of(pos, annotation)
+            rows.append({"protease": label, "position": pos, "motif": motif,
+                         "region": region, "in_CDR": region.startswith("CDR"),
+                         "score": float(base), "note": note})
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    return df.sort_values(["score", "position"],
+                          ascending=[False, True]).reset_index(drop=True)
+
+
+def liability_summary(name: str, liabilities: pd.DataFrame,
+                      proteases: pd.DataFrame | None = None) -> dict:
+    """One-line summary per sequence: total score and the risk breakdown."""
+    if liabilities is None or liabilities.empty:
+        base = {"name": name, "total_score": 0.0, "n_liabilities": 0,
+                "n_high": 0, "n_medium": 0, "n_low": 0, "n_in_CDR": 0}
+    else:
+        base = {
+            "name": name,
+            "total_score": round(float(liabilities["score"].sum()), 2),
+            "n_liabilities": int(len(liabilities)),
+            "n_high": int((liabilities["risk"] == "High").sum()),
+            "n_medium": int((liabilities["risk"] == "Medium").sum()),
+            "n_low": int((liabilities["risk"] == "Low").sum()),
+            "n_in_CDR": int(liabilities["in_CDR"].sum()),
+        }
+    if proteases is not None and not proteases.empty:
+        base["protease_score"] = round(float(proteases["score"].sum()), 2)
+        base["n_protease_sites"] = int(len(proteases))
+    return base
+
+
+LIABILITY_COLORS = {
+    "N-glycosylation": "#7b3294", "Deamidation (high)": "#d7191c",
+    "Deamidation (moderate)": "#fdae61", "Isomerisation (high)": "#2c7bb6",
+    "Isomerisation (moderate)": "#abd9e9", "Oxidation (Met)": "#1a9641",
+    "Oxidation (Trp)": "#8c6d31", "Fragmentation": "#e377c2",
+    "Integrin binding": "#17becf", "Hydrophobic patch": "#999999",
+    "Free cysteine": "#000000", "Missing cysteine": "#555555",
+}
+
+
+def plot_liability_map(liabilities: dict[str, pd.DataFrame],
+                       annotations: dict | None = None, lengths: dict | None = None):
+    """Liabilities along the sequence, one row per VHH, bubble size by score.
+
+    This is the view that answers the question you actually ask of a panel:
+    *where* do the problems sit, and do they fall in a CDR.
+    """
+    names = list(liabilities)
+    if not names:
+        return None
+    fig, ax = plt.subplots(figsize=(12, 0.72 * len(names) + 2.2))
+
+    # CDR bands per row, so a liability landing in a loop is visible at a glance
+    if annotations:
+        for y, name in enumerate(names):
+            ann = annotations.get(name)
+            if not ann:
+                continue
+            for region in ("CDR1", "CDR2", "CDR3"):
+                r = ann.get(region)
+                if r and r["start"]:
+                    ax.add_patch(plt.Rectangle(
+                        (r["start"], y - 0.34), r["end"] - r["start"], 0.68,
+                        facecolor=REGION_COLORS[region], alpha=0.16, lw=0, zorder=0))
+
+    seen = []
+    for y, name in enumerate(names):
+        df = liabilities[name]
+        if df is None or df.empty:
+            continue
+        for label, group in df[df["position"] > 0].groupby("liability", sort=False):
+            ax.scatter(group["position"], [y] * len(group),
+                       s=group["score"] * 22 + 18,
+                       color=LIABILITY_COLORS.get(label, "#777777"),
+                       alpha=0.75, edgecolor="white", linewidth=0.6,
+                       label=label if label not in seen else None, zorder=3)
+            if label not in seen:
+                seen.append(label)
+
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=9)
+    ax.set_ylim(len(names) - 0.45, -0.55)
+    ax.set_xlim(0, max((lengths or {}).values(), default=140) + 4)
+    ax.set_xlabel("Residue position")
+    ax.set_title("Chemical liabilities along the sequence "
+                 "(bubble size = score; shaded bands = CDRs)", fontsize=11)
+    ax.grid(alpha=0.25, axis="x")
+    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=8,
+              frameon=False, labelspacing=0.9)
+    fig.tight_layout()
+    return fig
+
+
+def plot_liability_profile(liabilities: dict[str, pd.DataFrame]):
+    """Stacked bar of the score contributed by each liability type, per VHH."""
+    names = list(liabilities)
+    frames = []
+    for name in names:
+        df = liabilities[name]
+        if df is None or df.empty:
+            continue
+        grouped = df.groupby("liability")["score"].sum()
+        grouped.name = name
+        frames.append(grouped)
+    if not frames:
+        return None
+    matrix = pd.concat(frames, axis=1).fillna(0).T.reindex(names).fillna(0)
+
+    fig, ax = plt.subplots(figsize=(1.5 * len(names) + 4, 4.4))
+    bottom = np.zeros(len(matrix))
+    for column in matrix.columns:
+        values = matrix[column].to_numpy()
+        ax.bar(matrix.index, values, bottom=bottom, label=column,
+               color=LIABILITY_COLORS.get(column, "#777777"), width=0.6)
+        bottom += values
+    for x, total in enumerate(bottom):
+        ax.text(x, total, f"{total:.0f}", ha="center", va="bottom", fontsize=9,
+                fontweight="bold")
+    ax.set_ylabel("Summed liability score")
+    ax.set_title("Liability profile", fontsize=11)
+    ax.tick_params(axis="x", rotation=30)
+    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=8, frameon=False)
+    ax.grid(alpha=0.25, axis="y")
+    fig.tight_layout()
+    return fig
 
 
 # --------------------------------------------------------------------------- #
@@ -872,7 +1067,7 @@ def analyze(seqs: dict[str, str], ph: float | None = None,
 # PDF report
 # --------------------------------------------------------------------------- #
 
-SEVERITY_COLORS = {"high": "#c44e52", "medium": "#dd8452", "low": "#8c8c8c"}
+RISK_COLORS = {"High": "#c44e52", "Medium": "#dd8452", "Low": "#8c8c8c"}
 
 
 def _fig_bytes(fig, dpi: int = 150) -> bytes:
@@ -1053,20 +1248,30 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
             if liab.empty:
                 story.append(Paragraph("None detected.", body))
             else:
-                lrows = [["Liability", "Motif", "Position", "Region", "Severity"]]
-                lrows += liab[["liability", "motif", "position", "region",
-                               "severity"]].astype(str).values.tolist()
-                t = table(lrows, widths=[44 * mm, 20 * mm, 24 * mm, 22 * mm, 22 * mm])
+                summary = liability_summary(name, liab)
+                story.append(Paragraph(
+                    f"Total score {summary['total_score']} over "
+                    f"{summary['n_liabilities']} motif(s): {summary['n_high']} high, "
+                    f"{summary['n_medium']} medium, {summary['n_low']} low; "
+                    f"{summary['n_in_CDR']} inside a CDR.", body))
+                lrows = [["Liability", "Motif", "Position", "Region", "Score", "Risk"]]
+                lrows += liab[["liability", "motif", "range", "region", "score",
+                               "risk"]].astype(str).values.tolist()
+                t = table(lrows, widths=[42 * mm, 18 * mm, 22 * mm, 20 * mm,
+                                         16 * mm, 18 * mm])
                 extra = []
-                for i, sev in enumerate(liab["severity"], start=1):
-                    extra.append(("TEXTCOLOR", (4, i), (4, i),
-                                  colors.HexColor(SEVERITY_COLORS.get(sev, "#333333"))))
+                for i, level in enumerate(liab["risk"], start=1):
+                    extra.append(("TEXTCOLOR", (5, i), (5, i),
+                                  colors.HexColor(RISK_COLORS.get(level, "#333333"))))
                 t.setStyle(TableStyle(extra))
                 story.append(t)
                 story.append(Paragraph(
                     "A motif inside a CDR may affect binding; the same motif in a "
                     "framework is mainly a stability or heterogeneity concern. "
-                    "Severity is a heuristic, not an experimental measurement.", small))
+                    "Scores follow the in-house scale without the solvent-exposure "
+                    "weighting a structure would provide, so the categories compress "
+                    "towards the top and the ranking between sequences is more "
+                    "informative than any single category.", small))
 
     # ---- Figures ----------------------------------------------------------
     if figures:

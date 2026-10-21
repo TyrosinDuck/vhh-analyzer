@@ -216,6 +216,25 @@ map: a wrong tag layout makes the app report missing tags on clones that are fin
 Everything is downloadable: the full per-read table as CSV, and the extracted VHHs as
 protein or DNA FASTA.
 
+## Synthetic sequence generator
+
+`generator.py` builds VHH sequences whose frameworks are sampled from an IMGT
+position-frequency matrix derived from real data, with random CDRs whose lengths come
+from the same reference set. The bundled matrix is built from **PLAbDab-nano** (OPIG,
+University of Oxford), 1958 unique VHH sequences — `data/vhh_position_freq.csv` and
+`data/vhh_position_meta.json`.
+
+> *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
+> literature*, [doi:10.1093/nar/gkae881](https://doi.org/10.1093/nar/gkae881).
+> Its data-availability statement reads: "PLAbDab-nano is freely available to
+> download and query at https://opig.stats.ox.ac.uk/webapps/plabdab-nano/."
+
+Please cite it if you publish work based on the generated sequences. What is bundled
+here is an **aggregate frequency matrix**, not the sequences themselves.
+
+Supply your own matrix to mimic your own library instead: same CSV shape, one row per
+IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid columns.
+
 ## What the app reports
 
 | Tab | Contents |
