@@ -73,6 +73,12 @@ say so than silently produce nonsense.
 A sequence containing a non-standard residue (B, X, Z, a stop…) is rejected by name.
 Fix or remove it rather than letting it through.
 
+**Clearing the box.** The 🗑️ **Clear** button empties the sequence field in one
+click instead of selecting everything by hand. It is greyed out when the box is
+already empty, and it also resets the file uploader — so re-selecting the same
+FASTA after clearing works, which it would not if the uploader still thought it
+had already handled that file.
+
 ### 3.1b Generating synthetic VHHs
 
 The panel **Generate synthetic VHH sequences** builds sequences that look like real
@@ -434,6 +440,31 @@ Underneath, **two identity matrices**: full-length and CDR3-only. The second is 
 one that matters when triaging panning output. Two clones can share 90%+ full-length
 identity while having unrelated CDR3s — they are the same scaffold, not the same
 binder. To turn that observation into actual groups, use **Clonal families** (§3.10).
+
+**Sequence logo.** Underneath, the same alignment as a logo: letter height shows
+what is conserved and what varies, which reads faster than the alignment itself
+when all you want to know is where the diversity sits. It reproduces the logo from
+the clinical-VHH alignment notebook — `logomaker`, gaps and X ignored, no
+pseudocount, amino acids that never occur dropped so the colouring only shows
+residues actually present — with the CDR bands of the first sequence mapped onto
+alignment columns.
+
+Three controls:
+
+*Height* is **Frequency** or **Information (bits)**. Frequency makes every column
+sum to 1, so the logo reads directly as composition — the notebook's choice.
+Information is the classic Schneider logo in bits, where a mixed column stays
+short even when one residue is commonest; it is the better one for spotting which
+positions genuinely carry signal.
+
+*Positions per row* sets the wrap, 20 to 140 columns. Fewer positions per row means
+more rows and wider letters, which is what you want for a figure; more positions
+per row keeps the whole domain on one or two lines for a quick look.
+
+*Colours* offers the usual logomaker schemes, chemistry by default.
+
+The underlying matrix downloads as CSV, one row per alignment position and one
+column per amino acid, if you want to plot it yourself.
 
 ### 3.10 Clonal families
 

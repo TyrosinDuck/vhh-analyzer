@@ -249,6 +249,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
 | Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
 | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
+| Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
 | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
 | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |

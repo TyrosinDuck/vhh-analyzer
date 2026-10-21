@@ -51,7 +51,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.1520"
+VERSION = "20261021.1600"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -65,7 +65,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21d", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.21e", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
@@ -327,6 +327,15 @@ def png_msa(seqs, anns):
     with tempfile.TemporaryDirectory() as tmp:
         fig, aln_path = vc.plot_msa(seqs, anns, workdir=tmp)
         return fig_to_png(fig, close=True), aln_path.read_text()
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_logo(seqs, anns, to_type, wrap_length, color_scheme):
+    with tempfile.TemporaryDirectory() as tmp:
+        fig, matrix, _path = vc.plot_logo(seqs, anns, to_type=to_type,
+                                          wrap_length=wrap_length,
+                                          color_scheme=color_scheme, workdir=tmp)
+        return fig_to_png(fig, close=True), matrix
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -1055,6 +1064,14 @@ with col_act:
     if st.button("Load example", **FIT):
         st.session_state["seq_text"] = EXAMPLE
         st.rerun()
+    if st.button("🗑️ Clear", **FIT,
+                 help="Empty the sequence box.",
+                 disabled=not st.session_state.get("seq_text", "").strip()):
+        st.session_state["seq_text"] = ""
+        # forget the last upload too, otherwise re-selecting the same file after
+        # clearing does nothing: the uploader still considers it already handled
+        st.session_state["last_upload"] = None
+        st.rerun()
     uploaded = st.file_uploader("or upload FASTA", type=["fasta", "fa", "txt", "faa"])
     if uploaded is not None and uploaded.file_id != st.session_state.get("last_upload"):
         st.session_state["last_upload"] = uploaded.file_id
@@ -1736,6 +1753,44 @@ with tabs["Alignment"]:
         st.caption("Two clones from the same panning can share 90%+ full-length "
                    "identity while having unrelated CDR3s — the second matrix is the "
                    "one that tells you whether they are really the same binder.")
+
+        st.divider()
+        st.subheader("Sequence logo")
+        st.markdown(
+            "The alignment as a logo: letter height shows what is conserved and "
+            "what varies, which reads faster than the alignment itself when you "
+            "only want to know where the diversity sits.")
+
+        lg = st.columns([1, 1, 1])
+        with lg[0]:
+            logo_type = st.selectbox(
+                "Height", ["probability", "information"], index=0,
+                format_func=lambda t: "Frequency" if t == "probability"
+                                      else "Information (bits)",
+                help="Frequency: letter height is the residue's share of the "
+                     "column, so every column sums to 1 and reads as "
+                     "composition. Information: height in bits, the classic "
+                     "Schneider logo, where a mixed column stays short even if "
+                     "one residue is commonest.")
+        with lg[1]:
+            logo_wrap = st.slider("Positions per row", 20, 140, 65, step=5,
+                                  help="How many alignment columns each row "
+                                       "carries. Fewer rows, wider letters.")
+        with lg[2]:
+            logo_scheme = st.selectbox(
+                "Colours", ["chemistry", "charge", "hydrophobicity", "skylign_protein"],
+                index=0)
+
+        with st.spinner("Drawing the logo…"):
+            img_logo, logo_matrix = png_logo(sequences, annotations, logo_type,
+                                             int(logo_wrap), logo_scheme)
+        st.image(img_logo, **FIT)
+        st.caption("CDR bands refer to the first sequence submitted, mapped onto "
+                   "alignment columns. Amino acids that never occur are dropped "
+                   "from the matrix, so the colouring only shows residues that "
+                   "are actually present.")
+        st.download_button("Logo matrix (CSV)", logo_matrix.to_csv(),
+                           file_name=f"logo_{logo_type}.csv", mime="text/csv")
         plt.close("all")
 
 # --- Clonal families ------------------------------------------------------- #

@@ -35,6 +35,7 @@ __all__ = [
     "annotate", "annotate_anarci", "annotate_regex", "anarci_available",
     "register_feature", "compute_features", "FEATURE_REGISTRY",
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
+    "plot_logo",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS",
     "pairwise_scores", "cluster_families", "plot_family_dendrogram",
     "FAMILY_DEFAULTS", "imgt_numbering", "imgt_region",
@@ -48,7 +49,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21d"
+__version__ = "2026.10.21e"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1017,6 +1018,86 @@ def plot_msa(seqs: dict[str, str], annotations: dict | None = None,
                                        text_color=REGION_COLORS[region],
                                        range_color=REGION_COLORS[region])
     return mv.plotfig(), aln_path
+
+
+def plot_logo(seqs: dict[str, str], annotations: dict | None = None,
+              to_type: str = "probability", wrap_length: int = 65,
+              color_scheme: str = "chemistry", workdir: str | Path = ".",
+              figwidth: float = 16.0):
+    """Sequence logo of the alignment, wrapped over several rows.
+
+    Reproduces the logo from the clinical-VHH alignment notebook: the aligned
+    sequences go through ``logomaker.alignment_to_matrix`` with gaps and X
+    ignored and no pseudocount, amino-acid columns never observed are dropped,
+    and the logo is wrapped at ``wrap_length`` columns per row with ticks every
+    ten positions carrying absolute alignment coordinates.
+
+    ``to_type`` is ``"probability"`` (height = frequency, the notebook's choice,
+    which reads directly as composition) or ``"information"`` (height in bits,
+    the classic Schneider logo, where a column of mixed residues is short even
+    if one residue is commonest).
+
+    Returns ``(figure, matrix, path_to_aligned_fasta)``.
+    """
+    import logomaker
+
+    aln_path = build_alignment(seqs, Path(workdir) / "alignment.fasta")
+    records = dict(ln.split("\n", 1) for ln in
+                   aln_path.read_text().lstrip(">").split("\n>"))
+    records = {k: v.replace("\n", "") for k, v in records.items()}
+    aligned = list(records.values())
+
+    matrix = logomaker.alignment_to_matrix(aligned, to_type=to_type,
+                                           characters_to_ignore="-Xx.",
+                                           pseudocount=0)
+    # drop amino acids that never occur, so the colour key stays readable
+    matrix = matrix.loc[:, (matrix > 0).any(axis=0)]
+
+    n_pos = matrix.shape[0]
+    n_rows = max(1, (n_pos + wrap_length - 1) // wrap_length)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(figwidth, 2.0 * n_rows),
+                             squeeze=False)
+
+    # CDR spans of the first sequence, in alignment columns, for the shading
+    spans = {}
+    if annotations:
+        ref = list(seqs)[0]
+        ref_aligned = records.get(ref, "")
+        for region in ("CDR1", "CDR2", "CDR3"):
+            info = (annotations.get(ref) or {}).get(region) or {}
+            if ref_aligned and info.get("start") and info.get("end"):
+                try:
+                    spans[region] = aln_columns(ref_aligned, info["start"],
+                                                info["end"])
+                except KeyError:
+                    pass
+
+    for row in range(n_rows):
+        start = row * wrap_length
+        end = min((row + 1) * wrap_length, n_pos)
+        ax = axes[row, 0]
+        block = matrix.iloc[start:end].copy()
+        block.index = range(len(block))         # logomaker wants 0-based indices
+        logomaker.Logo(block, ax=ax, color_scheme=color_scheme)
+
+        for region, (c0, c1) in spans.items():
+            lo, hi = max(c0, start + 1), min(c1, end)
+            if lo <= hi:
+                ax.axvspan(lo - start - 1.5, hi - start - 0.5,
+                           color=REGION_COLORS[region], alpha=0.18, lw=0,
+                           zorder=0)
+                ax.text((lo + hi) / 2 - start - 1, 1.02, region,
+                        transform=ax.get_xaxis_transform(), ha="center",
+                        fontsize=7.5, color="0.3")
+
+        ax.set_xlim(-0.5, len(block) - 0.5)
+        ticks = range(0, len(block), 10)
+        ax.set_xticks(list(ticks))
+        ax.set_xticklabels([str(start + p + 1) for p in ticks])
+        ax.set_ylabel("Bits" if to_type == "information" else "Freq")
+    axes[-1, 0].set_xlabel("Alignment position")
+    fig.tight_layout()
+    return fig, matrix, aln_path
 
 
 def render_annotated_html(name: str, annotation: dict) -> str:

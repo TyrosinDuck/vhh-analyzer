@@ -6,6 +6,7 @@ scipy>=1.10
 matplotlib>=3.7
 pyfamsa>=0.5
 pymsaviz>=0.4
+logomaker>=0.8
 streamlit>=1.30
 reportlab>=4.0
 dna_features_viewer>=3.1
