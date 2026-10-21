@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import re
 import tempfile
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -48,7 +49,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.0030"
+VERSION = "20261021.0700"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -328,6 +329,16 @@ def go_to(target: str) -> None:
     st.session_state["section"] = target
 
 
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=2)
+def load_manual() -> str:
+    """The user manual, read from MANUAL.md so there is one source of truth."""
+    path = Path(__file__).parent / "MANUAL.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"The manual file could not be read ({exc})."
+
+
 def current_sequences() -> dict[str, str]:
     """Sequences currently in the analysis input, parsed — or an empty dict.
 
@@ -371,6 +382,8 @@ with st.sidebar:
     for key, (icon, label, _desc) in SECTIONS.items():
         st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
                   disabled=section == key, on_click=go_to, args=(key,))
+    st.button("📖 Manual", key="nav_manual", **FIT,
+              disabled=section == "manual", on_click=go_to, args=("manual",))
 
     st.divider()
 
@@ -433,6 +446,15 @@ if section == "home":
             st.button(f"Open {label.lower()}", key=f"home_{key}", type="primary",
                       **FIT, on_click=go_to, args=(key,))
 
+    st.write("")
+    hcols = st.columns([1, 2])
+    with hcols[0]:
+        st.button("📖 Read the manual", key="home_manual", **FIT,
+                  on_click=go_to, args=("manual",))
+    with hcols[1]:
+        st.caption("Every screen explained, what each number means, and how far to "
+                   "trust it.")
+
     staged = current_sequences()
     if staged:
         st.info(f"{len(staged)} sequence(s) are currently loaded in the analysis "
@@ -453,6 +475,21 @@ retyping it.
 Each section also works on its own: you can go straight to cloning with a pasted
 DNA insert, or straight to analysis with a FASTA file.
 """)
+    footer()
+    st.stop()
+
+
+# --------------------------------------------------------------------------- #
+# Manual
+# --------------------------------------------------------------------------- #
+
+if section == "manual":
+    manual = load_manual()
+    top = st.columns([3, 1])
+    with top[1]:
+        st.download_button("Download (Markdown)", manual, file_name="VHH_manual.md",
+                           mime="text/markdown", **FIT)
+    st.markdown(manual)
     footer()
     st.stop()
 

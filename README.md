@@ -18,6 +18,13 @@ vhh_webapp/
 `vhh_core.py` is the single source of truth. The notebook and the web app both import
 it, so a fix to a descriptor propagates to both instead of drifting apart.
 
+## Documentation
+
+A full user manual lives in `MANUAL.md` and is rendered inside the app, reachable from
+the home page and from the sidebar. It documents every screen, what each number means,
+and how far to trust it. Edit the Markdown file and the app picks it up — there is one
+source of truth.
+
 ## Layout
 
 The app opens on a home page with three sections, also reachable from the sidebar,
