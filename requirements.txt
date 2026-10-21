@@ -2,6 +2,7 @@
 biopython>=1.81
 pandas>=2.0
 numpy>=1.24
+scipy>=1.10
 matplotlib>=3.7
 pyfamsa>=0.5
 pymsaviz>=0.4

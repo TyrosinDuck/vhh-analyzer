@@ -50,7 +50,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.1145"
+VERSION = "20261021.1215"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -64,7 +64,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21b", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.21c", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
@@ -258,6 +258,23 @@ def png_liability_profile(liabs):
 
 
 @st.cache_data(**_FIG_CACHE)
+@st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
+def families_for(seqs, anns, cutoff, linkage_method, same_length):
+    """Clonal families — cached, because the pairwise alignments dominate."""
+    return vc.cluster_families(seqs, anns, cutoff=cutoff,
+                               linkage_method=linkage_method,
+                               require_same_length=same_length)
+
+
+@st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
+def png_family_dendrogram(seqs, anns, cutoff, linkage_method, same_length):
+    result = families_for(seqs, anns, cutoff, linkage_method, same_length)
+    if result["linkage"] is None:
+        return None
+    fig, _ = vc.plot_family_dendrogram(result)
+    return fig_to_png(fig, close=True)
+
+
 def png_identity(seqs, anns, region):
     mat = vc.identity_matrix(seqs, anns, region=region) if region \
         else vc.identity_matrix(seqs)
@@ -1126,11 +1143,14 @@ if errors:
         st.warning(f"**{name}** — annotation failed: {msg}. "
                    "Physico-chemical values are still reported below.")
 
-tabs = st.tabs(["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
-                "Liabilities", "Alignment", "DNA", "Download"])
+# Named rather than indexed: inserting a tab in the middle of an indexed list
+# silently reassigns every panel after it.
+TAB_LABELS = ["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
+              "Liabilities", "Alignment", "Clonal families", "DNA", "Download"]
+tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
 
 # --- Properties ------------------------------------------------------------ #
-with tabs[0]:
+with tabs["Properties"]:
     main_cols = ["name", "length", "mw_kda", "pI", "ext_coeff_reduced", "A280_0.1pct",
                  "instability_index", "aliphatic_index", "gravy", "aromaticity",
                  "net_charge", "n_Cys"]
@@ -1177,7 +1197,7 @@ with tabs[0]:
             st.markdown(f"- **`{name}`** — {entry['doc']}")
 
 # --- Plots ----------------------------------------------------------------- #
-with tabs[1]:
+with tabs["Plots"]:
     st.image(png_secondary_structure(df), **FIT)
 
     st.image(png_charge(df, sequences, ph), **FIT)
@@ -1217,7 +1237,7 @@ with tabs[1]:
     plt.close("all")
 
 # --- CDR / Framework ------------------------------------------------------- #
-with tabs[2]:
+with tabs["CDR / Framework"]:
     if not annotations:
         st.warning("No sequence could be annotated.")
     else:
@@ -1270,7 +1290,7 @@ non-canonical framework — which is itself worth knowing.
 """)
 
 # --- Hallmarks & germline --------------------------------------------------- #
-with tabs[3]:
+with tabs["Hallmarks & germline"]:
     st.markdown("The four FR2 positions that distinguish a camelid VHH from a "
                 "conventional VH, and the closest germline genes.")
     hm_rows, gl_rows = [], []
@@ -1308,7 +1328,7 @@ with tabs[3]:
         st.info("Germline assignment needs ANARCI, which is not available here.")
 
 # --- Liabilities ------------------------------------------------------------ #
-with tabs[4]:
+with tabs["Liabilities"]:
     st.markdown(
         "Chemical and manufacturability liabilities, scored and placed along the "
         "sequence.")
@@ -1406,7 +1426,7 @@ with tabs[4]:
         file_name="liabilities.csv", mime="text/csv")
 
 # --- Alignment ------------------------------------------------------------- #
-with tabs[5]:
+with tabs["Alignment"]:
     if len(sequences) < 2:
         st.info("Submit at least two sequences to see an alignment.")
     else:
@@ -1434,8 +1454,110 @@ with tabs[5]:
                    "one that tells you whether they are really the same binder.")
         plt.close("all")
 
+# --- Clonal families ------------------------------------------------------- #
+with tabs["Clonal families"]:
+    st.markdown(
+        "After a panning, the first question is not how good each clone is but "
+        "**how many different clones you actually have** — a plate of picked "
+        "colonies is routinely the same few lineages over and over. Grouping on "
+        "CDR3 answers that, because CDR3 is what differs between independent "
+        "lineages while the frameworks stay nearly constant.")
+
+    if len(sequences) < 2:
+        st.info("Submit at least two sequences to group them into families.")
+    elif not any((a.get("CDR3") or {}).get("seq") for a in annotations.values()):
+        st.warning("No CDR3 could be annotated, so there is nothing to group on.")
+    else:
+        fam_cols = st.columns([2, 1, 1])
+        with fam_cols[0]:
+            cutoff = st.slider(
+                "CDR3 identity threshold (%)", min_value=50, max_value=100,
+                value=int(vc.FAMILY_DEFAULTS["cutoff"]), step=1,
+                help="Two sequences at or above this identity belong to the same "
+                     "family. 100% groups only strictly identical CDR3s.")
+        with fam_cols[1]:
+            linkage_method = st.selectbox(
+                "Linkage", ["complete", "average"],
+                index=0 if vc.FAMILY_DEFAULTS["linkage"] == "complete" else 1,
+                help="complete: every pair inside a family meets the threshold. "
+                     "average: merges on the mean distance, more permissive — a "
+                     "family may then contain pairs below the threshold.")
+        with fam_cols[2]:
+            same_length = st.checkbox(
+                "Same CDR3 length only",
+                value=bool(vc.FAMILY_DEFAULTS["require_same_length"]),
+                help="Forces CDR3s of different lengths apart whatever their "
+                     "alignment. Off by default: a one-residue indel is a "
+                     "plausible sibling, not a new lineage.")
+
+        with st.spinner("Grouping…"):
+            fam = families_for(sequences, annotations, float(cutoff),
+                               linkage_method, bool(same_length))
+
+        n_seqs = len(fam["assignment"])
+        n_fam = fam["n_families"]
+        singletons = int((fam["families"]["n_sequences"] == 1).sum())
+        head = st.columns(4)
+        head[0].metric("Sequences grouped", n_seqs)
+        head[1].metric("Families", n_fam)
+        head[2].metric("Singletons", singletons)
+        head[3].metric("Redundancy", f"{n_seqs / n_fam:.2f}" if n_fam else "—",
+                       help="Sequences per family. Above ~2 you are re-picking "
+                            "the same lineages and could screen more colonies.")
+
+        if fam["skipped"]:
+            st.warning("Left out for want of an annotated CDR3: "
+                       + ", ".join(fam["skipped"]))
+
+        st.subheader("Families")
+        st.dataframe(fam["families"], hide_index=True, **FIT)
+        st.caption(
+            "`min_identity` is the **worst** pair inside the family: with "
+            "*complete* linkage it can never fall below your threshold, so a "
+            "value under it means *average* linkage merged across it. "
+            "`representative` is the family's most frequent CDR3 — a reasonable "
+            "default pick for the clone to carry forward.")
+
+        img_dendro = png_family_dendrogram(sequences, annotations, float(cutoff),
+                                           linkage_method, bool(same_length))
+        if img_dendro:
+            st.subheader("Dendrogram")
+            st.image(img_dendro, **FIT)
+            st.caption("The dashed line is your threshold; branches joining to "
+                       "its right are separate families. Move the slider and "
+                       "watch which groups merge — that is the honest way to see "
+                       "how robust a family is.")
+
+        st.subheader("Per-sequence assignment")
+        st.dataframe(fam["assignment"], hide_index=True, **FIT)
+
+        dl = st.columns(3)
+        dl[0].download_button("Families (CSV)",
+                              fam["families"].to_csv(index=False),
+                              file_name=f"families_{int(cutoff)}pct.csv",
+                              mime="text/csv")
+        dl[1].download_button("Assignment (CSV)",
+                              fam["assignment"].to_csv(index=False),
+                              file_name=f"family_assignment_{int(cutoff)}pct.csv",
+                              mime="text/csv")
+        dl[2].download_button("CDR3 identity matrix (CSV)",
+                              fam["identity"].round(1).to_csv(),
+                              file_name="cdr3_identity_matrix.csv",
+                              mime="text/csv")
+
+        with st.expander("One representative per family, as FASTA"):
+            reps = {r: sequences[r] for r in fam["families"]["representative"]
+                    if r in sequences}
+            fasta = "".join(f">{k}\n{v}\n" for k, v in reps.items())
+            st.code(fasta or "—", language="text")
+            st.download_button("Download representatives (FASTA)", fasta,
+                               file_name="family_representatives.fasta",
+                               mime="text/plain")
+        plt.close("all")
+
+
 # --- DNA -------------------------------------------------------------------- #
-with tabs[6]:
+with tabs["DNA"]:
     st.markdown("Back-translation into DNA using *E. coli* preferred codons, with "
                 "cloning sites and long homopolymer runs removed.")
 
@@ -1485,7 +1607,7 @@ with tabs[6]:
               on_click=go_to, args=("cloning",))
 
 # --- Download -------------------------------------------------------------- #
-with tabs[7]:
+with tabs["Download"]:
     st.markdown("Export the full results table, including every region sequence, "
                 "custom feature and flag.")
     st.download_button("Results (CSV)", df.to_csv(index=False),

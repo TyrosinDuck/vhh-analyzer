@@ -324,9 +324,68 @@ bands of the first sequence marked, downloadable as aligned FASTA.
 Underneath, **two identity matrices**: full-length and CDR3-only. The second is the
 one that matters when triaging panning output. Two clones can share 90%+ full-length
 identity while having unrelated CDR3s — they are the same scaffold, not the same
-binder.
+binder. To turn that observation into actual groups, use **Clonal families** (§3.9).
 
-### 3.9 DNA
+### 3.9 Clonal families
+
+This is the tab for triaging panning output. The first question after a screening is
+not how good each clone is, but **how many different clones you actually have** — a
+plate of picked colonies is routinely the same few lineages over and over, and
+properties computed on 16 reads that represent 3 lineages will mislead you three
+times over.
+
+Grouping is done on **CDR3**, because CDR3 is what differs between independent
+lineages while the frameworks stay nearly constant.
+
+**How it works.** Every pair of CDR3s is aligned (global, BLOSUM62, gaps −11/−1) and
+scored for identity — strictly identical residues over the length of the longer
+CDR3. Those identities become a distance matrix (`1 − identity`), which is clustered
+hierarchically and cut at your threshold. This is the same procedure as the Sanger
+screening notebook, so the app and the notebook give the same families for the same
+reads.
+
+**The three controls.**
+
+*CDR3 identity threshold*, 50–100%, default 80%. Two sequences at or above it belong
+to the same family. At 100% only strictly identical CDR3s group together.
+
+*Linkage.* `complete` guarantees that **every pair** inside a family meets the
+threshold — the conservative reading of "same family". `average` merges on the mean
+distance and is more permissive, so a family can then contain pairs that fall below
+your threshold. The family table's `min_identity` column is there to catch exactly
+that: it reports each family's worst internal pair, and a value under your threshold
+tells you `average` merged across it.
+
+*Same CDR3 length only* forces CDR3s of different lengths into different families
+whatever their alignment. Off by default, because a one-residue indel in a CDR3 is a
+plausible sibling rather than a new lineage. Turn it on if you want strictly
+length-matched families.
+
+**What you get.** Four numbers at the top — sequences grouped, families, singletons,
+and redundancy (sequences per family). Redundancy above roughly 2 means you are
+re-picking the same lineages and could screen more colonies for the same effort.
+
+Then a family table, with for each family its size, how many distinct CDR3s it
+contains, its worst internal identity and similarity, its CDR3 length range, and a
+**representative** — the family's most frequent CDR3, a reasonable default for the
+clone to carry forward.
+
+A dendrogram draws your threshold as a dashed line; branches joining to its right
+are separate families. Move the slider and watch which groups merge: that is the
+honest way to judge how robust a family is. A grouping that holds from 70% to 95% is
+real; one that appears only at 78% is an artefact of where you put the line.
+
+Finally a per-sequence assignment table, and CSV downloads of the families, the
+assignment and the CDR3 identity matrix, plus a FASTA of one representative per
+family — which is usually what you actually want to order or subclone.
+
+**Two honest limits.** Families are a *hypothesis* about shared lineage drawn from
+CDR3 similarity alone; two unrelated lineages can converge on a similar CDR3, and
+true siblings with a heavily mutated CDR3 can be split. And sequences whose CDR3
+could not be annotated are left out rather than guessed at — they are listed
+explicitly when that happens.
+
+### 3.10 DNA
 
 Back-translation into *E. coli* codon-optimised DNA.
 
@@ -348,7 +407,7 @@ motifs. It does **not** model mRNA secondary structure near the ribosome binding
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
 
-### 3.10 Download
+### 3.11 Download
 
 The results table as CSV, the figures as 300 dpi PNG, and a full PDF report.
 

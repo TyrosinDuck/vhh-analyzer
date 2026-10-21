@@ -32,7 +32,7 @@ which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
-| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks and germline, liabilities, alignment, codon-optimised DNA, PDF report |
+| **Sequence analysis** | characterization, CDR/framework annotation, hallmarks and germline, liabilities, alignment, clonal families, codon-optimised DNA, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
@@ -245,6 +245,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
 | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
 | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
+| Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
 | Download | CSV, figures as PNG, and a complete PDF report |
 

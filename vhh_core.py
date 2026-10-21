@@ -36,11 +36,13 @@ __all__ = [
     "register_feature", "compute_features", "FEATURE_REGISTRY",
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS",
+    "pairwise_scores", "cluster_families", "plot_family_dendrogram",
+    "FAMILY_DEFAULTS",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21b"
+__version__ = "2026.10.21c"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1076,6 +1078,238 @@ def _fig_bytes(fig, dpi: int = 150) -> bytes:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
     return buf.getvalue()
+
+
+
+# ---------------------------------------------------------------------------
+# Clonal families
+# ---------------------------------------------------------------------------
+# After a panning you rarely care how good each clone is before you know how
+# many *different* clones you have: a plate of 16 picked colonies is routinely
+# the same three lineages over and over. Grouping on CDR3 answers that, because
+# CDR3 is the region that differs between independent lineages while the
+# frameworks stay nearly constant.
+#
+# The method is the one used in the Sanger screening notebook, kept identical so
+# the app and the notebook give the same families for the same reads:
+#   * identity and similarity from a global BLOSUM62 alignment (gaps -11/-1),
+#     over a denominator of max(len(a), len(b))
+#   * distance = 1 - identity, hierarchical clustering, cut at 1 - cutoff
+#
+# Note the denominator differs from ``pairwise_identity`` above, which divides by
+# the alignment length. The two agree for equal-length CDR3s and differ by a few
+# percent otherwise; this one is kept here for continuity with the notebook.
+
+FAMILY_DEFAULTS = {"cutoff": 80.0, "linkage": "complete",
+                   "require_same_length": False}
+
+_FAMILY_ALIGNER = None
+_BLOSUM62 = None
+
+
+def _family_aligner():
+    """Global BLOSUM62 aligner, built once — constructing it is not free."""
+    global _FAMILY_ALIGNER, _BLOSUM62
+    if _FAMILY_ALIGNER is None:
+        from Bio import Align
+        from Bio.Align import substitution_matrices
+        _BLOSUM62 = substitution_matrices.load("BLOSUM62")
+        aligner = Align.PairwiseAligner()
+        aligner.substitution_matrix = _BLOSUM62
+        aligner.open_gap_score = -11
+        aligner.extend_gap_score = -1
+        aligner.mode = "global"
+        _FAMILY_ALIGNER = aligner
+    return _FAMILY_ALIGNER
+
+
+def _blosum(x: str, y: str) -> float:
+    try:
+        return float(_BLOSUM62[x, y])
+    except (KeyError, IndexError):
+        try:
+            return float(_BLOSUM62[y, x])
+        except (KeyError, IndexError):
+            return -4.0
+
+
+def pairwise_scores(a: str, b: str) -> tuple[float, float]:
+    """``(identity, similarity)`` in percent.
+
+    *Identity* counts strictly identical residues; *similarity* also counts
+    conservative substitutions (BLOSUM62 > 0, what BLAST calls positives). Both
+    are divided by the length of the longer sequence, so a CDR3 that is a
+    truncation of another cannot score 100%.
+    """
+    a, b = clean_sequence(a), clean_sequence(b)
+    if not a or not b:
+        return float("nan"), float("nan")
+    aligner = _family_aligner()
+    aln = aligner.align(a, b)[0]
+    top, bottom = str(aln[0]), str(aln[1])
+    ident = sim = 0
+    for x, y in zip(top, bottom):
+        if x == "-" or y == "-":
+            continue
+        if x == y:
+            ident += 1
+            sim += 1
+        elif _blosum(x, y) > 0:
+            sim += 1
+    denom = max(len(a), len(b))
+    return round(100 * ident / denom, 1), round(100 * sim / denom, 1)
+
+
+def cluster_families(seqs: dict[str, str], annotations: dict,
+                     cutoff: float = 80.0, linkage_method: str = "complete",
+                     require_same_length: bool = False,
+                     region: str = "CDR3") -> dict:
+    """Group sequences into clonal families on their CDR3.
+
+    ``cutoff`` is a percent identity: two sequences at or above it belong to the
+    same family. ``linkage_method`` decides what that means for a family of more
+    than two members — ``"complete"`` guarantees every pair inside a family
+    meets the cutoff, ``"average"`` merges on the mean distance and is more
+    permissive, so a family can then contain pairs below the cutoff. The returned
+    diagnostic reports each family's worst internal pair, which is how you see
+    that happening.
+
+    ``require_same_length`` forces CDR3s of different lengths into different
+    families, whatever their alignment. Off by default: a single-residue indel in
+    a CDR3 is a plausible sibling, not a new lineage.
+
+    Returns a dict with ``assignment`` (one row per sequence), ``families`` (one
+    row per family), ``identity`` and ``similarity`` matrices, the scipy
+    ``linkage`` matrix for the dendrogram, and ``skipped`` — sequences left out
+    because the region could not be annotated.
+    """
+    import numpy as np
+
+    subject, skipped = {}, []
+    for name in seqs:
+        loop = ((annotations.get(name) or {}).get(region) or {}).get("seq") or ""
+        if loop:
+            subject[name] = loop
+        else:
+            skipped.append(name)
+
+    names = list(subject)
+    n = len(names)
+    empty = pd.DataFrame()
+    if n == 0:
+        return {"assignment": empty, "families": empty, "identity": empty,
+                "similarity": empty, "linkage": None, "skipped": skipped,
+                "cutoff": cutoff, "linkage_method": linkage_method,
+                "region": region, "n_families": 0}
+
+    ident = np.eye(n) * 100.0
+    simil = np.eye(n) * 100.0
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = subject[names[i]], subject[names[j]]
+            v, w = pairwise_scores(a, b)
+            if require_same_length and len(a) != len(b):
+                v = w = 0.0
+            ident[i, j] = ident[j, i] = v
+            simil[i, j] = simil[j, i] = w
+
+    ident_df = pd.DataFrame(ident, index=names, columns=names)
+    simil_df = pd.DataFrame(simil, index=names, columns=names)
+
+    link = None
+    if n >= 2:
+        from scipy.cluster.hierarchy import fcluster, linkage as scipy_linkage
+        from scipy.spatial.distance import squareform
+
+        dist = 1.0 - ident / 100.0
+        np.fill_diagonal(dist, 0.0)
+        dist = np.clip((dist + dist.T) / 2, 0.0, None)   # enforce exact symmetry
+        link = scipy_linkage(squareform(dist, checks=False), method=linkage_method)
+        labels = fcluster(link, t=1.0 - cutoff / 100.0, criterion="distance")
+    else:
+        labels = np.array([1])
+
+    # number families by decreasing size, so F01 is always the dominant lineage
+    order = pd.Series(labels).value_counts().index
+    remap = {old: f"F{i + 1:02d}" for i, old in enumerate(order)}
+    family_of = {names[i]: remap[labels[i]] for i in range(n)}
+
+    assignment = pd.DataFrame({
+        "name": names,
+        "family": [family_of[x] for x in names],
+        region.lower(): [subject[x] for x in names],
+        f"{region.lower()}_len": [len(subject[x]) for x in names],
+    }).sort_values(["family", "name"]).reset_index(drop=True)
+
+    rows = []
+    for fam, group in assignment.groupby("family"):
+        members = list(group["name"])
+        idx = [names.index(m) for m in members]
+        sub_i = ident[np.ix_(idx, idx)]
+        sub_s = simil[np.ix_(idx, idx)]
+        loops = [subject[m] for m in members]
+        # representative: the most frequent CDR3 of the family, ties by name
+        counts = pd.Series(loops).value_counts()
+        top_loop = counts.index[0]
+        rep = sorted(m for m in members if subject[m] == top_loop)[0]
+        rows.append({
+            "family": fam,
+            "n_sequences": len(members),
+            "n_unique_cdr3": int(pd.Series(loops).nunique()),
+            "representative": rep,
+            "cdr3_len": f"{min(map(len, loops))}-{max(map(len, loops))}"
+                        if len(set(map(len, loops))) > 1 else str(len(loops[0])),
+            "min_identity": round(float(sub_i.min()), 1),
+            "min_similarity": round(float(sub_s.min()), 1),
+            "members": ", ".join(members),
+            "cdr3_list": " | ".join(sorted(set(loops))),
+        })
+    families = (pd.DataFrame(rows)
+                .sort_values("n_sequences", ascending=False)
+                .reset_index(drop=True))
+
+    return {"assignment": assignment, "families": families,
+            "identity": ident_df, "similarity": simil_df, "linkage": link,
+            "skipped": skipped, "cutoff": cutoff,
+            "linkage_method": linkage_method, "region": region,
+            "n_families": int(families["family"].nunique())}
+
+
+def plot_family_dendrogram(result: dict, title: str | None = None):
+    """Dendrogram of the family clustering, with the cutoff drawn in."""
+    from scipy.cluster.hierarchy import dendrogram
+
+    link = result.get("linkage")
+    names = list(result["identity"].index)
+    if link is None:
+        fig, ax = plt.subplots(figsize=(5, 1.6))
+        ax.text(0.5, 0.5, "A dendrogram needs at least two annotated CDR3s",
+                ha="center", va="center", fontsize=9)
+        ax.axis("off")
+        return fig
+
+    cutoff = result["cutoff"]
+    height = max(2.4, 0.32 * len(names) + 1.2)
+    fig, ax = plt.subplots(figsize=(8.2, height))
+    dd = dendrogram(link, labels=names, orientation="right",
+                    color_threshold=1.0 - cutoff / 100.0, ax=ax,
+                    above_threshold_color="0.6")
+    ax.axvline(1.0 - cutoff / 100.0, color="crimson", ls="--", lw=1.2)
+    ax.annotate(f"{cutoff:.0f}% identity", xy=(1.0 - cutoff / 100.0, 1.0),
+                xycoords=("data", "axes fraction"), xytext=(4, -12),
+                textcoords="offset points", color="crimson", fontsize=8,
+                va="top")
+    ticks = [t / 100 for t in range(0, 101, 20)]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f"{100 - t * 100:.0f}" for t in ticks])
+    ax.set_xlabel(f"{result['region']} identity (%)")
+    ax.set_title(title or f"Clonal families — {result['region']}, "
+                          f"{result['linkage_method']} linkage", fontsize=10)
+    ax.tick_params(axis="y", labelsize=8)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    fig.tight_layout()
+    return fig, dd
 
 
 def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
