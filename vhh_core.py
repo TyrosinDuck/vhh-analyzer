@@ -47,12 +47,13 @@ __all__ = [
     "APR_THRESHOLD",
     "humanness", "human_germlines", "disulfides",
     "suggest_repairs", "apply_repairs", "LIABILITY_REPAIRS",
+    "compare_to_reference", "plot_differences",
     "CONSERVED_IMGT",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.23a"
+__version__ = "2026.10.23b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -2121,6 +2122,135 @@ def apply_repairs(seq: str, substitutions: list[str]) -> tuple[str, list[str]]:
         seen[pos] = to
     return "".join(chars), problems
 
+
+
+
+# ---------------------------------------------------------------------------
+# Comparison against a reference sequence
+# ---------------------------------------------------------------------------
+# Humanisation variants, a Sanger clone against the construct it should be, a
+# panel against its parent: all the same question — which positions differ, and
+# where. Done in IMGT numbering rather than by raw alignment, so an insertion in
+# CDR3 does not shift every downstream position and turn one mutation into
+# twenty.
+
+def compare_to_reference(reference: str, seqs: dict[str, str],
+                         reference_name: str = "reference") -> dict:
+    """Positions where each sequence differs from ``reference``, in IMGT numbering.
+
+    Returns ``differences`` (one row per differing position per sequence),
+    ``summary`` (one row per sequence) and ``errors``. Each row carries the IMGT
+    label, the region, both residues, the residue index in each sequence, and
+    whether the substitution is conservative by BLOSUM62.
+
+    A position present in one sequence and absent from the other is reported as
+    an insertion or a deletion rather than silently dropped — in a CDR3 that is
+    usually the most interesting difference there is.
+    """
+    ref_map = {f"{n}{i}" if i else str(n): (aa, idx)
+               for n, i, aa, idx in imgt_numbering(reference)}
+
+    rows, summary, errors = [], [], {}
+    for name, seq in seqs.items():
+        if clean_sequence(seq) == clean_sequence(reference):
+            summary.append({"name": name, "identical": True, "n_differences": 0,
+                            "n_substitutions": 0, "n_indels": 0,
+                            "n_in_CDR": 0, "n_conservative": 0})
+            continue
+        try:
+            query_map = {f"{n}{i}" if i else str(n): (aa, idx)
+                         for n, i, aa, idx in imgt_numbering(seq)}
+        except Exception as exc:
+            errors[name] = str(exc)
+            continue
+
+        diffs = []
+        for label in sorted(set(ref_map) | set(query_map), key=_imgt_label_key):
+            ref_aa, ref_idx = ref_map.get(label, (None, None))
+            qry_aa, qry_idx = query_map.get(label, (None, None))
+            if ref_aa == qry_aa:
+                continue
+            num = int(re.match(r"\d+", label).group())
+            if ref_aa is None:
+                kind, conservative = "insertion", None
+            elif qry_aa is None:
+                kind, conservative = "deletion", None
+            else:
+                kind = "substitution"
+                conservative = _blosum(ref_aa, qry_aa) > 0 if _blosum_ready() else None
+            diffs.append({
+                "sequence": name, "imgt": label, "region": imgt_region(num),
+                "reference": ref_aa or "-", "query": qry_aa or "-",
+                "change": (f"{ref_aa}{label}{qry_aa}" if kind == "substitution"
+                           else f"{kind} at {label}"),
+                "kind": kind,
+                "reference_position": ref_idx, "query_position": qry_idx,
+                "in_CDR": imgt_region(num).startswith("CDR"),
+                "conservative": conservative,
+            })
+        rows.extend(diffs)
+        frame = pd.DataFrame(diffs)
+        summary.append({
+            "name": name, "identical": False, "n_differences": len(diffs),
+            "n_substitutions": int((frame["kind"] == "substitution").sum())
+                               if len(frame) else 0,
+            "n_indels": int((frame["kind"] != "substitution").sum())
+                        if len(frame) else 0,
+            "n_in_CDR": int(frame["in_CDR"].sum()) if len(frame) else 0,
+            "n_conservative": int((frame["conservative"] == True).sum())
+                              if len(frame) else 0,
+        })
+
+    return {"differences": pd.DataFrame(rows),
+            "summary": pd.DataFrame(summary),
+            "errors": errors, "reference_name": reference_name}
+
+
+def _imgt_label_key(label: str) -> tuple:
+    """Sort IMGT labels, keeping insertion codes in their proper place."""
+    m = re.match(r"(\d+)([A-Z]*)", label)
+    num, ins = int(m.group(1)), m.group(2)
+    if ins and num in (33, 61, 112):          # these insertions count backwards
+        return (num - 1, 1000 - ord(ins[0]))
+    return (num, ord(ins[0]) if ins else 0)
+
+
+def plot_differences(result: dict, region_colors: dict | None = None):
+    """Differences per sequence along IMGT positions, CDR bands marked."""
+    diffs = result["differences"]
+    fig, ax = plt.subplots(figsize=(11, max(2.0, 0.45 * max(1, len(result["summary"])) + 1.2)))
+    if not len(diffs):
+        ax.text(0.5, 0.5, "No difference from the reference", ha="center",
+                va="center", fontsize=10)
+        ax.axis("off")
+        return fig
+
+    names = list(dict.fromkeys(diffs["sequence"]))
+    y_of = {n: i for i, n in enumerate(names)}
+    for region, (lo, hi) in IMGT_CDR.items():
+        ax.axvspan(lo, hi, color=REGION_COLORS[region], alpha=0.16, lw=0, zorder=0)
+        ax.text((lo + hi) / 2, 1.02, region, transform=ax.get_xaxis_transform(),
+                ha="center", fontsize=7.5, color="0.3")
+
+    for _, r in diffs.iterrows():
+        num = int(re.match(r"\d+", r["imgt"]).group())
+        marker = "o" if r["kind"] == "substitution" else "v"
+        colour = ("#4c72b0" if r["conservative"] is True
+                  else "0.4" if r["kind"] != "substitution" else "#c44e52")
+        ax.plot(num, y_of[r["sequence"]], marker, ms=6, color=colour, zorder=3)
+
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=8)
+    ax.set_ylim(-0.6, len(names) - 0.4)
+    ax.set_xlim(0, 130)
+    ax.set_xlabel("IMGT position")
+    ax.set_title(f"Differences from {result['reference_name']} — "
+                 "red non-conservative, blue conservative, grey indel",
+                 fontsize=10)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    fig.tight_layout()
+    return fig
 
 
 def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],

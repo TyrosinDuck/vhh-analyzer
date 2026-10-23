@@ -35,6 +35,7 @@ import streamlit as st
 import cloning as cl
 import generator as gn
 import constructs as ctm
+import repertoire as rep
 import sanger as sg
 import vhh_core as vc
 
@@ -51,7 +52,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261023.1400"
+VERSION = "20261023.1630"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -65,16 +66,18 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.23a", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.23b", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
-                    "constructs": "2026.10.21d"}
+                    "constructs": "2026.10.21d",
+                    "repertoire": "2026.10.23a"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
                                   ("sanger", REQUIRED_MODULES["sanger"], sg),
                                   ("cloning", REQUIRED_MODULES["cloning"], cl),
                                   ("generator", REQUIRED_MODULES["generator"], gn),
-                                  ("constructs", REQUIRED_MODULES["constructs"], ctm))
+                                  ("constructs", REQUIRED_MODULES["constructs"], ctm),
+                                  ("repertoire", REQUIRED_MODULES["repertoire"], rep))
           if getattr(mod, "__version__", None) != want]
 if _stale:
     st.error("Some modules are out of date — update " + ", ".join(_stale) +
@@ -317,6 +320,52 @@ def repairs_for(seq, liabilities, ann, include_cdr):
 @st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
 def png_construct(construct, title):
     return fig_to_png(ctm.plot_construct(construct, title), close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
+def rarity_for(seq, threshold, min_support):
+    return rep.rare_residues(seq, threshold=threshold, min_support=min_support)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def rarity_tables(seqs, threshold, min_support):
+    return rep.rarity_table(seqs, threshold=threshold, min_support=min_support)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_rarity(seq, name, threshold, min_support):
+    return fig_to_png(rep.plot_rarity(seq, name, threshold=threshold,
+                                      min_support=min_support), close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def repertoire_stats(seqs, anns):
+    per_seq, distribution = rep.cdr_length_comparison(anns)
+    composition = rep.composition_comparison(seqs, anns)
+    return per_seq, distribution, composition
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_cdr_lengths(seqs, anns):
+    _p, distribution, _c = repertoire_stats(seqs, anns)
+    return fig_to_png(rep.plot_cdr_lengths(distribution, len(seqs)), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_composition(seqs, anns, regions):
+    _p, _d, composition = repertoire_stats(seqs, anns)
+    return fig_to_png(rep.plot_composition(composition, list(regions)), close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def comparison_for(reference, seqs, reference_name):
+    return vc.compare_to_reference(reference, seqs, reference_name)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_differences(reference, seqs, reference_name):
+    return fig_to_png(vc.plot_differences(
+        comparison_for(reference, seqs, reference_name)), close=True)
 
 
 def png_identity(seqs, anns, region):
@@ -1268,8 +1317,8 @@ def type_of(name: str) -> str:
 # Named rather than indexed: inserting a tab in the middle of an indexed list
 # silently reassigns every panel after it.
 TAB_LABELS = ["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
-              "Liabilities", "Aggregation", "Alignment", "Clonal families",
-              "DNA", "Constructs", "Download"]
+              "Liabilities", "Aggregation", "Alignment", "vs Reference",
+              "Repertoire", "Clonal families", "DNA", "Constructs", "Download"]
 tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
 
 # --- Properties ------------------------------------------------------------ #
@@ -1912,6 +1961,188 @@ with tabs["Alignment"]:
         st.download_button("Logo matrix (CSV)", logo_matrix.to_csv(),
                            file_name=f"logo_{logo_type}.csv", mime="text/csv")
         plt.close("all")
+
+# --- vs Reference ----------------------------------------------------------- #
+with tabs["vs Reference"]:
+    st.markdown(
+        "Which positions differ from a sequence you choose as the reference. "
+        "Humanisation variants against the parent, a Sanger clone against the "
+        "construct it should be, a panel against its ancestor — the same "
+        "question each time.")
+    if not heavy_only_notice("Reference comparison"):
+        pass
+    elif len(heavy_sequences) < 2 and not st.session_state.get("ref_paste", "").strip():
+        st.info("Submit at least two sequences, or paste a reference below, to "
+                "compare against.")
+        st.text_area("Reference sequence (optional)", key="ref_paste", height=90,
+                     placeholder="Paste the parent sequence here")
+    else:
+        ref_cols = st.columns([2, 1])
+        with ref_cols[0]:
+            ref_choice = st.selectbox(
+                "Reference", list(heavy_sequences) + ["— paste one —"],
+                help="Everything else is compared against this sequence.")
+        with ref_cols[1]:
+            show_cdr_only = st.checkbox("CDR positions only", value=False)
+
+        if ref_choice == "— paste one —":
+            pasted = st.text_area("Reference sequence", key="ref_paste", height=90,
+                                  placeholder="Paste the parent sequence here")
+            ref_seq, ref_name = pasted.strip(), "pasted reference"
+            others = dict(heavy_sequences)
+        else:
+            ref_seq, ref_name = heavy_sequences[ref_choice], ref_choice
+            others = {k: v for k, v in heavy_sequences.items() if k != ref_choice}
+
+        if not ref_seq:
+            st.info("Paste a reference sequence to compare against.")
+        elif not others:
+            st.info("Nothing to compare — submit another sequence.")
+        else:
+            try:
+                comp = comparison_for(ref_seq, others, ref_name)
+            except Exception as exc:
+                st.error(f"Could not compare: {exc}")
+                comp = None
+
+            if comp:
+                for name, msg in comp["errors"].items():
+                    st.warning(f"**{name}** — could not be numbered: {msg}")
+
+                st.dataframe(comp["summary"], hide_index=True, **FIT)
+                st.caption(
+                    "Positions are matched by **IMGT number**, not by raw "
+                    "alignment. A one-residue deletion in CDR3 is therefore "
+                    "reported as one deletion rather than as every downstream "
+                    "position having changed. Note that IMGT places insertions "
+                    "at the centre of a loop, so adding a residue to CDR3 can "
+                    "also shift a few neighbours — those show up as "
+                    "substitutions alongside the insertion.")
+
+                diffs = comp["differences"]
+                if show_cdr_only and len(diffs):
+                    diffs = diffs[diffs["in_CDR"]]
+
+                if not len(diffs):
+                    st.success("No difference from the reference"
+                               + (" in the CDRs." if show_cdr_only else "."))
+                else:
+                    st.image(png_differences(ref_seq, others, ref_name), **FIT)
+                    st.dataframe(diffs, hide_index=True, **FIT)
+                    st.download_button(
+                        "Differences (CSV)", diffs.to_csv(index=False),
+                        file_name=f"differences_vs_{ref_name}.csv",
+                        mime="text/csv")
+    plt.close("all")
+
+
+# --- Repertoire ------------------------------------------------------------- #
+with tabs["Repertoire"]:
+    st.markdown(
+        "Your sequences against the natural VHH repertoire — the same "
+        "position-frequency matrix the synthetic generator samples from, used "
+        "here the other way round.")
+    if not heavy_only_notice("Repertoire comparison"):
+        pass
+    else:
+        if _vh_only:
+            st.warning(
+                "The reference is a **VHH** repertoire. A conventional VH "
+                "compared against it will legitimately show its FR2 hallmark "
+                "positions as rare — that is the difference between a VH and a "
+                "VHH, not a defect in the sequence.", icon="🧬")
+
+        rar, nat = st.tabs(["Unusual framework residues",
+                            "Your set vs the natural repertoire"])
+
+        with rar:
+            st.markdown(
+                "Framework positions whose residue is rare in the reference. "
+                "Worth a second look: this is what catches a Sanger miscall, a "
+                "PCR error, or a construct that has drifted without anyone "
+                "noticing.")
+            rc = st.columns(3)
+            with rc[0]:
+                rare_thr = st.slider("Rare at or below", 0.001, 0.10,
+                                     float(rep.RARE_THRESHOLD), step=0.001,
+                                     format="%.3f")
+            with rc[1]:
+                min_sup = st.slider("Minimum support", 0, 1900,
+                                    int(rep.MIN_SUPPORT), step=50,
+                                    help="Positions backed by fewer reference "
+                                         "sequences than this are set aside "
+                                         "rather than called rare.")
+            with rc[2]:
+                rare_plot = st.checkbox("Plot each sequence",
+                                        value=len(heavy_sequences) <= 4)
+
+            summary, flagged = rarity_tables(heavy_sequences, float(rare_thr),
+                                             int(min_sup))
+            st.dataframe(summary, hide_index=True, **FIT)
+            st.caption(
+                "**Rare is not wrong.** A residue absent from the reference may "
+                "be a genuine novelty, a germline this set under-samples, or the "
+                "very mutation you selected for. Every call carries the number "
+                "of reference sequences behind it.")
+
+            if len(flagged):
+                st.subheader("Flagged positions")
+                st.dataframe(flagged, hide_index=True, **FIT)
+                st.download_button("Unusual residues (CSV)",
+                                   flagged.to_csv(index=False),
+                                   file_name="unusual_framework_residues.csv",
+                                   mime="text/csv")
+            else:
+                st.success("No framework residue falls below the threshold — "
+                           "every position matches the natural repertoire.")
+
+            if rare_plot:
+                for name, seq in heavy_sequences.items():
+                    try:
+                        st.image(png_rarity(seq, name, float(rare_thr),
+                                            int(min_sup)), **FIT)
+                    except Exception as exc:
+                        st.warning(f"**{name}** — {exc}")
+
+        with nat:
+            st.markdown(
+                "Where your set sits against the reference distribution. After "
+                "a panning this is what says whether the selection was biased — "
+                "towards long CDR3s, towards charged loops, and so on.")
+            if not heavy_annotations:
+                st.info("Nothing annotated to compare.")
+            else:
+                per_seq, distribution, composition = repertoire_stats(
+                    heavy_sequences, heavy_annotations)
+                st.image(png_cdr_lengths(heavy_sequences, heavy_annotations), **FIT)
+                st.caption(
+                    "Grey is the natural repertoire, red your set. With only a "
+                    "handful of sequences the red bars are coarse by "
+                    "construction — one sequence in ten is a 10% bar.")
+                st.dataframe(per_seq, hide_index=True, **FIT)
+
+                st.subheader("Amino-acid composition")
+                regions = st.multiselect(
+                    "Regions", ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"],
+                    default=["CDR1", "CDR2", "CDR3"])
+                if regions:
+                    st.image(png_composition(heavy_sequences, heavy_annotations,
+                                             tuple(regions)), **FIT)
+                    st.caption(
+                        "Above the line: enriched in your set relative to the "
+                        "natural repertoire. Below: depleted. The reference "
+                        "composition is the position-frequency matrix averaged "
+                        "over each region, weighted by support.")
+                    shown = composition[composition["region"].isin(regions)]
+                    st.dataframe(
+                        shown.sort_values("delta", ascending=False),
+                        hide_index=True, **FIT)
+                    st.download_button("Composition (CSV)",
+                                       composition.to_csv(index=False),
+                                       file_name="composition_vs_repertoire.csv",
+                                       mime="text/csv")
+    plt.close("all")
+
 
 # --- Clonal families ------------------------------------------------------- #
 with tabs["Clonal families"]:

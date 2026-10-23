@@ -519,7 +519,7 @@ bands of the first sequence marked, downloadable as aligned FASTA.
 Underneath, **two identity matrices**: full-length and CDR3-only. The second is the
 one that matters when triaging panning output. Two clones can share 90%+ full-length
 identity while having unrelated CDR3s — they are the same scaffold, not the same
-binder. To turn that observation into actual groups, use **Clonal families** (§3.10).
+binder. To turn that observation into actual groups, use **Clonal families** (§3.12).
 
 **Sequence logo.** Underneath, the same alignment as a logo: letter height shows
 what is conserved and what varies, which reads faster than the alignment itself
@@ -546,7 +546,74 @@ per row keeps the whole domain on one or two lines for a quick look.
 The underlying matrix downloads as CSV, one row per alignment position and one
 column per amino acid, if you want to plot it yourself.
 
-### 3.10 Clonal families
+### 3.10 vs Reference
+
+Which positions differ from a sequence you pick as the reference. Humanisation
+variants against the parent, a Sanger clone against the construct it was supposed
+to be, a panel against its ancestor — the same question each time.
+
+Choose the reference from the submitted sequences, or paste one that is not in the
+set. Everything else is compared against it.
+
+**Positions are matched by IMGT number, not by raw alignment.** That is the whole
+point of doing it this way: delete one residue from a CDR3 and an alignment-based
+diff reports every downstream position as changed, whereas this reports one
+deletion. Insertions and deletions are reported as such rather than dropped — in a
+CDR3 they are usually the most interesting difference there is.
+
+One honest caveat, visible in the app: IMGT places insertions at the *centre* of a
+loop, so adding a residue to CDR3 can shift a couple of its neighbours. Those show
+up as substitutions alongside the insertion. It is a property of the numbering, not
+a mistake, but it means an insertion rarely reports as exactly one change.
+
+The summary gives, per sequence, the number of differences split into substitutions
+and indels, how many fall in a CDR, and how many substitutions are conservative by
+BLOSUM62. The map underneath places every difference along the IMGT axis with the
+CDR bands marked — red for non-conservative, blue for conservative, grey for an
+indel — so a humanisation variant reads at a glance as "four changes, all in FR2".
+A *CDR positions only* toggle narrows everything to the loops, which is the view
+you want when checking whether a clone kept its binding site.
+
+### 3.11 Repertoire
+
+Your sequences against the natural VHH repertoire. This is the same IMGT
+position-frequency matrix the synthetic generator samples from (§3.1b, PLAbDab-nano,
+1958 VHHs), used the other way round.
+
+**Unusual framework residues.** For each sequence, the framework positions whose
+residue is rare in the reference. This is what catches a Sanger miscall, a PCR
+error, or a construct that has quietly drifted. On a normal VHH it flags nothing
+across ninety-odd compared positions; plant a proline in the middle of FR3 and it
+comes out at 0.7% against a consensus alanine at 83%, with 1952 reference sequences
+behind the call.
+
+CDRs are excluded on purpose. A CDR is *supposed* to be unusual, and flagging it
+would bury the framework signal that actually matters.
+
+Two guards are built in rather than left to you. The *minimum support* slider sets
+aside positions backed by too few reference sequences instead of calling them rare —
+a frequency from 30 sequences is not a frequency from 1900, and every row carries
+its support. And the wording stays "unusual", never "error": **rare is not wrong**.
+A residue absent from the reference may be a genuine novelty, a germline this set
+under-samples, or the very mutation you selected for.
+
+**Your set vs the natural repertoire.** CDR length distributions and per-region
+amino-acid composition, your set overlaid on the reference. After a panning this is
+what says whether the selection was biased: a shift towards long CDR3s, an
+enrichment in charged residues, a depletion of the tyrosine and glycine that are the
+staples of natural CDR3s. Drop a deliberately charged set in and lysine comes out
+enriched by thirty points over the reference, with tyrosine and glycine depleted —
+which is exactly the kind of signature a charged target leaves behind.
+
+With only a handful of sequences the comparison is coarse by construction: one
+sequence in ten is a 10% bar. Read it for the direction, not the number.
+
+**A note if you submitted a conventional VH.** The reference is a *VHH* repertoire.
+A VH compared against it may legitimately show FR2 positions as unusual — that is
+the difference between a VH and a VHH, not a defect in your sequence. The app warns
+when VH sequences are present.
+
+### 3.12 Clonal families
 
 This is the tab for triaging panning output. The first question after a screening is
 not how good each clone is, but **how many different clones you actually have** — a
@@ -605,7 +672,7 @@ true siblings with a heavily mutated CDR3 can be split. And sequences whose CDR3
 could not be annotated are left out rather than guessed at — they are listed
 explicitly when that happens.
 
-### 3.11 DNA
+### 3.13 DNA
 
 Back-translation into *E. coli* codon-optimised DNA.
 
@@ -627,7 +694,7 @@ motifs. It does **not** model mRNA secondary structure near the ribosome binding
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
 
-### 3.12 Constructs
+### 3.14 Constructs
 
 Assemble a VHH into the construct you will actually order, and get the mass, pI
 and DNA of the finished protein rather than of the bare domain. The practical
@@ -672,7 +739,7 @@ protein sequence; and codon-optimised DNA for the whole construct, with the same
 restriction-site avoidance as the DNA tab and the same round-trip verification —
 the DNA is translated back and compared to the construct before it is shown.
 
-### 3.13 Download
+### 3.15 Download
 
 The results table as CSV, the figures as 300 dpi PNG, and a full PDF report.
 

@@ -32,7 +32,7 @@ which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
-| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, VHH-specific analyses for VHHs — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
+| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
@@ -251,6 +251,8 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
 | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
 | Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
+| vs Reference | positions differing from a chosen reference, matched by IMGT number so an indel reports as one change rather than shifting everything downstream |
+| Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
 | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
 | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
