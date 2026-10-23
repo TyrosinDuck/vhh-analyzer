@@ -16,7 +16,8 @@ frameworks, read VHHs out of Sanger chromatograms, and plan a restriction clonin
 between two plasmids.
 
 **It is built around VHHs, but it accepts any protein.** Each submitted sequence is
-classified, and the analyses that are not VHH-specific — mass, pI, extinction
+classified. Conventional VH domains get the same full analysis as VHHs, labelled
+as VH. For everything else, the analyses that are not antibody-specific — mass, pI, extinction
 coefficient, charge, hydrophobicity, secondary-structure propensity, aggregation,
 chemical liabilities, codon-optimised DNA, fusion constructs — run on all of them.
 Only the VHH-specific tabs are skipped for the rest. A mixed submission works: see
@@ -165,16 +166,39 @@ That gives six verdicts, shown in the `type` column of the Properties table:
 |---|---|
 | **VHH** | everything runs |
 | **V domain, VHH/VH ambiguous** | everything runs, with a caution — 1/4 hallmarks usually means a humanised VHH or a VH-like construct |
-| **Conventional VH** | VHH-specific tabs skipped |
-| **Light-chain V domain** | VHH-specific tabs skipped |
-| **Contains a V domain** | VHH-specific tabs skipped — a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
-| **Other protein** | VHH-specific tabs skipped |
+| **Conventional VH** | everything runs, labelled VH throughout — see below |
+| **Light-chain V domain** | antibody-specific tabs skipped |
+| **Contains a V domain** | antibody-specific tabs skipped — a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
+| **Other protein** | antibody-specific tabs skipped |
 
-When anything other than a VHH is submitted, a notice at the top names each
-sequence and says why it was classified that way. The tabs that skip them —
-**CDR / Framework**, **Hallmarks & germline** including humanness, **Clonal
-families**, and the disulfide section of **Liabilities** — say so rather than
-quietly showing a shorter list.
+**A conventional VH gets the full analysis.** Most of what this app calls "the
+VHH analysis" is not camelid-specific at all: IMGT numbering, the CDR windows,
+germline assignment, humanness and CDR3 grouping are exactly the same operation
+on a VH. Withholding them would have been an arbitrary restriction, so a VH goes
+through all of it, with a `type` column in every per-sequence table saying which
+is which, and a notice at the top naming the VH sequences.
+
+Exactly two readings are genuinely camelid, and both are flagged where they
+appear rather than used to gate everything else:
+
+- **The FR2 hallmark tetrad.** On a VH a score of 0/4 is simply what a VH looks
+  like, not a defect. The row is still shown, because seeing `VGLW` next to a
+  camelid `FERF` is the clearest possible illustration of the difference.
+- **The additional CDR1–CDR3 disulfide.** The pattern matched against is a
+  camelid one. On a VH, an extra cysteine pair is reported as unverified rather
+  than as the known VHH motif. The canonical IMGT 23/104 disulfide is the same in
+  both and applies to either.
+
+Humanness on a VH behaves as you would expect and the app says so: a high
+framework identity to a human germline is expected rather than informative, and
+the hallmark rows are not a humanisation decision there, since a VH already
+carries the VH residues.
+
+When something that is **not** a heavy-chain domain is submitted, a notice names
+each sequence and says why. The tabs that skip them — **CDR / Framework**,
+**Hallmarks & germline** including humanness, **Clonal families**, and the
+disulfide section of **Liabilities** — say so rather than quietly showing a
+shorter list.
 
 **Two behaviours worth knowing.**
 
@@ -186,10 +210,11 @@ app falls back to the only thing that holds generally: an odd number of cysteine
 guarantees at least one unpaired thiol; an even number tells you nothing without a
 structure.
 
-*The alignment defaults to the VHHs.* Aligning a 1200-residue protein against
-120-residue VHHs produces a figure that is mostly gaps, and a logo to match. So the
-**Alignment** tab aligns the VHH subset by default, with a checkbox to include
-everything. If nothing in the submission is a VHH, it aligns what you gave it.
+*The alignment defaults to the antibody domains.* Aligning a 1200-residue protein
+against 120-residue VHHs produces a figure that is mostly gaps, and a logo to
+match. So the **Alignment** tab aligns the heavy-chain subset by default — VHH and
+VH together, which align perfectly well — with a checkbox to include the rest. If
+nothing in the submission is an antibody domain, it aligns what you gave it.
 
 ### 3.2 Sidebar settings
 

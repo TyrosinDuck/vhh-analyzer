@@ -239,7 +239,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 
 | Tab | Contents |
 |---|---|
-| Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else — so VHH-specific analyses only run where they mean something |
+| Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
 | Properties | physico-chemical descriptors, developability flags, custom features |
 | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | CDR / Framework | region table, coloured sequences, both annotation methods explained |

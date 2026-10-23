@@ -37,7 +37,8 @@ __all__ = [
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
     "plot_logo",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS", "MIN_LENGTH",
-    "classify", "classify_all", "VHH_KINDS", "KIND_VHH", "KIND_VH",
+    "classify", "classify_all", "VHH_KINDS", "HEAVY_KINDS",
+    "KIND_VHH", "KIND_VH",
     "KIND_VL", "KIND_AMBIGUOUS", "KIND_FUSION", "KIND_OTHER",
     "pairwise_scores", "cluster_families", "plot_family_dendrogram",
     "FAMILY_DEFAULTS", "imgt_numbering", "imgt_region",
@@ -51,7 +52,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21g"
+__version__ = "2026.10.23a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -208,6 +209,16 @@ KIND_FUSION = "Contains a V domain"
 KIND_OTHER = "Other protein"
 
 VHH_KINDS = {KIND_VHH, KIND_AMBIGUOUS}
+
+# Kinds that get the full heavy-chain analysis. Most of what this app calls
+# "VHH analysis" is not camelid-specific at all: IMGT numbering, the CDR windows,
+# germline assignment, humanness and CDR3 grouping apply to any heavy-chain
+# variable domain, VHH or conventional VH alike. Only two things are genuinely
+# camelid — how the FR2 hallmark tetrad is *read*, and the additional CDR1-CDR3
+# disulfide — and those are labelled where they appear rather than used to
+# withhold everything else.
+HEAVY_KINDS = {KIND_VHH, KIND_AMBIGUOUS, KIND_VH}
+
 DOMAIN_COVERAGE = 0.80      # fraction of the sequence the V domain must cover
 
 
@@ -221,7 +232,8 @@ def classify(seq: str, method: str | None = None) -> dict:
     """
     seq = clean_sequence(seq)
     out = {"length": len(seq), "chain": None, "hallmark_score": None,
-           "coverage": None, "evalue": None, "method": "ANARCI"}
+           "coverage": None, "evalue": None, "method": "ANARCI",
+           "full_analysis": False}
 
     try:
         from anarci import anarci
@@ -243,10 +255,11 @@ def classify(seq: str, method: str | None = None) -> dict:
             out["note"] = ("no VHH anchors found; generic analyses only "
                            "(install ANARCI for a reliable verdict)")
         out["is_vhh"] = out["kind"] in VHH_KINDS
+        out["full_analysis"] = out["kind"] in HEAVY_KINDS
         return out
 
     if numbered[0] is None:
-        out.update({"kind": KIND_OTHER, "is_vhh": False,
+        out.update({"kind": KIND_OTHER, "is_vhh": False, "full_analysis": False,
                     "note": "ANARCI finds no immunoglobulin variable domain — "
                             "generic analyses only"})
         return out
@@ -260,7 +273,7 @@ def classify(seq: str, method: str | None = None) -> dict:
 
     if coverage < DOMAIN_COVERAGE:
         out.update({
-            "kind": KIND_FUSION, "is_vhh": False,
+            "kind": KIND_FUSION, "is_vhh": False, "full_analysis": False,
             "note": f"a {chain}-chain V domain spans residues {start + 1}-{end + 1} "
                     f"({coverage:.0%} of the sequence) — this looks like a fusion "
                     f"or a multi-domain protein, so the VHH analyses are skipped",
@@ -268,7 +281,7 @@ def classify(seq: str, method: str | None = None) -> dict:
         return out
 
     if chain in ("K", "L"):
-        out.update({"kind": KIND_VL, "is_vhh": False,
+        out.update({"kind": KIND_VL, "is_vhh": False, "full_analysis": False,
                     "note": f"ANARCI numbers this as a {chain} light-chain "
                             "variable domain, not a VHH"})
         return out
@@ -288,7 +301,9 @@ def classify(seq: str, method: str | None = None) -> dict:
     else:
         out.update({"kind": KIND_VH, "is_vhh": False,
                     "note": "heavy-chain V domain with a VH-like FR2 tetrad — "
-                            "a conventional VH, so the VHH analyses are skipped"})
+                            "a conventional VH, not a VHH. The heavy-chain "
+                            "analyses still apply and are run"})
+    out["full_analysis"] = out["kind"] in HEAVY_KINDS
     return out
 
 

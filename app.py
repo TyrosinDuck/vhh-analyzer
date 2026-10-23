@@ -51,7 +51,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261021.1800"
+VERSION = "20261023.1400"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -65,7 +65,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.21g", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.23a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
@@ -1204,42 +1204,66 @@ df, annotations, errors = analyze_with_progress(sequences, ph, method)
 # What is each sequence? The app accepts any protein, so every VHH-specific
 # analysis has to know which sequences it legitimately applies to.
 kinds = {name: classify_cached(seq, method) for name, seq in sequences.items()}
+# Heavy-chain V domains — VHH *and* conventional VH — get the full analysis.
+# Almost none of it is camelid-specific: IMGT numbering, the CDR windows,
+# germline assignment, humanness and CDR3 grouping are the same operation on a
+# VH. The two camelid readings (the hallmark tetrad, the extra CDR1-CDR3
+# disulfide) are labelled in place instead of gating the rest.
+heavy_names = [n for n in sequences if kinds[n]["full_analysis"]]
 vhh_names = [n for n in sequences if kinds[n]["is_vhh"]]
-other_names = [n for n in sequences if not kinds[n]["is_vhh"]]
-vhh_sequences = {n: sequences[n] for n in vhh_names}
-vhh_annotations = {n: annotations[n] for n in vhh_names if n in annotations}
+other_names = [n for n in sequences if not kinds[n]["full_analysis"]]
+heavy_sequences = {n: sequences[n] for n in heavy_names}
+heavy_annotations = {n: annotations[n] for n in heavy_names if n in annotations}
 
 df.insert(1, "type", [kinds[n]["kind"] for n in df["name"]])
 
+_vh_only = [n for n in heavy_names if not kinds[n]["is_vhh"]]
+if _vh_only:
+    st.info(
+        f"**{len(_vh_only)} sequence(s) are conventional VH, not VHH.** They go "
+        "through the full heavy-chain analysis all the same — CDR/framework, "
+        "germline, humanness, clonal families — and are labelled as VH "
+        "throughout. Only two readings are camelid-specific and are flagged "
+        "where they appear: the FR2 hallmark tetrad, and the additional "
+        "CDR1–CDR3 disulfide.\n\n"
+        + "\n".join(f"- **{n}** — {kinds[n]['note']}" for n in _vh_only),
+        icon="🧬")
+
 if other_names:
     st.info(
-        f"**{len(other_names)} of {len(sequences)} sequence(s) are not VHHs.** "
-        "They are characterised like any protein — mass, pI, extinction, charge, "
-        "aggregation, liabilities, DNA — but the VHH-specific tabs skip them.\n\n"
+        f"**{len(other_names)} of {len(sequences)} sequence(s) are not "
+        "heavy-chain variable domains.** They are characterised like any "
+        "protein — mass, pI, extinction, charge, aggregation, liabilities, DNA — "
+        "but the antibody-specific tabs skip them.\n\n"
         + "\n".join(f"- **{n}** — {kinds[n]['kind']}: {kinds[n]['note']}"
                      for n in other_names), icon="ℹ️")
 
-# An annotation failure on something that is not a VHH is the expected outcome,
-# not an error worth alarming anyone about.
-real_errors = {n: m for n, m in errors.items() if kinds[n]["is_vhh"]}
+# An annotation failure on something that is not an antibody domain is the
+# expected outcome, not an error worth alarming anyone about.
+real_errors = {n: m for n, m in errors.items() if kinds[n]["full_analysis"]}
 if real_errors:
     for name, msg in real_errors.items():
         st.warning(f"**{name}** — annotation failed: {msg}. "
                    "Physico-chemical values are still reported below.")
 
 
-def vhh_only_notice(what: str) -> bool:
-    """Guard for a VHH-specific panel. True when there is something to show."""
-    if not vhh_names:
-        st.info(f"{what} applies to VHHs, and none of the submitted sequences is "
-                "one. The generic tabs — Properties, Plots, Liabilities, "
-                "Aggregation, DNA, Constructs — cover them all.")
+def heavy_only_notice(what: str) -> bool:
+    """Guard for a panel that needs a heavy-chain V domain (VHH or VH)."""
+    if not heavy_names:
+        st.info(f"{what} applies to heavy-chain variable domains — VHH or "
+                "conventional VH — and none of the submitted sequences is one. "
+                "The generic tabs — Properties, Plots, Liabilities, Aggregation, "
+                "DNA, Constructs — cover them all.")
         return False
     if other_names:
-        st.caption("Showing the "
-                   f"{len(vhh_names)} VHH sequence(s); "
+        st.caption(f"Showing the {len(heavy_names)} heavy-chain domain(s); "
                    f"{len(other_names)} other sequence(s) are not analysed here.")
     return True
+
+
+def type_of(name: str) -> str:
+    """Short label for a sequence's kind, for the per-sequence tables."""
+    return "VHH" if kinds[name]["is_vhh"] else kinds[name]["kind"]
 
 # Named rather than indexed: inserting a tab in the middle of an indexed list
 # silently reassigns every panel after it.
@@ -1337,19 +1361,19 @@ with tabs["Plots"]:
 
 # --- CDR / Framework ------------------------------------------------------- #
 with tabs["CDR / Framework"]:
-    _cdr_ok = vhh_only_notice("CDR and framework annotation")
-    if _cdr_ok and not vhh_annotations:
+    _cdr_ok = heavy_only_notice("CDR and framework annotation")
+    if _cdr_ok and not heavy_annotations:
         st.warning("No sequence could be annotated.")
     elif _cdr_ok:
-        rows = [{"name": n,
+        rows = [{"name": n, "type": type_of(n),
                  "method": df.loc[df["name"] == n, "annotation_method"].iloc[0],
-                 "CDR1": vhh_annotations[n]["CDR1"]["seq"],
-                 "CDR2": vhh_annotations[n]["CDR2"]["seq"],
-                 "CDR3": vhh_annotations[n]["CDR3"]["seq"],
-                 "CDR1 len": len(vhh_annotations[n]["CDR1"]["seq"]),
-                 "CDR2 len": len(vhh_annotations[n]["CDR2"]["seq"]),
-                 "CDR3 len": len(vhh_annotations[n]["CDR3"]["seq"])}
-                for n in vhh_annotations]
+                 "CDR1": heavy_annotations[n]["CDR1"]["seq"],
+                 "CDR2": heavy_annotations[n]["CDR2"]["seq"],
+                 "CDR3": heavy_annotations[n]["CDR3"]["seq"],
+                 "CDR1 len": len(heavy_annotations[n]["CDR1"]["seq"]),
+                 "CDR2 len": len(heavy_annotations[n]["CDR2"]["seq"]),
+                 "CDR3 len": len(heavy_annotations[n]["CDR3"]["seq"])}
+                for n in heavy_annotations]
         st.dataframe(pd.DataFrame(rows), hide_index=True, **FIT)
 
         st.subheader("Annotated sequences")
@@ -1360,14 +1384,14 @@ with tabs["CDR / Framework"]:
             'border-radius:3px">CDR2</span> '
             '<span style="background:#4daf4a;color:#fff;padding:1px 6px;'
             'border-radius:3px">CDR3</span>', unsafe_allow_html=True)
-        st.markdown("".join(vc.render_annotated_html(n, vhh_annotations[n])
-                            for n in vhh_annotations), unsafe_allow_html=True)
+        st.markdown("".join(vc.render_annotated_html(n, heavy_annotations[n])
+                            for n in heavy_annotations), unsafe_allow_html=True)
 
         with st.expander("Framework regions"):
             st.dataframe(pd.DataFrame(
-                [{"name": n, **{r: vhh_annotations[n][r]["seq"]
+                [{"name": n, **{r: heavy_annotations[n][r]["seq"]
                                 for r in ("FR1", "FR2", "FR3", "FR4")}}
-                 for n in vhh_annotations]), hide_index=True, **FIT)
+                 for n in heavy_annotations]), hide_index=True, **FIT)
 
         with st.expander("How the two annotation methods work"):
             st.markdown("""
@@ -1393,12 +1417,13 @@ non-canonical framework — which is itself worth knowing.
 with tabs["Hallmarks & germline"]:
     st.markdown("The four FR2 positions that distinguish a camelid VHH from a "
                 "conventional VH, and the closest germline genes.")
-    _has_vhh = vhh_only_notice("Hallmark and germline analysis")
+    _has_vhh = heavy_only_notice("Hallmark and germline analysis")
     hm_rows, gl_rows = [], []
-    for name, seq in vhh_sequences.items():
+    for name, seq in heavy_sequences.items():
         try:
             hm = hallmark_data(seq, annotations.get(name))
-            hm_rows.append({"name": name, "tetrad": hm["tetrad"],
+            hm_rows.append({"name": name, "type": type_of(name),
+                            "tetrad": hm["tetrad"],
                             "camelid score": f"{hm['camelid_score']}/4",
                             **{f"IMGT {p['IMGT']}": f"{p['residue']} ({p['verdict']})"
                                for p in hm["positions"]},
@@ -1417,7 +1442,10 @@ with tabs["Hallmarks & germline"]:
         st.caption("A score of 4/4 is the canonical camelid profile. IMGT 49 is "
                    "shared with VH3, so 3/4 with a G at 49 is common and still a "
                    "genuine VHH. Engineered or humanised constructs sit between the "
-                   "two profiles.")
+                   "two profiles. **This is the one reading that is camelid-"
+                   "specific**: on a conventional VH a score of 0/4 is simply what "
+                   "a VH looks like, not a defect — the row is shown so you can "
+                   "see the contrast, and the `type` column says which is which.")
 
     if gl_rows:
         st.subheader("Closest germline")
@@ -1444,7 +1472,7 @@ with tabs["Hallmarks & germline"]:
                  "comparison. Searching all families rarely changes the answer.")
     fam_arg = None if family == "all human heavy V" else family
 
-    for name, seq in vhh_sequences.items():
+    for name, seq in heavy_sequences.items():
         try:
             h = humanness_for(seq, fam_arg)
         except Exception as exc:
@@ -1453,7 +1481,8 @@ with tabs["Hallmarks & germline"]:
         if not h["gene"]:
             st.warning(f"**{name}** — no germline could be compared.")
             continue
-        with st.expander(f"**{name}** — {h['identity']}% to {h['gene']} "
+        with st.expander(f"**{name}** ({type_of(name)}) — "
+                         f"{h['identity']}% to {h['gene']} "
                          f"({h['n_divergent']} divergent framework positions, "
                          f"{h['n_hallmark']} of them hallmarks)",
                          expanded=len(sequences) == 1):
@@ -1470,9 +1499,15 @@ with tabs["Hallmarks & germline"]:
                     h["divergences"].to_csv(index=False),
                     file_name=f"humanness_{name}.csv", mime="text/csv",
                     key=f"dl_human_{name}")
+            if not kinds[name]["is_vhh"]:
+                st.caption(
+                    "This is a conventional VH, so a high framework identity is "
+                    "expected rather than informative — and the `hallmark` rows "
+                    "below are not a humanisation decision here, since a VH "
+                    "already carries the VH residues.")
             st.caption(
                 "The rows flagged `hallmark` are the four FR2 positions that make "
-                "this a VHH rather than a VH. They are the real decision: "
+                "a domain a VHH rather than a VH. They are the real decision: "
                 "reverting them raises the humanness number and simultaneously "
                 "removes the camelid surface that keeps a VHH soluble without a "
                 "light chain. The other rows are the cheap ones.")
@@ -1584,14 +1619,16 @@ with tabs["Liabilities"]:
     # ---- disulfides -------------------------------------------------------- #
     st.divider()
     st.subheader("Cysteines and disulfides")
-    _ = vhh_only_notice("IMGT-numbered disulfide analysis")
+    _ = heavy_only_notice("IMGT-numbered disulfide analysis")
     st.markdown(
         "The table above flags every cysteine outside the canonical FR1/FR3 pair "
         "as a possible free thiol. That is the right default, but it is wrong in "
         "one common case: camelid VHHs with long CDR3s often carry a **second, "
         "stabilising** disulfide, typically between CDR1 or FR2 and CDR3. This "
-        "section tells the two situations apart.")
-    for name, seq in vhh_sequences.items():
+        "section tells the two situations apart. The canonical IMGT 23/104 pair "
+        "is the same in a conventional VH, so that part applies to both; only "
+        "the extra-pair reading is camelid.")
+    for name, seq in heavy_sequences.items():
         try:
             ds = disulfides_for(seq, annotations.get(name))
         except Exception as exc:
@@ -1604,7 +1641,13 @@ with tabs["Liabilities"]:
                 st.dataframe(ds["cysteines"], hide_index=True, **FIT)
             if len(ds["pairs"]):
                 st.dataframe(ds["pairs"], hide_index=True, **FIT)
-            if ds["has_extra_pair"]:
+            if ds["has_extra_pair"] and not kinds[name]["is_vhh"]:
+                st.info(
+                    "An extra cysteine pair was found, but the CDR1–CDR3 pattern "
+                    "this is matched against is a **camelid** one, and this "
+                    "sequence is a conventional VH. Treat the pairing as "
+                    "unverified rather than as the known VHH motif.")
+            elif ds["has_extra_pair"]:
                 st.success(
                     "Read the extra cysteines as a stabilising pair rather than a "
                     "liability — but remember this is inferred from position "
@@ -1787,17 +1830,20 @@ with tabs["Alignment"]:
     # Aligning a 1200-residue protein against 120-residue VHHs produces a mostly
     # empty figure, so the default is the VHH subset — unless there are no VHHs,
     # in which case aligning the others is the only thing that makes sense.
-    if other_names and vhh_names:
+    if other_names and heavy_names:
         align_all = st.checkbox(
-            f"Include the {len(other_names)} non-VHH sequence(s)", value=False,
+            f"Include the {len(other_names)} sequence(s) that are not antibody "
+            "domains", value=False,
             help="Off by default: mixing sequences of very different lengths "
-                 "gives an alignment that is mostly gaps, and a logo to match.")
+                 "gives an alignment that is mostly gaps, and a logo to match. "
+                 "VHH and conventional VH align together perfectly well and are "
+                 "both included either way.")
     else:
-        align_all = not vhh_names
-    aln_seqs = sequences if align_all else vhh_sequences
-    aln_anns = annotations if align_all else vhh_annotations
-    if other_names and not align_all and vhh_names:
-        st.caption(f"Aligning the {len(vhh_names)} VHH sequence(s) only.")
+        align_all = not heavy_names
+    aln_seqs = sequences if align_all else heavy_sequences
+    aln_anns = annotations if align_all else heavy_annotations
+    if other_names and not align_all and heavy_names:
+        st.caption(f"Aligning the {len(heavy_names)} heavy-chain domain(s) only.")
 
     if len(aln_seqs) < 2:
         st.info("Submit at least two sequences to see an alignment. "
@@ -1876,12 +1922,12 @@ with tabs["Clonal families"]:
         "CDR3 answers that, because CDR3 is what differs between independent "
         "lineages while the frameworks stay nearly constant.")
 
-    if not vhh_only_notice("Clonal family grouping"):
+    if not heavy_only_notice("Clonal family grouping"):
         pass
-    elif len(vhh_sequences) < 2:
+    elif len(heavy_sequences) < 2:
         st.info("Submit at least two VHH sequences to group them into families.")
     elif not any((a.get("CDR3") or {}).get("seq")
-                 for a in vhh_annotations.values()):
+                 for a in heavy_annotations.values()):
         st.warning("No CDR3 could be annotated, so there is nothing to group on.")
     else:
         fam_cols = st.columns([2, 1, 1])
@@ -1907,7 +1953,7 @@ with tabs["Clonal families"]:
                      "plausible sibling, not a new lineage.")
 
         with st.spinner("Grouping…"):
-            fam = families_for(vhh_sequences, vhh_annotations, float(cutoff),
+            fam = families_for(heavy_sequences, heavy_annotations, float(cutoff),
                                linkage_method, bool(same_length))
 
         n_seqs = len(fam["assignment"])
@@ -1934,7 +1980,7 @@ with tabs["Clonal families"]:
             "`representative` is the family's most frequent CDR3 — a reasonable "
             "default pick for the clone to carry forward.")
 
-        img_dendro = png_family_dendrogram(vhh_sequences, vhh_annotations,
+        img_dendro = png_family_dendrogram(heavy_sequences, heavy_annotations,
                                            float(cutoff),
                                            linkage_method, bool(same_length))
         if img_dendro:
@@ -1946,7 +1992,9 @@ with tabs["Clonal families"]:
                        "how robust a family is.")
 
         st.subheader("Per-sequence assignment")
-        st.dataframe(fam["assignment"], hide_index=True, **FIT)
+        st.dataframe(fam["assignment"].assign(
+            type=[type_of(x) for x in fam["assignment"]["name"]]),
+            hide_index=True, **FIT)
 
         dl = st.columns(3)
         dl[0].download_button("Families (CSV)",
@@ -1963,9 +2011,9 @@ with tabs["Clonal families"]:
                               mime="text/csv")
 
         with st.expander("One representative per family, as FASTA"):
-            reps = {r: vhh_sequences[r]
+            reps = {r: heavy_sequences[r]
                     for r in fam["families"]["representative"]
-                    if r in vhh_sequences}
+                    if r in heavy_sequences}
             fasta = "".join(f">{k}\n{v}\n" for k, v in reps.items())
             st.code(fasta or "—", language="text")
             st.download_button("Download representatives (FASTA)", fasta,
