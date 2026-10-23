@@ -53,7 +53,12 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261023.1700"
+VERSION = "20261023.1730"
+
+# Wall-clock start of this script run. Streamlit re-executes the whole file on
+# every interaction, so this is set afresh each time and measures what the user
+# actually waits for — not just the analysis loop.
+_RUN_STARTED = time.perf_counter()
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -189,6 +194,7 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
     is instantaneous, so there is nothing to see unless something is left behind.
     """
     target = slot if slot is not None else st.empty()
+    st.session_state["_status_slot"] = target
     bar = target.progress(0.0, text="Preparing…")
     rows, anns, errs = [], {}, {}
     total = len(seqs)
@@ -206,13 +212,21 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
     finally:
         elapsed = time.perf_counter() - started
         plural = "s" if total != 1 else ""
-        # No "from cache" note: whether a result came from the cache cannot be
-        # read off the elapsed time, and guessing it would mislabel a genuinely
-        # fast run.
-        target.success(
-            f"{total} sequence{plural} analysed in "
-            + (f"{elapsed * 1000:.0f} ms" if elapsed < 1 else f"{elapsed:.1f} s"),
-            icon="✅")
+        # Named precisely: this covers the characterisation and annotation loop
+        # only. Every tab body still has to render afterwards — the alignment,
+        # the logo, the identity matrices, the plasmid maps — and that is where
+        # most of the wall-clock time goes and why Streamlit's own spinner keeps
+        # turning after this bar is full. The final line is written at the end of
+        # the script, once the page is actually finished.
+        #
+        # No "from cache" note either: whether a result came from the cache
+        # cannot be read off the elapsed time, and guessing it would mislabel a
+        # genuinely fast run.
+        target.info(
+            f"{total} sequence{plural} characterised in "
+            + (f"{elapsed * 1000:.0f} ms" if elapsed < 1 else f"{elapsed:.1f} s")
+            + " — drawing the figures…", icon="⏳")
+        st.session_state["_status_parts"] = (total, elapsed)
     return pd.DataFrame(rows), anns, errs
 
 
@@ -2548,5 +2562,19 @@ with tabs["Download"]:
 
     st.divider()
     st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
+
+# The page is now fully built, so the status line under the Analyze button can
+# be replaced with the figure the user actually experienced. A placeholder can be
+# rewritten later in the same run, which is exactly what this relies on.
+_slot = st.session_state.pop("_status_slot", None)
+_parts = st.session_state.pop("_status_parts", None)
+if _slot is not None and _parts is not None:
+    _total, _analysis = _parts
+    _whole = time.perf_counter() - _RUN_STARTED
+    _fmt = lambda t: f"{t * 1000:.0f} ms" if t < 1 else f"{t:.1f} s"
+    _slot.success(
+        f"{_total} sequence{'s' if _total != 1 else ''} · "
+        f"characterised in {_fmt(_analysis)} · page built in {_fmt(_whole)}",
+        icon="✅")
 
 footer()

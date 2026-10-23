@@ -74,12 +74,23 @@ exists because the keyboard shortcut is not discoverable; both do the same thing
 which is to commit what you typed.
 
 A progress bar runs directly under the button while the analysis is working, and is
-replaced by a line saying how many sequences were analysed and how long it took.
-The line stays, which matters more than it sounds: on a handful of sequences the
-analysis takes a fraction of a second, and once the cache is warm it is effectively
-instant — a bar that cleared itself would leave no evidence anything had happened.
-The spinner at the top right of the page is Streamlit's own, and sits at a fixed
-position that cannot be moved.
+replaced by a line that stays — which matters more than it sounds, because on a
+handful of sequences the analysis itself takes a fraction of a second and a bar
+that cleared itself would leave no evidence anything had happened.
+
+That line reports **two** numbers, and the gap between them is the honest picture:
+
+- *characterised in …* — the physico-chemical analysis and the CDR annotation.
+  Typically well under a second.
+- *page built in …* — everything, including every figure. Streamlit re-executes
+  the whole script on each interaction, so all the tab bodies render whether you
+  open them or not: the alignment, the logo, the identity matrices, the
+  aggregation profiles, the plasmid maps. On a fresh set of six sequences this is
+  routinely a hundred times the analysis time.
+
+So when the bar fills and Streamlit's own spinner (top right, fixed position, not
+movable) keeps turning, that second number is what it is still working on. A
+second run over the same sequences is far quicker: the figures are cached.
 
 **Limits.** Up to 50 sequences per run, each between 25 and 1500 amino acids, and
 12 000 residues in total across the submission. Anything outside that is rejected
