@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import re
 import tempfile
+import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -52,7 +53,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261023.1630"
+VERSION = "20261023.1700"
 AUTHOR = "TyrosinDuck"
 AUTHOR_URL = "https://github.com/TyrosinDuck"
 
@@ -173,11 +174,25 @@ def process_ab1(payload: tuple, vector: str, cutoff: float, min_len: int,
                             min_trimmed_len=min_len, min_mean_phred=min_phred)
 
 
-def analyze_with_progress(seqs: dict[str, str], ph: float, method: str):
-    """Run the analysis sequence by sequence, showing progress as it goes."""
-    bar = st.progress(0.0, text="Preparing…")
+def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
+                          slot=None):
+    """Run the analysis sequence by sequence, showing progress as it goes.
+
+    ``slot`` is a placeholder created earlier in the script — normally the one
+    just under the Analyze button. Without it the bar would be drawn wherever
+    this happens to be called, which is below the generator panel and nowhere
+    near the control the user just clicked.
+
+    The bar is replaced by a one-line result rather than cleared: on a handful
+    of sequences the analysis takes well under a second and a bar that vanishes
+    leaves no evidence anything happened at all — and once the cache is warm it
+    is instantaneous, so there is nothing to see unless something is left behind.
+    """
+    target = slot if slot is not None else st.empty()
+    bar = target.progress(0.0, text="Preparing…")
     rows, anns, errs = [], {}, {}
     total = len(seqs)
+    started = time.perf_counter()
     try:
         for i, (name, seq) in enumerate(seqs.items()):
             bar.progress(i / total, text=f"Analyzing {name} ({i + 1}/{total})…")
@@ -189,7 +204,15 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str):
                 errs[name] = err
         bar.progress(1.0, text="Done")
     finally:
-        bar.empty()
+        elapsed = time.perf_counter() - started
+        plural = "s" if total != 1 else ""
+        # No "from cache" note: whether a result came from the cache cannot be
+        # read off the elapsed time, and guessing it would mislabel a genuinely
+        # fast run.
+        target.success(
+            f"{total} sequence{plural} analysed in "
+            + (f"{elapsed * 1000:.0f} ms" if elapsed < 1 else f"{elapsed:.1f} s"),
+            icon="✅")
     return pd.DataFrame(rows), anns, errs
 
 
@@ -1149,6 +1172,10 @@ with col_in:
     # keyboard shortcut nobody discovers on their own.
     st.button("Analyze", type="primary", **FIT)
     st.caption("Click Analyze, or press ⌘ + Enter (Ctrl + Enter on Windows/Linux).")
+    # Filled in later by analyze_with_progress: the progress bar while it runs,
+    # then the result line. Created here so it appears under the button rather
+    # than wherever in the script the analysis happens to be called.
+    status_slot = st.empty()
 
 # --- Synthetic sequence generator ------------------------------------------- #
 with st.expander("🎲 Generate synthetic VHH sequences"):
@@ -1248,7 +1275,8 @@ except ValueError as exc:
     footer()
     st.stop()
 
-df, annotations, errors = analyze_with_progress(sequences, ph, method)
+df, annotations, errors = analyze_with_progress(sequences, ph, method,
+                                                slot=status_slot)
 
 # What is each sequence? The app accepts any protein, so every VHH-specific
 # analysis has to know which sequences it legitimately applies to.

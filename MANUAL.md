@@ -73,6 +73,14 @@ Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The
 exists because the keyboard shortcut is not discoverable; both do the same thing,
 which is to commit what you typed.
 
+A progress bar runs directly under the button while the analysis is working, and is
+replaced by a line saying how many sequences were analysed and how long it took.
+The line stays, which matters more than it sounds: on a handful of sequences the
+analysis takes a fraction of a second, and once the cache is warm it is effectively
+instant — a bar that cleared itself would leave no evidence anything had happened.
+The spinner at the top right of the page is Streamlit's own, and sits at a fixed
+position that cannot be moved.
+
 **Limits.** Up to 50 sequences per run, each between 25 and 1500 amino acids, and
 12 000 residues in total across the submission. Anything outside that is rejected
 with a message naming the offending sequence.
