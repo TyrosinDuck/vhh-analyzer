@@ -53,7 +53,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261023.1730"
+VERSION = "20261023.1830"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -72,7 +72,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.23b", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.23c", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.23a"}
@@ -415,9 +415,10 @@ def png_identity(seqs, anns, region):
 
 
 @st.cache_data(**_FIG_CACHE)
-def png_msa(seqs, anns):
+def png_msa(seqs, anns, wrap_length=60):
     with tempfile.TemporaryDirectory() as tmp:
-        fig, aln_path = vc.plot_msa(seqs, anns, workdir=tmp)
+        fig, aln_path = vc.plot_msa(seqs, anns, workdir=tmp,
+                                    wrap_length=wrap_length)
         return fig_to_png(fig, close=True), aln_path.read_text()
 
 
@@ -1936,20 +1937,47 @@ with tabs["Alignment"]:
     if other_names and not align_all and heavy_names:
         st.caption(f"Aligning the {len(heavy_names)} heavy-chain domain(s) only.")
 
+    # Identifies the exact set being aligned, so the drawn state does not carry
+    # over to a different submission — otherwise a new analysis would silently
+    # pay for the heavy figures again.
+    aln_signature = hash(tuple(sorted(aln_seqs.items())))
+
     if len(aln_seqs) < 2:
         st.info("Submit at least two sequences to see an alignment. "
                 + ("Tick the box above to include the non-VHH sequences."
                    if other_names and not align_all else ""))
     else:
-        with st.spinner("Aligning…"):
-            # pymsaviz reads from a path, so the aligned FASTA is written to a
-            # temporary directory that is removed as soon as the figure exists.
-            img_msa, aln_text = png_msa(aln_seqs, aln_anns)
-        st.image(img_msa, **FIT)
-        st.caption("FAMSA alignment rendered with pymsaviz. CDR bands refer to the "
-                   "first sequence submitted.")
-        st.download_button("Download alignment (FASTA)", aln_text,
-                           file_name="alignment.fasta", mime="text/plain")
+        # The alignment and the logo are by some distance the two most expensive
+        # figures in the app, and Streamlit re-executes every tab body on every
+        # interaction — so without this they are redrawn each time, whether or
+        # not anyone is looking at this tab. Behind a button they cost one click
+        # per set of sequences, in the one tab people open in order to look at a
+        # figure rather than to check a number in passing.
+        drawn_for = st.session_state.get("alignment_drawn_for")
+        if drawn_for != aln_signature:
+            st.info(
+                "The alignment and the sequence logo are the two heaviest "
+                "figures here, so they are drawn on request rather than on "
+                "every interaction.", icon="🖼️")
+            if st.button("Draw the alignment and logo", type="primary",
+                         key="draw_alignment"):
+                st.session_state["alignment_drawn_for"] = aln_signature
+                st.rerun()
+
+        if st.session_state.get("alignment_drawn_for") == aln_signature:
+            msa_wrap = st.slider(
+                "Positions per row", 20, 140, 60, step=5, key="msa_wrap",
+                help="How many alignment columns each row carries. Fewer "
+                     "positions per row means more rows and wider letters.")
+            with st.spinner("Aligning…"):
+                # pymsaviz reads from a path, so the aligned FASTA is written to
+                # a temporary directory removed as soon as the figure exists.
+                img_msa, aln_text = png_msa(aln_seqs, aln_anns, int(msa_wrap))
+            st.image(img_msa, **FIT)
+            st.caption("FAMSA alignment rendered with pymsaviz. CDR bands refer "
+                       "to the first sequence submitted.")
+            st.download_button("Download alignment (FASTA)", aln_text,
+                               file_name="alignment.fasta", mime="text/plain")
 
         st.subheader("Pairwise identity")
         cols_id = st.columns(2)
@@ -1965,6 +1993,7 @@ with tabs["Alignment"]:
                    "identity while having unrelated CDR3s — the second matrix is the "
                    "one that tells you whether they are really the same binder.")
 
+    if st.session_state.get("alignment_drawn_for") == aln_signature:
         st.divider()
         st.subheader("Sequence logo")
         st.markdown(

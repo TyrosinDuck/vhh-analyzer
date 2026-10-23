@@ -535,6 +535,21 @@ is enough.
 With two or more sequences: a FAMSA alignment rendered with `pymsaviz`, with the CDR
 bands of the first sequence marked, downloadable as aligned FASTA.
 
+**Both figures are drawn on request.** The alignment and the logo are by some
+distance the two most expensive figures in the app, and Streamlit re-executes every
+tab body on every interaction — so left to themselves they are redrawn constantly,
+whether or not anyone is looking at this tab. A **Draw the alignment and logo**
+button replaces them until you ask. One click per set of sequences, and it takes
+roughly a quarter off the time to build the page for everyone who never opens this
+tab. Submitting a different set brings the button back, which is the point: a new
+analysis should not silently pay for figures nobody asked to see.
+
+A *Positions per row* slider sets the wrap, 20 to 140 columns, exactly as the logo
+below has its own. Fewer positions per row gives more rows and wider letters, which
+is what you want for a figure; more keeps the whole domain on one or two lines for a
+quick look. The two sliders are independent — the alignment and the logo can be
+wrapped differently.
+
 Underneath, **two identity matrices**: full-length and CDR3-only. The second is the
 one that matters when triaging panning output. Two clones can share 90%+ full-length
 identity while having unrelated CDR3s — they are the same scaffold, not the same

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import matplotlib
@@ -53,7 +54,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.23b"
+__version__ = "2026.10.23c"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -470,25 +471,18 @@ def annotate_anarci(seq: str, scheme: str = "imgt") -> dict:
     position; CDRs are then the fixed IMGT windows 27–38, 56–65 and 105–117.
     Because it is numbering-based it tolerates unusual CDR lengths.
     """
-    from anarci import anarci
+    if scheme != "imgt":
+        raise ValueError(f"only the IMGT scheme is supported, not {scheme!r}")
 
     seq = clean_sequence(seq)
-    numbered, _details, _ = anarci([("query", seq)], scheme=scheme, output=False)
-    if numbered[0] is None:
-        raise ValueError("ANARCI could not number this sequence")
-    numbering, start, _ = numbered[0][0]
-
     out = {r: {"seq": [], "pos": []} for r in REGIONS}
-    idx = start
-    for (num, _ins), aa in numbering:
-        if aa == "-":
-            continue
+    # positions stay 0-based here, as before: the return statement adds one back
+    for num, _ins, aa, idx in _anarci_numbering(seq):
         region = next((c for c, (lo, hi) in IMGT_CDR.items() if lo <= num <= hi), None)
         if region is None:
             region = "FR1" if num < 27 else "FR2" if num < 56 else "FR3" if num < 105 else "FR4"
         out[region]["seq"].append(aa)
-        out[region]["pos"].append(idx)
-        idx += 1
+        out[region]["pos"].append(idx - 1)
 
     return {r: {"start": (out[r]["pos"][0] + 1) if out[r]["pos"] else None,
                 "end": (out[r]["pos"][-1] + 1) if out[r]["pos"] else None,
@@ -512,13 +506,14 @@ HALLMARK_POSITIONS = [
 
 
 def imgt_position_map(seq: str) -> dict[int, str]:
-    """{IMGT position: residue} for one sequence. Requires ANARCI."""
-    from anarci import anarci
+    """{IMGT position: residue} for one sequence. Requires ANARCI.
 
-    numbered, _d, _h = anarci([("q", clean_sequence(seq))], scheme="imgt", output=False)
-    if numbered[0] is None:
-        raise ValueError("ANARCI could not number this sequence")
-    return {num: aa for (num, _ins), aa in numbered[0][0][0] if aa != "-"}
+    Derived from the cached numbering rather than from its own ANARCI call.
+    """
+    # Insertion-coded positions are kept and overwrite their base number, which
+    # is what the previous implementation did — 111A lands on key 111. It only
+    # matters inside a long CDR3, never at the hallmark positions this feeds.
+    return {num: aa for num, _ins, aa, _idx in _anarci_numbering(clean_sequence(seq))}
 
 
 def hallmarks(seq: str, annotation: dict | None = None) -> dict:
@@ -1578,16 +1573,19 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
 # IMGT numbering, exposed for the modules that need positions rather than regions
 # ---------------------------------------------------------------------------
 
-def imgt_numbering(seq: str) -> list[tuple[int, str, str, int]]:
-    """``[(imgt_number, insertion_code, residue, residue_index_1based), ...]``.
+@lru_cache(maxsize=512)
+def _anarci_numbering(seq: str) -> tuple[tuple[int, str, str, int], ...]:
+    """ANARCI numbering for one sequence — the single place that calls ANARCI.
 
-    ``annotate_anarci`` throws the numbering away once it has the regions, but
-    humanness and disulfide analysis both need to talk about IMGT positions, so
-    this returns it. Needs ANARCI.
+    Cached because a full page build asks for the same sequence's numbering from
+    seven different directions (annotation, hallmarks, humanness, disulfides,
+    rare residues, repairs, reference comparison). Each call is cheap on its own;
+    seven of them per sequence, on a modest shared server, are not.
+
+    Returns a tuple so a caller cannot mutate the cached value.
     """
     from anarci import anarci
 
-    seq = clean_sequence(seq)
     numbered, _details, _ = anarci([("query", seq)], scheme="imgt", output=False)
     if numbered[0] is None:
         raise ValueError("ANARCI could not number this sequence")
@@ -1598,7 +1596,17 @@ def imgt_numbering(seq: str) -> list[tuple[int, str, str, int]]:
             continue
         out.append((int(num), (ins or " ").strip(), aa, idx + 1))
         idx += 1
-    return out
+    return tuple(out)
+
+
+def imgt_numbering(seq: str) -> list[tuple[int, str, str, int]]:
+    """``[(imgt_number, insertion_code, residue, residue_index_1based), ...]``.
+
+    ``annotate_anarci`` throws the numbering away once it has the regions, but
+    humanness and disulfide analysis both need to talk about IMGT positions, so
+    this returns it. Needs ANARCI.
+    """
+    return list(_anarci_numbering(clean_sequence(seq)))
 
 
 def imgt_region(num: int) -> str:
