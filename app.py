@@ -37,6 +37,8 @@ import cloning as cl
 import generator as gn
 import constructs as ctm
 import repertoire as rep
+import triage as tg
+import codons as cdn
 import sanger as sg
 import vhh_core as vc
 
@@ -53,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261023.1830"
+VERSION = "20261026.1000"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -75,7 +77,8 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 REQUIRED_MODULES = {"vhh_core": "2026.10.23c", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
-                    "repertoire": "2026.10.23a"}
+                    "repertoire": "2026.10.23a",
+                    "triage": "2026.10.26a", "codons": "2026.10.26a"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -83,7 +86,9 @@ _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
                                   ("cloning", REQUIRED_MODULES["cloning"], cl),
                                   ("generator", REQUIRED_MODULES["generator"], gn),
                                   ("constructs", REQUIRED_MODULES["constructs"], ctm),
-                                  ("repertoire", REQUIRED_MODULES["repertoire"], rep))
+                                  ("repertoire", REQUIRED_MODULES["repertoire"], rep),
+                                  ("triage", REQUIRED_MODULES["triage"], tg),
+                                  ("codons", REQUIRED_MODULES["codons"], cdn))
           if getattr(mod, "__version__", None) != want]
 if _stale:
     st.error("Some modules are out of date — update " + ", ".join(_stale) +
@@ -403,6 +408,23 @@ def comparison_for(reference, seqs, reference_name):
 def png_differences(reference, seqs, reference_name):
     return fig_to_png(vc.plot_differences(
         comparison_for(reference, seqs, reference_name)), close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def triage_for(seqs, anns, kinds, ph, include_added):
+    return tg.triage_table(seqs, anns, kinds, ph=ph, include_added=include_added)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def diagnose_gene(dna, expected, cluster_window, gc_window):
+    return cdn.diagnose(dna, expected_protein=expected or None,
+                        cluster_window=cluster_window, gc_window=gc_window)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_gene_diagnosis(dna, expected, cluster_window, gc_window):
+    result = diagnose_gene(dna, expected, cluster_window, gc_window)
+    return fig_to_png(cdn.plot_diagnosis(result, gc_window), close=True)
 
 
 def png_identity(seqs, anns, region):
@@ -1359,10 +1381,70 @@ def type_of(name: str) -> str:
 
 # Named rather than indexed: inserting a tab in the middle of an indexed list
 # silently reassigns every panel after it.
-TAB_LABELS = ["Properties", "Plots", "CDR / Framework", "Hallmarks & germline",
-              "Liabilities", "Aggregation", "Alignment", "vs Reference",
-              "Repertoire", "Clonal families", "DNA", "Constructs", "Download"]
+TAB_LABELS = ["Triage", "Properties", "Plots", "CDR / Framework",
+              "Hallmarks & germline", "Liabilities", "Aggregation", "Alignment",
+              "vs Reference", "Repertoire", "Clonal families", "DNA",
+              "Gene diagnosis", "Constructs", "Download"]
 tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
+
+# --- Triage ----------------------------------------------------------------- #
+with tabs["Triage"]:
+    st.markdown(
+        "Every flag the app can raise, one row per sequence. This is the tab for "
+        "the moment you have to **decide** — which clones to carry forward, which "
+        "ten of sixteen to order — rather than to study one candidate.")
+    st.info(
+        "**There is no overall score, on purpose.** Weighting a deamidation site "
+        "against a hydrophobic patch against three divergent framework positions "
+        "means choosing what matters, and that depends on what the VHH is for. A "
+        "single number would hide that choice behind a decimal point. Sort by the "
+        "column you care about today.", icon="ℹ️")
+
+    tri_cols = st.columns([2, 1])
+    with tri_cols[0]:
+        shown_groups = st.multiselect(
+            "Column groups", list(tg.COLUMN_GROUPS),
+            default=[g for g in tg.COLUMN_GROUPS if g != "Physico-chemical"])
+    with tri_cols[1]:
+        flagged_only = st.checkbox(
+            "Only sequences with a flag", value=False,
+            help="Keeps the rows carrying a high-risk liability, an orphan "
+                 "cysteine, an unusual framework residue or an "
+                 "aggregation-prone region.")
+
+    with st.spinner("Collecting…"):
+        table = triage_for(sequences, annotations, kinds, ph, include_added=True)
+
+    view = table
+    if flagged_only and len(view):
+        mask = view[tg.FLAG_COLUMNS].fillna(False).any(axis=1)
+        view = view[mask]
+
+    keep = [c for g in shown_groups for c in tg.COLUMN_GROUPS[g]]
+    keep = [c for c in dict.fromkeys(["name"] + keep) if c in view.columns]
+    st.dataframe(view[keep], hide_index=True, **FIT)
+    st.caption(
+        f"{len(view)} of {len(table)} sequence(s) shown. Empty cells are "
+        "analyses that do not apply — a sequence that is not an antibody domain "
+        "has no hallmark score, and its cysteines are not read against the VHH "
+        "canonical pair. Click a column header to sort.")
+
+    if len(table):
+        flags = table[["name"] + tg.FLAG_COLUMNS].copy()
+        n_flagged = int(flags[tg.FLAG_COLUMNS].fillna(False).any(axis=1).sum())
+        fm = st.columns(4)
+        fm[0].metric("Sequences", len(table))
+        fm[1].metric("With a flag", n_flagged)
+        fm[2].metric("High-risk liability",
+                     int(flags["has_high_risk"].fillna(False).sum()))
+        fm[3].metric("Orphan cysteine",
+                     int(flags["has_orphan_cys"].fillna(False).sum()))
+        with st.expander("The flag columns on their own"):
+            st.dataframe(flags, hide_index=True, **FIT)
+
+    st.download_button("Triage table (CSV)", table.to_csv(index=False),
+                       file_name="triage.csv", mime="text/csv")
+
 
 # --- Properties ------------------------------------------------------------ #
 with tabs["Properties"]:
@@ -2373,6 +2455,99 @@ with tabs["DNA"]:
         "sequence through your synthesis vendor's checker before ordering.")
     st.button("🧬 Use these in the cloning section", key="to_cloning", **FIT,
               on_click=go_to, args=("cloning",))
+
+# --- Gene diagnosis --------------------------------------------------------- #
+with tabs["Gene diagnosis"]:
+    st.markdown(
+        "The reverse of the DNA tab: paste a coding sequence that is already in "
+        "a plasmid and ask what might be wrong with it.")
+    st.warning(
+        "**Codon usage is rarely the first suspect.** A VHH that expresses badly "
+        "in *E. coli* is more often explained by periplasmic toxicity, "
+        "inefficient signal-peptide cleavage, failure to form the intradomain "
+        "disulfide, inclusion bodies, plasmid loss or induction conditions. A "
+        "gene with flawless codon usage expresses badly for all of those "
+        "reasons. This tab tells you whether the sequence is *part* of the "
+        "problem; it cannot tell you that it is the problem.", icon="⚠️")
+
+    gene_dna = st.text_area(
+        "Coding DNA (5'→3')", height=140, key="gene_dna",
+        placeholder="CAGGTGCAGCTGCAGGAAAGCGGC…")
+    gc1, gc2, gc3 = st.columns([2, 1, 1])
+    with gc1:
+        expected = st.text_input(
+            "Expected protein (optional)",
+            help="If given, the translation is compared to it. Worth doing: a "
+                 "mismatch makes everything else here beside the point.")
+    with gc2:
+        cluster_window = st.slider("Cluster window (codons)", 2, 20,
+                                   int(cdn.CLUSTER_WINDOW))
+    with gc3:
+        gc_window = st.slider("GC window (nt)", 15, 120, int(cdn.GC_WINDOW),
+                              step=5)
+
+    if not gene_dna.strip():
+        st.info("Paste a coding sequence to diagnose.")
+    else:
+        try:
+            diag = diagnose_gene(gene_dna, expected.strip(), int(cluster_window),
+                                 int(gc_window))
+        except ValueError as exc:
+            st.error(f"Could not read that sequence — {exc}")
+            diag = None
+
+        if diag:
+            orf = diag["orf"]
+            gm = st.columns(5)
+            gm[0].metric("Length", f"{orf['length_nt']} nt")
+            gm[1].metric("Codons", orf["n_codons"])
+            gm[2].metric("GC", f"{diag['gc_overall']:.1%}")
+            gm[3].metric("Rare codons", diag["n_rare"],
+                         help="Codons whose scarcity in E. coli is well "
+                              "established and supplemented by the Rosetta and "
+                              "CodonPlus strains.")
+            gm[4].metric("Rare clusters", len(diag["clusters"]))
+
+            st.subheader("Findings")
+            icons = {"error": st.error, "warning": st.warning,
+                     "ok": st.success, "info": st.info}
+            for level, message in diag["findings"]:
+                icons.get(level, st.info)(message)
+
+            st.image(png_gene_diagnosis(gene_dna, expected.strip(),
+                                        int(cluster_window), int(gc_window)),
+                     **FIT)
+
+            if len(diag["clusters"]):
+                st.subheader("Rare-codon clusters")
+                st.dataframe(diag["clusters"], hide_index=True, **FIT)
+                st.caption(
+                    "Clustered and tandem rare codons are the ones associated "
+                    "with ribosome stalling. Isolated ones are generally "
+                    "tolerated, which is why they are counted but not listed "
+                    "here.")
+
+            if len(diag["gc_regions"]):
+                st.subheader("Extreme GC stretches")
+                st.dataframe(diag["gc_regions"], hide_index=True, **FIT)
+
+            with st.expander("Every codon"):
+                st.dataframe(diag["codons"], hide_index=True, **FIT)
+                st.download_button("Codon table (CSV)",
+                                   diag["codons"].to_csv(index=False),
+                                   file_name="codon_table.csv", mime="text/csv")
+
+            with st.expander("Translation"):
+                st.code(orf["protein"] or "—", language="text")
+                st.caption(f"{orf['protein_length']} residues.")
+
+            st.caption(
+                "**No CAI is reported.** A Codon Adaptation Index needs a full "
+                "codon usage table for the host; this app does not ship one, and "
+                "inventing the values would give you a number that looks precise "
+                "and means nothing. What is reported instead are the codons "
+                "whose scarcity is well documented, and where they sit.")
+
 
 # --- Constructs ------------------------------------------------------------- #
 with tabs["Constructs"]:

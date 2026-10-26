@@ -246,6 +246,33 @@ nothing in the submission is an antibody domain, it aligns what you gave it.
 The caption under the selector tells you which annotator is live. If it says *not
 installed*, every CDR boundary you see comes from the regex anchors.
 
+### 3.2b Triage
+
+The first tab, and the one for the moment you have to **decide** rather than
+study: sixteen clones out of a screening, ten slots in a synthesis order. Every
+flag the app can raise, one row per sequence, sortable by whichever column
+matters today.
+
+The columns come in groups you can show or hide — identity, physico-chemical,
+liabilities, aggregation, repertoire, cysteines, antibody-specific — and a
+*flags* view reduces everything to booleans, so "show me only the sequences with
+something wrong" is one checkbox.
+
+Every number here is produced by the same function that fills its own tab, so the
+triage table and the detailed tab can never disagree.
+
+**There is no overall score, deliberately.** Weighting a deamidation site against
+a hydrophobic patch against three divergent framework positions means choosing
+what matters, and that depends entirely on what the VHH is for — a reagent for
+your own ELISA and a candidate you mean to humanise have nothing in common. A
+single number would hide that choice behind a decimal point. The columns sit next
+to each other; you sort.
+
+Empty cells are analyses that do not apply rather than failures. A sequence that
+is not an antibody domain has no hallmark score, and its cysteines are not read
+against the VHH canonical pair — lysozyme's eight cysteines form four ordinary
+disulfides and are not eight orphan thiols.
+
 ### 3.3 Properties
 
 The main table, one row per sequence.
@@ -727,6 +754,49 @@ The optimiser maximises codon frequency, balances GC and removes cloning-unfrien
 motifs. It does **not** model mRNA secondary structure near the ribosome binding site,
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
+
+### 3.13b Gene diagnosis
+
+The reverse of the DNA tab: paste a coding sequence that is already in a plasmid
+and ask what might be wrong with it. Written for the case you described — VHHs
+that express poorly.
+
+**Read the warning at the top of the tab first.** Codon usage is rarely the first
+suspect. A VHH that expresses badly in *E. coli* is more often explained by
+periplasmic toxicity, inefficient signal-peptide cleavage, failure to form the
+intradomain disulfide, inclusion bodies, plasmid loss or induction conditions. A
+gene with flawless codon usage expresses badly for all of those reasons. This tab
+tells you whether the sequence is *part* of the problem; it cannot tell you that
+it is the problem.
+
+**The deterministic checks come first**, because they are the ones that are
+definitely wrong when they are wrong: frame, start and stop codons, internal
+stops, and — if you supply the expected protein — whether the translation matches
+it. That last one is worth doing every time: a mismatch makes everything else on
+the page beside the point.
+
+**Rare codons.** The codons whose scarcity in *E. coli* is well established, the
+ones the Rosetta and CodonPlus strains supplement with extra tRNA genes: AGA, AGG,
+CGA, CGG (Arg), ATA (Ile), CTA (Leu), CCC (Pro), GGA (Gly). What the tab reports
+and ranks are **clusters**, not the total: clustered and tandem rare codons are
+the ones associated with ribosome stalling, while scattered ones are generally
+tolerated. A gene can carry twenty rare codons and be perfectly fine.
+
+**No CAI is reported.** A Codon Adaptation Index needs a full codon usage table
+for the host. This app does not ship one, and inventing sixty-four relative
+adaptiveness values would produce a number that looks precise and means nothing.
+The documented rare codons and where they sit is what can be said honestly.
+
+**GC.** Overall, and as a sliding window. Stretches that stay outside 30–70% for
+at least a window length are listed — merged into regions rather than counted as
+windows, since windows overlap by one nucleotide and one awkward 60 nt stretch
+would otherwise be reported as thirty separate problems. The GC of the first
+fifteen codons is called out separately: a GC-rich start can fold the ribosome
+binding region and slow initiation, and it is one of the few places where silent
+changes reliably help.
+
+Homopolymer runs of seven or more are flagged too — they complicate both synthesis
+and Sanger reading.
 
 ### 3.14 Constructs
 
