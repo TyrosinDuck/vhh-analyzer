@@ -677,7 +677,24 @@ A residue absent from the reference may be a genuine novelty, a germline this se
 under-samples, or the very mutation you selected for.
 
 **Your set vs the natural repertoire.** CDR length distributions and per-region
-amino-acid composition, your set overlaid on the reference. After a panning this is
+amino-acid composition, your set shown against the reference.
+
+How your sequences are drawn depends on how many there are, and the reason is a
+real one. Plotted as a frequency, a single sequence is 100% of itself: its bar
+reaches 1.0, the reference distribution it is meant to be compared against is
+squashed into the bottom tenth of the axis, and the figure tells you nothing. So
+below eight sequences they are drawn as **markers placed on the reference curve**
+instead, each labelled with how common that length actually is among real VHHs.
+At eight or more, both are drawn as bars and the comparison of shapes becomes the
+point.
+
+Either way, a **"where each CDR length sits"** table gives the number that
+matters: the frequency of that exact length in the reference, and the percentile —
+the fraction of natural VHHs with a shorter CDR there. A CDR3 of 13 comes out at
+the 15th percentile against a distribution peaking at 17, which is a far more
+useful statement than any bar. Lengths below the 5th or above the 95th percentile
+are called unusual, and unusual is not wrong: a long CDR3 is often exactly what
+you selected for. After a panning this is
 what says whether the selection was biased: a shift towards long CDR3s, an
 enrichment in charged residues, a depletion of the tyrosine and glycine that are the
 staples of natural CDR3s. Drop a deliberately charged set in and lysine comes out

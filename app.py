@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261027.1300"
+VERSION = "20261027.1400"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -77,7 +77,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
-                    "repertoire": "2026.10.23a",
+                    "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27c"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
@@ -389,8 +389,9 @@ def repertoire_stats(seqs, anns):
 
 @st.cache_data(**_FIG_CACHE)
 def png_cdr_lengths(seqs, anns):
-    _p, distribution, _c = repertoire_stats(seqs, anns)
-    return fig_to_png(rep.plot_cdr_lengths(distribution, len(seqs)), close=True)
+    per_seq, distribution, _c = repertoire_stats(seqs, anns)
+    return fig_to_png(rep.plot_cdr_lengths(distribution, len(seqs), per_seq),
+                      close=True)
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -2571,10 +2572,41 @@ with tabs["Repertoire"]:
                 per_seq, distribution, composition = repertoire_stats(
                     heavy_sequences, heavy_annotations)
                 st.image(png_cdr_lengths(heavy_sequences, heavy_annotations), **FIT)
-                st.caption(
-                    "Grey is the natural repertoire, red your set. With only a "
-                    "handful of sequences the red bars are coarse by "
-                    "construction — one sequence in ten is a 10% bar.")
+                if len(heavy_sequences) >= rep.MIN_FOR_BARS:
+                    st.caption(
+                        "Grey is the natural repertoire, red your set, both as "
+                        "fractions of their own total.")
+                else:
+                    st.caption(
+                        f"Grey is the natural repertoire; the red markers are "
+                        f"your {len(heavy_sequences)} sequence(s). Below "
+                        f"{rep.MIN_FOR_BARS} sequences they are drawn as markers "
+                        "rather than bars, because a single sequence is 100% of "
+                        "itself: its bar would reach 1.0 and flatten the "
+                        "distribution it is meant to be compared against. The "
+                        "grey figure next to each marker is how common that "
+                        "length is among real VHHs.")
+
+                context = rep.cdr_length_context(per_seq, distribution)
+                if len(context):
+                    st.markdown("**Where each CDR length sits**")
+                    st.dataframe(context, hide_index=True, **FIT,
+                                 column_config={
+                                     "reference_frequency":
+                                         st.column_config.NumberColumn(
+                                             "Frequency in nature",
+                                             format="%.3f"),
+                                     "percentile": st.column_config.NumberColumn(
+                                         "Percentile", format="%.0f"),
+                                     "natural_mode":
+                                         st.column_config.NumberColumn(
+                                             "Most common length")})
+                    st.caption(
+                        "`Percentile` is the fraction of natural VHHs with a "
+                        "shorter CDR of that region. The verdict calls a length "
+                        "unusual below the 5th or above the 95th percentile — "
+                        "unusual is not wrong, and a long CDR3 is often exactly "
+                        "what you selected for.")
                 st.dataframe(per_seq, hide_index=True, **FIT)
 
                 st.subheader("Amino-acid composition")

@@ -34,12 +34,12 @@ import generator as gn
 import vhh_core as vc
 
 __all__ = [
-    "rare_residues", "rarity_table", "plot_rarity", "cdr_length_comparison",
+    "rare_residues", "rarity_table", "plot_rarity", "cdr_length_comparison", "cdr_length_context", "MIN_FOR_BARS",
     "plot_cdr_lengths", "composition_comparison", "plot_composition",
     "RARE_THRESHOLD", "MIN_SUPPORT", "__version__",
 ]
 
-__version__ = "2026.10.23a"
+__version__ = "2026.10.27a"
 
 RARE_THRESHOLD = 0.02      # frequency at or below this counts as unusual
 MIN_SUPPORT = 100          # positions backed by fewer reference sequences are set aside
@@ -219,12 +219,63 @@ def cdr_length_comparison(annotations: dict,
     return per_seq, pd.DataFrame(rows)
 
 
-def plot_cdr_lengths(distribution: pd.DataFrame, n_submitted: int = 0):
-    """Reference CDR length distribution with the submitted set overlaid."""
+
+MIN_FOR_BARS = 8        # below this, the submitted set is drawn as markers
+
+
+def cdr_length_context(per_seq: pd.DataFrame,
+                       distribution: pd.DataFrame) -> pd.DataFrame:
+    """Where each submitted CDR length sits in the reference distribution.
+
+    With one or two sequences a frequency bar is meaningless — a single sequence
+    is 100% of itself, which says nothing and flattens the reference it is drawn
+    against. What is worth knowing is how common that length is among real VHHs,
+    and what fraction of them are shorter. That is what this returns.
+    """
+    rows = []
+    for _, seq_row in per_seq.iterrows():
+        for region in ("CDR1", "CDR2", "CDR3"):
+            length = seq_row.get(region)
+            if not length:
+                continue
+            block = distribution[distribution["region"] == region]
+            if not len(block):
+                continue
+            at = block[block["length"] == length]["reference_frequency"]
+            freq = float(at.iloc[0]) if len(at) else 0.0
+            below = float(block[block["length"] < length]
+                          ["reference_frequency"].sum())
+            mode_row = block.loc[block["reference_frequency"].idxmax()]
+            rows.append({
+                "name": seq_row["name"], "region": region, "length": int(length),
+                "reference_frequency": round(freq, 4),
+                "percentile": round(100 * (below + freq / 2), 1),
+                "natural_mode": int(mode_row["length"]),
+                "verdict": ("unusually short" if below < 0.05 else
+                            "unusually long" if below + freq > 0.95 else
+                            "typical"),
+            })
+    return pd.DataFrame(rows)
+
+
+def plot_cdr_lengths(distribution: pd.DataFrame, n_submitted: int = 0,
+                     per_seq: pd.DataFrame | None = None):
+    """Reference CDR length distribution with the submitted set shown on it.
+
+    How the submitted set is drawn depends on how many sequences there are, and
+    the reason is a real one rather than cosmetic. Plotted as a frequency, a
+    single sequence is 100% of itself: its bar reaches 1.0, the reference
+    distribution it is meant to be compared against is squashed into the bottom
+    tenth of the axis, and the figure says nothing. So below ``MIN_FOR_BARS``
+    the submitted sequences become markers placed on the reference curve, which
+    is the comparison you actually wanted.
+    """
     import matplotlib.pyplot as plt
 
     regions = ["CDR1", "CDR2", "CDR3"]
-    fig, axes = plt.subplots(1, 3, figsize=(13, 3.1))
+    as_bars = n_submitted >= MIN_FOR_BARS
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.4))
+
     for ax, region in zip(axes, regions):
         block = distribution[distribution["region"] == region]
         if not len(block):
@@ -234,15 +285,44 @@ def plot_cdr_lengths(distribution: pd.DataFrame, n_submitted: int = 0):
                      | (block["submitted_count"] > 0)]
         x = used["length"].to_numpy()
         ax.bar(x, used["reference_frequency"], color="0.78", width=0.8,
-               label="natural repertoire")
-        ax.bar(x, used["submitted_frequency"], color="#c44e52", width=0.42,
-               label=f"submitted (n={n_submitted})")
+               label="natural repertoire", zorder=1)
+
+        if as_bars:
+            ax.bar(x, used["submitted_frequency"], color="#c44e52", width=0.42,
+                   label=f"submitted (n={n_submitted})", zorder=2)
+        else:
+            top = float(used["reference_frequency"].max() or 1.0)
+            submitted = used[used["submitted_count"] > 0]
+            for _, row in submitted.iterrows():
+                length = int(row["length"])
+                height = float(row["reference_frequency"])
+                count = int(row["submitted_count"])
+                ax.vlines(length, 0, top * 1.08, color="#c44e52", lw=1.6,
+                          zorder=3)
+                ax.plot([length], [top * 1.08], marker="v", color="#c44e52",
+                        ms=7, zorder=4)
+                ax.annotate(f"{length}" + (f" ×{count}" if count > 1 else ""),
+                            xy=(length, top * 1.08), xytext=(0, 7),
+                            textcoords="offset points", ha="center",
+                            fontsize=7.5, color="#c44e52")
+                # offset sideways: centred, it sits on top of the marker line
+                ax.annotate(f"{height:.1%}", xy=(length, height),
+                            xytext=(7, 2), textcoords="offset points",
+                            ha="left", fontsize=7, color="0.35")
+            ax.set_ylim(0, top * 1.30)
+
         ax.set_title(region, fontsize=10)
         ax.set_xlabel("Length (aa)")
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
-    axes[0].set_ylabel("Fraction")
-    axes[0].legend(fontsize=7.5, frameon=False)
+
+    axes[0].set_ylabel("Fraction of natural repertoire")
+    if as_bars:
+        axes[0].legend(fontsize=7.5, frameon=False)
+    else:
+        axes[0].plot([], [], marker="v", color="#c44e52", lw=1.6,
+                     label=f"your sequence(s), n={n_submitted}")
+        axes[0].legend(fontsize=7.5, frameon=False, loc="upper left")
     fig.tight_layout()
     return fig
 
