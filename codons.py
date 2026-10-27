@@ -33,10 +33,11 @@ import vhh_core as vc
 __all__ = [
     "RARE_CODONS", "orf_report", "codon_table", "rare_clusters", "gc_windows",
     "gc_regions", "suggest_gc_fix", "parse_dna_input", "summarise",
+    "plot_gc_comparison",
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.27b"
+__version__ = "2026.10.27c"
 
 # Codons whose scarcity in E. coli is well established — these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -483,6 +484,55 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
         "remaining_regions": gc_regions(gc_windows(fixed, gc_window), gc_window),
     }
 
+
+
+
+def plot_gc_comparison(before: str, after: str, suggestions=None,
+                       gc_window: int = GC_WINDOW,
+                       labels: tuple[str, str] = ("before", "after")):
+    """The GC profile before and after the swaps, on one axis.
+
+    The point of the figure is to show that the stretches that crossed the band
+    no longer do, and at what cost — the changed codons are marked underneath so
+    you can see where the edits landed.
+    """
+    import matplotlib.pyplot as plt
+
+    before, after = _clean_dna(before), _clean_dna(after)
+    gc_before = gc_windows(before, gc_window)
+    gc_after = gc_windows(after, gc_window)
+
+    fig, ax = plt.subplots(figsize=(11, 3.6))
+    ax.axhspan(GC_LOW, GC_HIGH, color="0.92", zorder=0)
+    ax.axhline(GC_LOW, color="0.65", ls="--", lw=0.8)
+    ax.axhline(GC_HIGH, color="0.65", ls="--", lw=0.8)
+
+    ax.plot(gc_before["start"], gc_before["gc"], color="#c44e52", lw=1.3,
+            label=labels[0], zorder=2)
+    ax.plot(gc_after["start"], gc_after["gc"], color="#4c72b0", lw=1.6,
+            label=labels[1], zorder=3)
+    ax.fill_between(gc_before["start"], gc_before["gc"], GC_HIGH,
+                    where=gc_before["gc"] > GC_HIGH, color="#c44e52",
+                    alpha=0.22, zorder=1, interpolate=True)
+
+    if suggestions is not None and len(suggestions):
+        positions = suggestions["nt_start"].to_numpy()
+        ax.plot(positions, [0.04] * len(positions), "|", color="0.35", ms=9,
+                zorder=4)
+        ax.text(0.99, 0.11, f"{len(positions)} codon(s) changed",
+                transform=ax.transAxes, fontsize=7.5, ha="right", va="bottom",
+                color="0.35")
+
+    ax.set_ylim(0, 1)
+    ax.set_xlim(gc_before["start"].min(), gc_before["start"].max())
+    ax.set_xlabel("Position (nt)")
+    ax.set_ylabel(f"GC fraction ({gc_window} nt window)", fontsize=9)
+    ax.set_title("GC profile before and after the suggested changes", fontsize=10)
+    ax.legend(frameon=False, fontsize=8.5, loc="upper right")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    fig.tight_layout()
+    return fig
 
 
 def parse_dna_input(text: str, max_sequences: int = 20,

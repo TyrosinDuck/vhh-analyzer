@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261027.1200"
+VERSION = "20261027.1300"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -78,7 +78,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.23a",
-                    "triage": "2026.10.26a", "codons": "2026.10.27b"}
+                    "triage": "2026.10.26a", "codons": "2026.10.27c"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -429,6 +429,16 @@ def gc_fix_for(dna, gc_window, strategy, avoid):
 
 
 @st.cache_data(**_FIG_CACHE)
+def png_gc_comparison(dna, gc_window, strategy, avoid):
+    fix = gc_fix_for(dna, gc_window, strategy, avoid)
+    if not fix["n_changes"]:
+        return None
+    return fig_to_png(cdn.plot_gc_comparison(dna, fix["dna"],
+                                             fix["suggestions"], gc_window),
+                      close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
 def png_gene_diagnosis(dna, expected, cluster_window, gc_window):
     result = diagnose_gene(dna, expected, cluster_window, gc_window)
     return fig_to_png(cdn.plot_diagnosis(result, gc_window), close=True)
@@ -601,7 +611,12 @@ if "pending_seq_text" in st.session_state:
     st.session_state["seq_text"] = st.session_state.pop("pending_seq_text")
 if "pending_gene_dna" in st.session_state:
     st.session_state["gene_dna"] = st.session_state.pop("pending_gene_dna")
-st.session_state.setdefault("seq_text", "")
+# Streamlit discards a widget's state once the widget stops being rendered, and
+# leaving a section is exactly that. Re-asserting these keys on every run, before
+# any section draws, is what keeps an input filled when you come back to it.
+for _input_key in ("seq_text", "gene_dna"):
+    st.session_state.setdefault(_input_key, "")
+    st.session_state[_input_key] = st.session_state[_input_key]
 
 section = st.session_state["section"]
 
@@ -959,6 +974,17 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                     "every lower-GC alternative is either a rare codon, creates "
                     "a site you asked to keep, or opens a homopolymer run.")
         else:
+            comparison = png_gc_comparison(gene_dna, gc_window, strategy,
+                                           tuple(sorted(fix_avoid)))
+            if comparison:
+                st.image(comparison, **FIT)
+                st.caption(
+                    "Red is the sequence as you pasted it, blue after the "
+                    "swaps; the grey band is the acceptable range and the "
+                    "shaded red area is what used to sit above it. The ticks "
+                    "along the bottom mark the codons that changed — if they "
+                    "cluster in one place, that is the stretch that was the "
+                    "problem.")
             st.dataframe(fix["regions"], hide_index=True, **FIT)
             st.dataframe(fix["suggestions"], hide_index=True, **FIT)
             st.markdown("**Rewritten sequence**")

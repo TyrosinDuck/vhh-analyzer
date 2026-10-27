@@ -919,6 +919,11 @@ The full per-read table as CSV, and the extracted VHHs as protein or DNA FASTA.
 Its own section, reached from the home page or from the **DNA** tab of the
 analysis section, which hands its back-translated sequences straight over.
 
+**What you paste stays there.** Leaving the section and coming back does not clear
+the box, the same as in the analysis section — Streamlit normally discards an
+input's contents once its screen stops being drawn, and both inputs are explicitly
+kept alive against that.
+
 **Several sequences at once.** Paste FASTA, a bare sequence, or several separated
 by blank lines — up to 20, 6000 nt each. The overview table puts one row per
 sequence: frame, internal stops, GC, rare codons and their clusters, GC-rich
@@ -987,8 +992,12 @@ untouched and introduced no rare codon. Minimal is the default because you are
 paying to synthesise this gene, and a construct that differs from the original in
 twenty places is easier to reason about than one that differs in sixty.
 
-You get the before-and-after GC of each stretch, the full list of swaps with the
-GC each one buys, and the rewritten sequence as FASTA.
+You get a **before-and-after GC profile**: red is the sequence as you pasted it,
+blue after the swaps, the grey band is the acceptable range, and the shaded red
+area is what used to sit above it. Ticks along the bottom mark the codons that
+changed — when they cluster in one place, that is the stretch that was the
+problem. Underneath, the before-and-after GC of each stretch as numbers, the full
+list of swaps with the GC each one buys, and the rewritten sequence as FASTA.
 
 **What this does not promise.** Lowering local GC removes one plausible obstacle to
 expression. It does not make the gene express — every cause listed at the top of
