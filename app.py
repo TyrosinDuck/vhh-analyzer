@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261026.1000"
+VERSION = "20261027.1100"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -74,11 +74,11 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.23c", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.23a",
-                    "triage": "2026.10.26a", "codons": "2026.10.26a"}
+                    "triage": "2026.10.26a", "codons": "2026.10.27a"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -419,6 +419,13 @@ def triage_for(seqs, anns, kinds, ph, include_added):
 def diagnose_gene(dna, expected, cluster_window, gc_window):
     return cdn.diagnose(dna, expected_protein=expected or None,
                         cluster_window=cluster_window, gc_window=gc_window)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def gc_fix_for(dna, gc_window, strategy, avoid):
+    sites = {k: v for k, v in vc.DEFAULT_AVOID_SITES.items() if k in avoid}
+    return cdn.suggest_gc_fix(dna, avoid_sites=sites, gc_window=gc_window,
+                              strategy=strategy)
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -1450,7 +1457,8 @@ with tabs["Triage"]:
 with tabs["Properties"]:
     main_cols = ["name", "type", "length", "mw_kda", "pI", "ext_coeff_reduced",
                  "A280_0.1pct", "instability_index", "aliphatic_index", "gravy",
-                 "aromaticity", "net_charge", "n_Cys"]
+                 "aromaticity", "net_charge", "n_Cys", "n_Lys",
+                 "n_primary_amines"]
     st.dataframe(
         df[main_cols].style.format(precision=2).background_gradient(
             subset=["gravy", "instability_index"], cmap="RdYlGn_r"),
@@ -1492,6 +1500,42 @@ with tabs["Properties"]:
     with st.expander("Feature definitions"):
         for name, entry in vc.FEATURE_REGISTRY.items():
             st.markdown(f"- **`{name}`** — {entry['doc']}")
+
+    with st.expander("Lysines and primary amines — for conjugation"):
+        st.markdown(
+            "`n_Lys` counts lysine side chains; `n_primary_amines` adds the free "
+            "N-terminal α-amine, which an NHS ester labels just as readily. "
+            "Together they are the sites a random amine-coupling chemistry — "
+            "NHS-biotin, NHS-fluorophore, amine coupling onto a chip — will react "
+            "with.")
+        lys_rows = []
+        for name, seq in sequences.items():
+            table = vc.lysine_sites(seq, annotations.get(name))
+            lys_rows.append(table.assign(sequence=name))
+        lys_all = pd.concat(lys_rows, ignore_index=True) if lys_rows else pd.DataFrame()
+        if len(lys_all):
+            st.dataframe(
+                lys_all[["sequence", "site", "position", "region", "in_CDR", "note"]],
+                hide_index=True, **FIT,
+                column_config={"note": st.column_config.TextColumn("Note",
+                                                                   width="large")})
+            in_cdr = lys_all[lys_all["in_CDR"]]
+            if len(in_cdr):
+                st.warning(
+                    f"{len(in_cdr)} amine site(s) sit inside a CDR: "
+                    + ", ".join(f"{r['sequence']} {r['site']}"
+                                for _, r in in_cdr.iterrows())
+                    + ". Random amine coupling will hit these along with the "
+                      "rest, which is the usual explanation for a VHH that loses "
+                      "binding after labelling. Site-specific chemistry — a "
+                      "C-terminal cysteine, sortase, or an Avi tag — avoids the "
+                      "problem entirely.", icon="⚠️")
+            st.download_button("Amine sites (CSV)", lys_all.to_csv(index=False),
+                               file_name="amine_sites.csv", mime="text/csv")
+        st.caption(
+            "Counted from sequence, so this is how many amines **exist**, not "
+            "how many are solvent-accessible — that needs a structure. Treat it "
+            "as the upper bound on labelling sites.")
 
 # --- Plots ----------------------------------------------------------------- #
 with tabs["Plots"]:
@@ -2530,6 +2574,77 @@ with tabs["Gene diagnosis"]:
             if len(diag["gc_regions"]):
                 st.subheader("Extreme GC stretches")
                 st.dataframe(diag["gc_regions"], hide_index=True, **FIT)
+
+            gc_rich = (diag["gc_regions"][
+                diag["gc_regions"]["direction"] == "GC-rich"]
+                if len(diag["gc_regions"]) else [])
+            if len(gc_rich):
+                st.subheader("Suggested codon changes")
+                st.markdown(
+                    "A GC-rich stretch is one of the few sequence problems with "
+                    "a clean fix: swap codons for lower-GC synonyms. Every "
+                    "suggestion below has been checked — it is not a documented "
+                    "rare codon, it creates none of the restriction sites you "
+                    "select, it opens no homopolymer run, and the protein is "
+                    "verified unchanged.")
+                fx = st.columns([1, 2])
+                with fx[0]:
+                    strategy = st.radio(
+                        "How far to go", ["minimal", "maximal"],
+                        format_func=lambda x: ("Minimal — stop once the band is "
+                                               "cleared" if x == "minimal"
+                                               else "Maximal — swap everything "
+                                                    "possible"),
+                        help="Minimal applies the biggest reductions first and "
+                             "stops as soon as no GC-rich stretch survives. You "
+                             "are paying to synthesise this gene, and a "
+                             "construct differing in twenty places is easier to "
+                             "reason about than one differing in sixty.")
+                with fx[1]:
+                    fix_avoid = st.multiselect(
+                        "Restriction sites to preserve",
+                        sorted(vc.DEFAULT_AVOID_SITES),
+                        default=sorted(vc.DEFAULT_AVOID_SITES),
+                        key="gcfix_avoid",
+                        help="No suggestion will create one of these.")
+
+                fix = gc_fix_for(gene_dna, int(gc_window), strategy,
+                                 tuple(sorted(fix_avoid)))
+                fm = st.columns(4)
+                fm[0].metric("Codons changed", fix["n_changes"])
+                fm[1].metric("GC", f"{fix['gc_after']:.1%}",
+                             delta=f"{(fix['gc_after'] - fix['gc_before']) * 100:+.1f} pts",
+                             delta_color="off")
+                fm[2].metric("GC-rich stretches left",
+                             int((fix["remaining_regions"]["direction"]
+                                  == "GC-rich").sum())
+                             if len(fix["remaining_regions"]) else 0)
+                fm[3].metric("Protein", "unchanged" if fix["protein_unchanged"]
+                             else "CHANGED")
+
+                if not fix["protein_unchanged"]:
+                    st.error("The rewritten sequence does not translate to the "
+                             "same protein. Do not use it, and please report it.")
+                elif not fix["n_changes"]:
+                    st.info("No synonymous swap satisfies all the constraints "
+                            "here — every lower-GC alternative is either a rare "
+                            "codon, creates a site you asked to keep, or opens a "
+                            "homopolymer run.")
+                else:
+                    st.dataframe(fix["regions"], hide_index=True, **FIT)
+                    st.dataframe(fix["suggestions"], hide_index=True, **FIT)
+                    st.markdown("**Rewritten sequence**")
+                    st.code(fix["dna"], language="text")
+                    st.download_button(
+                        "Rewritten DNA (FASTA)",
+                        f">gc_adjusted_{strategy}\n{fix['dna']}\n",
+                        file_name=f"gc_adjusted_{strategy}.fasta",
+                        mime="text/plain")
+                    st.caption(
+                        "Lowering local GC removes one plausible obstacle to "
+                        "expression. It does not promise the gene will then "
+                        "express — the causes listed at the top of this tab are "
+                        "all still in play.")
 
             with st.expander("Every codon"):
                 st.dataframe(diag["codons"], hide_index=True, **FIT)

@@ -33,6 +33,7 @@ from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
 __all__ = [
     "clean_sequence", "seq_id", "parse_input", "characterize", "stability_flags",
+    "lysine_sites",
     "annotate", "annotate_anarci", "annotate_regex", "anarci_available",
     "register_feature", "compute_features", "FEATURE_REGISTRY",
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
@@ -54,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.23c"
+__version__ = "2026.10.27a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -364,6 +365,12 @@ def characterize(name: str, seq: str, ph: float | None = None) -> dict:
         "net_charge": round(pa.charge_at_pH(ph), 2),
         "charge_pH": ph,
         "n_Cys": counts["C"],
+        # Lysines plus the free N-terminal alpha-amine: the primary amines an
+        # NHS-ester label will react with. Counted from sequence, so this is how
+        # many exist, not how many are solvent-accessible — that needs a
+        # structure. Treat it as the upper bound on labelling sites.
+        "n_Lys": counts["K"],
+        "n_primary_amines": counts["K"] + 1,
         "n_Met": counts["M"],
         "n_Trp": counts["W"],
         "n_Asn": counts["N"],
@@ -373,6 +380,35 @@ def characterize(name: str, seq: str, ph: float | None = None) -> dict:
         "sequence": seq,
     }
 
+
+
+def lysine_sites(seq: str, annotation: dict | None = None) -> pd.DataFrame:
+    """Every lysine, plus the N-terminal amine, with its region.
+
+    For conjugation planning. An NHS ester reacts with the lysine side-chain
+    amines and the N-terminal alpha-amine indiscriminately, so a VHH with a
+    lysine in a CDR is one where random labelling risks the paratope. Which ones
+    are *accessible* is a structural question this cannot answer — what it gives
+    you is where they are.
+    """
+    seq = clean_sequence(seq)
+    rows = [{
+        "site": "N-terminus", "position": 1, "residue": seq[0],
+        "region": region_of(1, annotation), "in_CDR": False,
+        "note": "alpha-amine, always present and usually the most reactive",
+    }]
+    rows[0]["in_CDR"] = rows[0]["region"].startswith("CDR")
+    for i, aa in enumerate(seq, start=1):
+        if aa != "K":
+            continue
+        region = region_of(i, annotation)
+        rows.append({
+            "site": f"K{i}", "position": i, "residue": "K", "region": region,
+            "in_CDR": region.startswith("CDR"),
+            "note": "in a CDR — random labelling here risks the paratope"
+                    if region.startswith("CDR") else "",
+        })
+    return pd.DataFrame(rows)
 
 def stability_flags(row: dict | pd.Series, ph: float | None = None) -> list[str]:
     """Rule-based developability warnings. Thresholds are deliberately simple —

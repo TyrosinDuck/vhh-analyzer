@@ -241,7 +241,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 |---|---|
 | Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
 | Triage | every flag the app raises, one row per sequence, sortable — no composite score, deliberately |
-| Properties | physico-chemical descriptors, developability flags, custom features |
+| Properties | physico-chemical descriptors, developability flags, lysines and primary amines for conjugation planning, custom features |
 | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | CDR / Framework | region table, coloured sequences, both annotation methods explained |
 | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
@@ -256,7 +256,7 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
 | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
-| Gene diagnosis | paste an existing CDS: frame and stop checks, documented rare codons and their clusters, GC stretches, homopolymers — no invented CAI |
+| Gene diagnosis | paste an existing CDS: frame and stop checks, documented rare codons and their clusters, GC stretches, homopolymers — no invented CAI — plus synonymous codon swaps to lower GC, checked against rare codons, restriction sites and homopolymers |
 | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
 | Download | CSV, figures as PNG, and a complete PDF report |
 

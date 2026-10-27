@@ -304,6 +304,22 @@ charge at pH 5 (relevant for cation-exchange capture), the Lys+Arg fraction, CDR
 length, CDR3-only GRAVY, and counts of NG and DP/DG motifs. Each definition is listed
 in the expander underneath.
 
+**Lysines and primary amines.** `n_Lys` counts lysine side chains and
+`n_primary_amines` adds the free N-terminal α-amine, which an NHS ester labels
+just as readily. Together they are the sites a random amine-coupling chemistry —
+NHS-biotin, NHS-fluorophore, amine coupling onto a chip — will react with.
+
+An expander lists every one of them with its region, and warns when any sits
+inside a CDR. That warning is the point of the feature: random amine coupling
+hits a CDR lysine along with the rest, and it is the usual explanation for a VHH
+that binds on the bench and stops binding once labelled. Site-specific chemistry —
+a C-terminal cysteine, sortase, or an Avi tag — avoids the problem entirely, and
+the Constructs tab (§3.14) builds those.
+
+Counted from sequence, so this is how many amines **exist**, not how many are
+solvent-accessible. That needs a structure. Treat it as the upper bound on
+labelling sites.
+
 ### 3.4 Plots
 
 Four figures:
@@ -797,6 +813,33 @@ changes reliably help.
 
 Homopolymer runs of seven or more are flagged too — they complicate both synthesis
 and Sanger reading.
+
+**Suggested codon changes.** A GC-rich stretch is one of the few sequence problems
+with a clean fix: swap codons for lower-GC synonyms. When the tab finds one, it
+offers the swaps.
+
+Every suggestion is checked against three constraints before it is offered. The
+substitute is not one of the documented rare codons, so you do not trade a GC
+problem for a translation one. It creates none of the restriction sites you choose
+to preserve — the same list the DNA tab uses, and you can shorten it if a site no
+longer matters. And it opens no homopolymer run. The protein is then translated
+from the rewritten sequence and compared to the original; if they differ the
+output is refused rather than shown.
+
+*Minimal* and *Maximal* decide how far to go. Minimal applies the biggest GC
+reductions first and **stops as soon as no GC-rich stretch survives**. Maximal
+swaps every codon it can. On a deliberately GC-rich test gene, minimal cleared all
+four stretches with 26 codon changes where maximal used 56 — both left the protein
+untouched and introduced no rare codon. Minimal is the default because you are
+paying to synthesise this gene, and a construct that differs from the original in
+twenty places is easier to reason about than one that differs in sixty.
+
+You get the before-and-after GC of each stretch, the full list of swaps with the
+GC each one buys, and the rewritten sequence as FASTA.
+
+**What this does not promise.** Lowering local GC removes one plausible obstacle to
+expression. It does not make the gene express — every cause listed at the top of
+this tab is still in play.
 
 ### 3.14 Constructs
 

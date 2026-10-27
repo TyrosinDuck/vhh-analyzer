@@ -32,11 +32,11 @@ import vhh_core as vc
 
 __all__ = [
     "RARE_CODONS", "orf_report", "codon_table", "rare_clusters", "gc_windows",
-    "gc_regions",
+    "gc_regions", "suggest_gc_fix",
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.26a"
+__version__ = "2026.10.27a"
 
 # Codons whose scarcity in E. coli is well established — these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -319,6 +319,169 @@ def diagnose(dna: str, expected_protein: str | None = None,
             "gc_overall": round(float(np.mean([1 if b in "GC" else 0
                                                for b in dna])), 4),
             "findings": findings, "protein_match": protein_match}
+
+
+
+# ---------------------------------------------------------------------------
+# Lowering GC without touching the protein
+# ---------------------------------------------------------------------------
+# A GC-rich stretch is one of the few sequence problems with a clean fix: swap
+# codons for lower-GC synonyms. The constraints are what make it non-trivial —
+# the substitute must not be a rare codon, must not create a restriction site
+# you are using, and must not open a homopolymer run. Every suggestion below has
+# been checked against all three, and the protein is verified unchanged.
+#
+# What this cannot promise is that the gene will then express. Lowering local GC
+# removes one plausible obstacle; see the warning at the top of this module for
+# the others.
+
+_SYNONYMS: dict[str, list[str]] | None = None
+
+
+def _synonyms() -> dict[str, list[str]]:
+    """Amino acid -> every codon, bacterial table."""
+    global _SYNONYMS
+    if _SYNONYMS is None:
+        from Bio.Data import CodonTable
+        table = CodonTable.unambiguous_dna_by_id[11]
+        out: dict[str, list[str]] = {}
+        for codon, aa in table.forward_table.items():
+            out.setdefault(aa, []).append(codon)
+        _SYNONYMS = out
+    return _SYNONYMS
+
+
+def _gc(seq: str) -> float:
+    return sum(1 for b in seq if b in "GC") / len(seq) if seq else 0.0
+
+
+def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
+                   avoid_sites: dict | None = None,
+                   gc_window: int = GC_WINDOW,
+                   max_homopolymer: int = 6,
+                   allow_rare: bool = False,
+                   strategy: str = "minimal") -> dict:
+    """Synonymous swaps that lower GC inside the flagged stretches.
+
+    Only codons inside a GC-rich region are considered — there is no reason to
+    disturb the rest of the gene. For each, the lowest-GC synonym is taken that
+    is not a documented rare codon, does not create one of ``avoid_sites``, and
+    does not produce a homopolymer run longer than ``max_homopolymer``.
+
+    ``strategy`` is ``"minimal"`` (default) or ``"maximal"``. Minimal applies the
+    biggest GC reductions first and **stops as soon as the region is back inside
+    the band** — you are paying to synthesise a gene, and a construct that
+    differs from the original in twenty places is easier to reason about than one
+    that differs in sixty. Maximal swaps every codon it can, which lowers GC
+    further and is worth having when minimal is not enough.
+
+    Returns the suggestions, the rewritten DNA, and the before/after GC of each
+    region so you can see whether it was worth it.
+    """
+    dna = _clean_dna(dna)
+    avoid_sites = vc.DEFAULT_AVOID_SITES if avoid_sites is None else avoid_sites
+    if regions is None:
+        regions = gc_regions(gc_windows(dna, gc_window), gc_window)
+    rich = (regions[regions["direction"] == "GC-rich"]
+            if len(regions) else pd.DataFrame())
+
+    protein_before = vc.translate_dna(dna)
+    codons = [dna[i:i + 3] for i in range(0, len(dna) - len(dna) % 3, 3)]
+    working = list(codons)
+    syn = _synonyms()
+    suggestions = []
+
+    targets: set[int] = set()
+    for _, region in rich.iterrows():
+        first = max(0, (int(region["start"]) - 1) // 3)
+        last = min(len(codons) - 1, (int(region["end"]) - 1) // 3)
+        targets.update(range(first, last + 1))
+
+    def region_within_band(sequence: str) -> bool:
+        """True when no GC-rich stretch survives in the rewritten sequence."""
+        remaining = gc_regions(gc_windows(sequence, gc_window), gc_window)
+        return not len(remaining[remaining["direction"] == "GC-rich"]) \
+            if len(remaining) else True
+
+    # Minimal first applies the swaps that buy the most GC, so it can stop early
+    order = sorted(targets)
+    if strategy == "minimal":
+        def gain(i: int) -> float:
+            aa = vc.translate_dna(codons[i])
+            alts = [c for c in syn.get(aa, []) if c != codons[i]]
+            if not allow_rare:
+                alts = [c for c in alts if c not in RARE_CODONS]
+            return -(_gc(codons[i]) - min((_gc(c) for c in alts), default=_gc(codons[i])))
+        order = sorted(targets, key=gain)
+
+    for index in order:
+        if strategy == "minimal" and suggestions and region_within_band(
+                "".join(working)):
+            break
+        codon = working[index]
+        aa = vc.translate_dna(codon)
+        if aa in ("", "*", "X"):
+            continue
+        options = [c for c in syn.get(aa, []) if c != codon]
+        if not allow_rare:
+            options = [c for c in options if c not in RARE_CODONS]
+        options = [c for c in options if _gc(c) < _gc(codon)]
+        if not options:
+            continue
+        options.sort(key=lambda c: (_gc(c), vc.ECOLI_CODONS.get(aa, []).index(c)
+                                    if c in vc.ECOLI_CODONS.get(aa, []) else 99))
+
+        for candidate in options:
+            trial = list(working)
+            trial[index] = candidate
+            spliced = "".join(trial)
+            if re.search(rf"(A{{{max_homopolymer + 1},}}|C{{{max_homopolymer + 1},}}"
+                         rf"|G{{{max_homopolymer + 1},}}|T{{{max_homopolymer + 1},}})",
+                         spliced):
+                continue
+            window = spliced[max(0, index * 3 - 9):index * 3 + 12]
+            if any(site in window for site in avoid_sites.values()):
+                continue
+            working[index] = candidate
+            suggestions.append({
+                "codon_index": index + 1,
+                "nt_start": index * 3 + 1,
+                "aa": aa,
+                "from": codon, "to": candidate,
+                "gc_from": round(_gc(codon), 2), "gc_to": round(_gc(candidate), 2),
+                "rare_substitute": candidate in RARE_CODONS,
+                "app_preference": (vc.ECOLI_CODONS.get(aa, []).index(candidate) + 1
+                                   if candidate in vc.ECOLI_CODONS.get(aa, [])
+                                   else None),
+            })
+            break
+
+    if strategy == "minimal":
+        suggestions.sort(key=lambda row: row["codon_index"])
+    fixed = "".join(working) + dna[len(dna) - len(dna) % 3:]
+    protein_after = vc.translate_dna(fixed)
+
+    before_after = []
+    for _, region in rich.iterrows():
+        lo, hi = int(region["start"]) - 1, int(region["end"])
+        before_after.append({
+            "start": int(region["start"]), "end": int(region["end"]),
+            "gc_before": round(_gc(dna[lo:hi]), 3),
+            "gc_after": round(_gc(fixed[lo:hi]), 3),
+            "n_changes": sum(1 for s in suggestions
+                             if lo < s["nt_start"] <= hi + 2),
+        })
+
+    return {
+        "suggestions": pd.DataFrame(suggestions),
+        "dna": fixed,
+        "protein_unchanged": protein_before == protein_after,
+        "regions": pd.DataFrame(before_after),
+        "gc_before": round(_gc(dna), 4),
+        "gc_after": round(_gc(fixed), 4),
+        "n_changes": len(suggestions),
+        "remaining_regions": gc_regions(gc_windows(fixed, gc_window), gc_window),
+    }
 
 
 def plot_diagnosis(result: dict, gc_window: int = GC_WINDOW):
