@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261027.1400"
+VERSION = "20261027.1500"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -78,7 +78,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
-                    "triage": "2026.10.26a", "codons": "2026.10.27c"}
+                    "triage": "2026.10.26a", "codons": "2026.10.27d"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -423,15 +423,15 @@ def diagnose_gene(dna, expected, cluster_window, gc_window):
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
-def gc_fix_for(dna, gc_window, strategy, avoid):
+def gc_fix_for(dna, gc_window, strategy, avoid, rank_cap):
     sites = {k: v for k, v in vc.DEFAULT_AVOID_SITES.items() if k in avoid}
     return cdn.suggest_gc_fix(dna, avoid_sites=sites, gc_window=gc_window,
-                              strategy=strategy)
+                              strategy=strategy, max_preference_rank=rank_cap)
 
 
 @st.cache_data(**_FIG_CACHE)
-def png_gc_comparison(dna, gc_window, strategy, avoid):
-    fix = gc_fix_for(dna, gc_window, strategy, avoid)
+def png_gc_comparison(dna, gc_window, strategy, avoid, rank_cap):
+    fix = gc_fix_for(dna, gc_window, strategy, avoid, rank_cap)
     if not fix["n_changes"]:
         return None
     return fig_to_png(cdn.plot_gc_comparison(dna, fix["dna"],
@@ -937,7 +937,15 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
             "been checked — it is not a documented rare codon, it creates none "
             "of the restriction sites you select, it opens no homopolymer run, "
             "and the protein is verified unchanged.")
-        fx = st.columns([1, 2])
+        fx = st.columns([1, 1, 1])
+        with fx[2]:
+            rank_cap = st.slider(
+                "Stay within the top N E. coli codons", 1, 6,
+                int(cdn.DEFAULT_RANK_CAP), key=f"rank_{name}",
+                help="The safeguard against trading a GC problem for a codon "
+                     "one. Only synonyms this far down the host's preference "
+                     "order are considered. 1 allows only the most-used codon "
+                     "and usually means no swap at all.")
         with fx[0]:
             strategy = st.radio(
                 "How far to go", ["minimal", "maximal"], key=f"strat_{name}",
@@ -955,7 +963,8 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                 default=sorted(vc.DEFAULT_AVOID_SITES), key=f"gcfix_{name}",
                 help="No suggestion will create one of these.")
 
-        fix = gc_fix_for(gene_dna, gc_window, strategy, tuple(sorted(fix_avoid)))
+        fix = gc_fix_for(gene_dna, gc_window, strategy, tuple(sorted(fix_avoid)),
+                         int(rank_cap))
         fm = st.columns(4)
         fm[0].metric("Codons changed", fix["n_changes"])
         fm[1].metric("GC", f"{fix['gc_after']:.1%}",
@@ -976,7 +985,8 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                     "a site you asked to keep, or opens a homopolymer run.")
         else:
             comparison = png_gc_comparison(gene_dna, gc_window, strategy,
-                                           tuple(sorted(fix_avoid)))
+                                           tuple(sorted(fix_avoid)),
+                                           int(rank_cap))
             if comparison:
                 st.image(comparison, **FIT)
                 st.caption(
@@ -988,6 +998,14 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                     "problem.")
             st.dataframe(fix["regions"], hide_index=True, **FIT)
             st.dataframe(fix["suggestions"], hide_index=True, **FIT)
+            st.caption(
+                "`rank_from` and `rank_to` are each codon's position in the "
+                "*E. coli* preference order. Worth a look before ordering: rank "
+                "is **ordinal, not proportional** — for leucine, the top codon "
+                "carries about half of all leucines and the second perhaps a "
+                "seventh, so even a rank-2 swap is a real drop in usage. The app "
+                "cannot say by how much, because that needs a codon usage table "
+                "it does not ship and will not invent.")
             st.markdown("**Rewritten sequence**")
             st.code(fix["dna"], language="text")
             st.download_button(

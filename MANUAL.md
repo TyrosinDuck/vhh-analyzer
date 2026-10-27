@@ -993,11 +993,33 @@ and Sanger reading.
 with a clean fix: swap codons for lower-GC synonyms. When the tab finds one, it
 offers the swaps.
 
-Every suggestion is checked against three constraints before it is offered. The
-substitute is not one of the documented rare codons, so you do not trade a GC
-problem for a translation one. It creates none of the restriction sites you choose
-to preserve — the same list the DNA tab uses, and you can shorten it if a site no
-longer matters. And it opens no homopolymer run. The protein is then translated
+Every suggestion is checked against four constraints before it is offered.
+
+The substitute is not one of the documented rare codons. On its own that is not
+enough, so there is a second, stricter brake: **only synonyms within the top N of
+the host's preference order are considered**, N being the *Stay within the top N
+E. coli codons* slider. Without it the algorithm takes the lowest-GC synonym
+whatever its usage — and leucine's CTG, which carries about half of all *E. coli*
+leucines, would be swapped for a codon used a seventh as often. That is exactly
+the trade you did not want to make.
+
+The default is 2, because on test sequences it already clears every GC-rich
+stretch while staying among the two most-used synonyms: 19 codon changes instead
+of 26 at rank 3, and the same result. At rank 1 only the single most-used codon is
+allowed, which usually means too few swaps to fix anything — the *GC-rich
+stretches left* figure tells you when that has happened, so raise the cap only if
+it reports a leftover.
+
+**One honest limit.** Rank is ordinal, not proportional. For leucine the top codon
+carries roughly half of all leucines and the second perhaps a seventh, so even a
+rank-2 swap is a real drop in usage — and this app cannot tell you by how much,
+because quantifying it needs a codon usage table it does not ship and will not
+invent. The suggestions table shows `rank_from` and `rank_to` for every change;
+read them before ordering. Treat the cap as a brake, not a guarantee.
+
+The remaining two constraints are unchanged: the substitute It creates none of the restriction sites you
+choose to preserve — the same list the DNA tab uses, and you can shorten it if a
+site no longer matters — and it opens no homopolymer run. The protein is then translated
 from the rewritten sequence and compared to the original; if they differ the
 output is refused rather than shown.
 

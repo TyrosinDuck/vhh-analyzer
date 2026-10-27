@@ -37,7 +37,7 @@ __all__ = [
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.27c"
+__version__ = "2026.10.27d"
 
 # Codons whose scarcity in E. coli is well established — these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -54,6 +54,11 @@ RARE_CODONS: dict[str, dict] = {
 }
 
 CLUSTER_WINDOW = 6        # codons; two rare codons this close count as a cluster
+# How far down the host's preference order a GC-lowering swap may go. 2 by
+# default because on test sequences it already clears every GC-rich stretch
+# while staying among the two most-used synonyms; raise it only when the UI
+# reports stretches left over.
+DEFAULT_RANK_CAP = 2
 GC_WINDOW = 30            # nucleotides
 GC_LOW, GC_HIGH = 0.30, 0.70   # practical synthesis band, not a biological one
 HEAD_CODONS = 15          # the translation initiation region, in codons
@@ -361,13 +366,32 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                    gc_window: int = GC_WINDOW,
                    max_homopolymer: int = 6,
                    allow_rare: bool = False,
-                   strategy: str = "minimal") -> dict:
+                   strategy: str = "minimal",
+                   max_preference_rank: int = DEFAULT_RANK_CAP) -> dict:
     """Synonymous swaps that lower GC inside the flagged stretches.
 
     Only codons inside a GC-rich region are considered — there is no reason to
     disturb the rest of the gene. For each, the lowest-GC synonym is taken that
     is not a documented rare codon, does not create one of ``avoid_sites``, and
     does not produce a homopolymer run longer than ``max_homopolymer``.
+
+    ``max_preference_rank`` is the safeguard against trading a GC problem for a
+    codon-usage one. Excluding the documented rare codons is not enough on its
+    own: leucine's CTG carries about half of all E. coli leucines, and swapping
+    it for TTA — not rare, but roughly a seventh as common — lowers GC by
+    replacing the dominant codon with a minor one. Only synonyms within this
+    rank of the host's preference order are considered, and the lowest-GC one
+    among *those* is taken. 1 allows only the most-used codon, which usually
+    means no swap at all; 2 is the default and clears most stretches; 6 removes
+    the safeguard entirely.
+
+    One honest limit: rank is **ordinal, not proportional**. For leucine, CTG
+    carries roughly half of all E. coli leucines and the rank-2 codon perhaps a
+    seventh — a rank-2 swap is still a real drop in usage, and this module
+    cannot say by how much, because quantifying it needs a codon usage table it
+    does not ship and will not invent. Use the rank cap as a brake, not as a
+    guarantee, and check the `rank_from`/`rank_to` columns on anything you are
+    about to order.
 
     ``strategy`` is ``"minimal"`` (default) or ``"maximal"``. Minimal applies the
     biggest GC reductions first and **stops as soon as the region is back inside
@@ -409,9 +433,12 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
     if strategy == "minimal":
         def gain(i: int) -> float:
             aa = vc.translate_dna(codons[i])
+            pref = vc.ECOLI_CODONS.get(aa, [])
             alts = [c for c in syn.get(aa, []) if c != codons[i]]
             if not allow_rare:
                 alts = [c for c in alts if c not in RARE_CODONS]
+            alts = [c for c in alts
+                    if (pref.index(c) + 1 if c in pref else 99) <= max_preference_rank]
             return -(_gc(codons[i]) - min((_gc(c) for c in alts), default=_gc(codons[i])))
         order = sorted(targets, key=gain)
 
@@ -423,14 +450,21 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
         aa = vc.translate_dna(codon)
         if aa in ("", "*", "X"):
             continue
+        preference = vc.ECOLI_CODONS.get(aa, [])
+
+        def rank(c: str) -> int:
+            """1-based position in the host's preference order; 99 if unlisted."""
+            return preference.index(c) + 1 if c in preference else 99
+
         options = [c for c in syn.get(aa, []) if c != codon]
         if not allow_rare:
             options = [c for c in options if c not in RARE_CODONS]
         options = [c for c in options if _gc(c) < _gc(codon)]
+        # the usage safeguard: stay inside the commonly used synonyms
+        options = [c for c in options if rank(c) <= max_preference_rank]
         if not options:
             continue
-        options.sort(key=lambda c: (_gc(c), vc.ECOLI_CODONS.get(aa, []).index(c)
-                                    if c in vc.ECOLI_CODONS.get(aa, []) else 99))
+        options.sort(key=lambda c: (_gc(c), rank(c)))
 
         for candidate in options:
             trial = list(working)
@@ -451,9 +485,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                 "from": codon, "to": candidate,
                 "gc_from": round(_gc(codon), 2), "gc_to": round(_gc(candidate), 2),
                 "rare_substitute": candidate in RARE_CODONS,
-                "app_preference": (vc.ECOLI_CODONS.get(aa, []).index(candidate) + 1
-                                   if candidate in vc.ECOLI_CODONS.get(aa, [])
-                                   else None),
+                "rank_from": rank(codon), "rank_to": rank(candidate),
             })
             break
 
