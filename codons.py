@@ -32,11 +32,11 @@ import vhh_core as vc
 
 __all__ = [
     "RARE_CODONS", "orf_report", "codon_table", "rare_clusters", "gc_windows",
-    "gc_regions", "suggest_gc_fix",
+    "gc_regions", "suggest_gc_fix", "parse_dna_input", "summarise",
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.27a"
+__version__ = "2026.10.27b"
 
 # Codons whose scarcity in E. coli is well established — these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -482,6 +482,89 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
         "n_changes": len(suggestions),
         "remaining_regions": gc_regions(gc_windows(fixed, gc_window), gc_window),
     }
+
+
+
+def parse_dna_input(text: str, max_sequences: int = 20,
+                    max_length: int = 6000) -> dict[str, str]:
+    """Parse FASTA or bare DNA into ``{name: sequence}``.
+
+    The protein side has its own parser in ``vhh_core``; this is the DNA
+    equivalent, with its own limits because a coding sequence is three times the
+    length of what it encodes.
+    """
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("No sequence provided")
+
+    seqs: dict[str, str] = {}
+    if ">" in text:
+        name, buf = None, []
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith(">"):
+                if name:
+                    seqs[name] = "".join(buf)
+                raw = line[1:].strip() or f"Sequence_{len(seqs) + 1}"
+                name, buf = raw.split()[0], []
+            elif line:
+                buf.append(line)
+        if name:
+            seqs[name] = "".join(buf)
+    else:
+        blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
+        for i, block in enumerate(blocks, start=1):
+            seqs[f"Sequence_{i}"] = block
+
+    cleaned: dict[str, str] = {}
+    for name, raw in seqs.items():
+        try:
+            dna = _clean_dna(raw)
+        except ValueError as exc:
+            raise ValueError(f"{name}: {exc}") from None
+        if len(dna) > max_length:
+            raise ValueError(f"{name}: {len(dna)} nt exceeds the {max_length} nt limit")
+        if len(dna) < 30:
+            raise ValueError(f"{name}: {len(dna)} nt is too short to diagnose")
+        key, n = name, 2
+        while key in cleaned:
+            key, n = f"{name}_{n}", n + 1
+        cleaned[key] = dna
+
+    if not cleaned:
+        raise ValueError("No valid DNA sequence found")
+    if len(cleaned) > max_sequences:
+        raise ValueError(f"{len(cleaned)} sequences, limit is {max_sequences} per run")
+    return cleaned
+
+
+def summarise(seqs: dict[str, str], gc_window: int = GC_WINDOW,
+              cluster_window: int = CLUSTER_WINDOW) -> pd.DataFrame:
+    """One row per sequence — the overview for a batch."""
+    rows = []
+    for name, dna in seqs.items():
+        try:
+            d = diagnose(dna, cluster_window=cluster_window, gc_window=gc_window)
+        except Exception as exc:
+            rows.append({"name": name, "note": str(exc)})
+            continue
+        gc_rich = (int((d["gc_regions"]["direction"] == "GC-rich").sum())
+                   if len(d["gc_regions"]) else 0)
+        rows.append({
+            "name": name,
+            "length_nt": d["orf"]["length_nt"],
+            "codons": d["orf"]["n_codons"],
+            "in_frame": d["orf"]["in_frame"],
+            "internal_stops": d["orf"]["n_internal_stops"],
+            "gc": d["gc_overall"],
+            "head_gc": round(d["head_gc"], 3),
+            "rare_codons": d["n_rare"],
+            "rare_clusters": len(d["clusters"]),
+            "gc_rich_stretches": gc_rich,
+            "homopolymers": len(d["homopolymers"]),
+            "note": "",
+        })
+    return pd.DataFrame(rows)
 
 
 def plot_diagnosis(result: dict, gc_window: int = GC_WINDOW):

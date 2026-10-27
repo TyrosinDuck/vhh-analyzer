@@ -42,18 +42,20 @@ Three things are worth stating plainly before you rely on any number:
 
 ## 2. Getting around
 
-The app opens on a home page with three sections. The sidebar carries the same three
+The app opens on a home page with four sections. The sidebar carries the same four
 entries plus a **Home** button, available from every screen.
 
 | Section | Use it for |
 |---|---|
 | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
 | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
+| 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
 
-The three share one sequence list. Whatever is loaded in the analysis input is also
-what the cloning section offers as an insert, and the sequencing section writes into
-it. Each section still works on its own.
+They are connected rather than separate. The sequencing section writes into the
+analysis input; the analysis input is what the cloning section offers as an insert;
+and the analysis section's **DNA** tab hands its back-translated sequences to gene
+diagnosis in one click. Each section still works entirely on its own.
 
 ---
 
@@ -771,75 +773,9 @@ motifs. It does **not** model mRNA secondary structure near the ribosome binding
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
 
-### 3.13b Gene diagnosis
-
-The reverse of the DNA tab: paste a coding sequence that is already in a plasmid
-and ask what might be wrong with it. Written for the case you described — VHHs
-that express poorly.
-
-**Read the warning at the top of the tab first.** Codon usage is rarely the first
-suspect. A VHH that expresses badly in *E. coli* is more often explained by
-periplasmic toxicity, inefficient signal-peptide cleavage, failure to form the
-intradomain disulfide, inclusion bodies, plasmid loss or induction conditions. A
-gene with flawless codon usage expresses badly for all of those reasons. This tab
-tells you whether the sequence is *part* of the problem; it cannot tell you that
-it is the problem.
-
-**The deterministic checks come first**, because they are the ones that are
-definitely wrong when they are wrong: frame, start and stop codons, internal
-stops, and — if you supply the expected protein — whether the translation matches
-it. That last one is worth doing every time: a mismatch makes everything else on
-the page beside the point.
-
-**Rare codons.** The codons whose scarcity in *E. coli* is well established, the
-ones the Rosetta and CodonPlus strains supplement with extra tRNA genes: AGA, AGG,
-CGA, CGG (Arg), ATA (Ile), CTA (Leu), CCC (Pro), GGA (Gly). What the tab reports
-and ranks are **clusters**, not the total: clustered and tandem rare codons are
-the ones associated with ribosome stalling, while scattered ones are generally
-tolerated. A gene can carry twenty rare codons and be perfectly fine.
-
-**No CAI is reported.** A Codon Adaptation Index needs a full codon usage table
-for the host. This app does not ship one, and inventing sixty-four relative
-adaptiveness values would produce a number that looks precise and means nothing.
-The documented rare codons and where they sit is what can be said honestly.
-
-**GC.** Overall, and as a sliding window. Stretches that stay outside 30–70% for
-at least a window length are listed — merged into regions rather than counted as
-windows, since windows overlap by one nucleotide and one awkward 60 nt stretch
-would otherwise be reported as thirty separate problems. The GC of the first
-fifteen codons is called out separately: a GC-rich start can fold the ribosome
-binding region and slow initiation, and it is one of the few places where silent
-changes reliably help.
-
-Homopolymer runs of seven or more are flagged too — they complicate both synthesis
-and Sanger reading.
-
-**Suggested codon changes.** A GC-rich stretch is one of the few sequence problems
-with a clean fix: swap codons for lower-GC synonyms. When the tab finds one, it
-offers the swaps.
-
-Every suggestion is checked against three constraints before it is offered. The
-substitute is not one of the documented rare codons, so you do not trade a GC
-problem for a translation one. It creates none of the restriction sites you choose
-to preserve — the same list the DNA tab uses, and you can shorten it if a site no
-longer matters. And it opens no homopolymer run. The protein is then translated
-from the rewritten sequence and compared to the original; if they differ the
-output is refused rather than shown.
-
-*Minimal* and *Maximal* decide how far to go. Minimal applies the biggest GC
-reductions first and **stops as soon as no GC-rich stretch survives**. Maximal
-swaps every codon it can. On a deliberately GC-rich test gene, minimal cleared all
-four stretches with 26 codon changes where maximal used 56 — both left the protein
-untouched and introduced no rare codon. Minimal is the default because you are
-paying to synthesise this gene, and a construct that differs from the original in
-twenty places is easier to reason about than one that differs in sixty.
-
-You get the before-and-after GC of each stretch, the full list of swaps with the
-GC each one buys, and the rewritten sequence as FASTA.
-
-**What this does not promise.** Lowering local GC removes one plausible obstacle to
-expression. It does not make the gene express — every cause listed at the top of
-this tab is still in play.
+A **Send to gene diagnosis** button passes the sequences straight to §5, where the
+frame, rare-codon and GC checks run on them — including the GC balancing this
+optimiser does globally but not window by window.
 
 ### 3.14 Constructs
 
@@ -978,7 +914,89 @@ The full per-read table as CSV, and the extracted VHHs as protein or DNA FASTA.
 
 ---
 
-## 5. In-silico cloning
+## 5. Gene diagnosis
+
+Its own section, reached from the home page or from the **DNA** tab of the
+analysis section, which hands its back-translated sequences straight over.
+
+**Several sequences at once.** Paste FASTA, a bare sequence, or several separated
+by blank lines — up to 20, 6000 nt each. The overview table puts one row per
+sequence: frame, internal stops, GC, rare codons and their clusters, GC-rich
+stretches, homopolymers. `in_frame` and `internal_stops` are the deterministic
+columns — wrong there means wrong — while the rest is triage. Pick one sequence
+from the list for the detailed view and the codon suggestions.
+
+The reverse of the DNA tab: paste a coding sequence that is already in a plasmid
+and ask what might be wrong with it. Written for the case you described — VHHs
+that express poorly.
+
+**Read the warning at the top of the tab first.** Codon usage is rarely the first
+suspect. A VHH that expresses badly in *E. coli* is more often explained by
+periplasmic toxicity, inefficient signal-peptide cleavage, failure to form the
+intradomain disulfide, inclusion bodies, plasmid loss or induction conditions. A
+gene with flawless codon usage expresses badly for all of those reasons. This tab
+tells you whether the sequence is *part* of the problem; it cannot tell you that
+it is the problem.
+
+**The deterministic checks come first**, because they are the ones that are
+definitely wrong when they are wrong: frame, start and stop codons, internal
+stops, and — if you supply the expected protein — whether the translation matches
+it. That last one is worth doing every time: a mismatch makes everything else on
+the page beside the point.
+
+**Rare codons.** The codons whose scarcity in *E. coli* is well established, the
+ones the Rosetta and CodonPlus strains supplement with extra tRNA genes: AGA, AGG,
+CGA, CGG (Arg), ATA (Ile), CTA (Leu), CCC (Pro), GGA (Gly). What the tab reports
+and ranks are **clusters**, not the total: clustered and tandem rare codons are
+the ones associated with ribosome stalling, while scattered ones are generally
+tolerated. A gene can carry twenty rare codons and be perfectly fine.
+
+**No CAI is reported.** A Codon Adaptation Index needs a full codon usage table
+for the host. This app does not ship one, and inventing sixty-four relative
+adaptiveness values would produce a number that looks precise and means nothing.
+The documented rare codons and where they sit is what can be said honestly.
+
+**GC.** Overall, and as a sliding window. Stretches that stay outside 30–70% for
+at least a window length are listed — merged into regions rather than counted as
+windows, since windows overlap by one nucleotide and one awkward 60 nt stretch
+would otherwise be reported as thirty separate problems. The GC of the first
+fifteen codons is called out separately: a GC-rich start can fold the ribosome
+binding region and slow initiation, and it is one of the few places where silent
+changes reliably help.
+
+Homopolymer runs of seven or more are flagged too — they complicate both synthesis
+and Sanger reading.
+
+**Suggested codon changes.** A GC-rich stretch is one of the few sequence problems
+with a clean fix: swap codons for lower-GC synonyms. When the tab finds one, it
+offers the swaps.
+
+Every suggestion is checked against three constraints before it is offered. The
+substitute is not one of the documented rare codons, so you do not trade a GC
+problem for a translation one. It creates none of the restriction sites you choose
+to preserve — the same list the DNA tab uses, and you can shorten it if a site no
+longer matters. And it opens no homopolymer run. The protein is then translated
+from the rewritten sequence and compared to the original; if they differ the
+output is refused rather than shown.
+
+*Minimal* and *Maximal* decide how far to go. Minimal applies the biggest GC
+reductions first and **stops as soon as no GC-rich stretch survives**. Maximal
+swaps every codon it can. On a deliberately GC-rich test gene, minimal cleared all
+four stretches with 26 codon changes where maximal used 56 — both left the protein
+untouched and introduced no rare codon. Minimal is the default because you are
+paying to synthesise this gene, and a construct that differs from the original in
+twenty places is easier to reason about than one that differs in sixty.
+
+You get the before-and-after GC of each stretch, the full list of swaps with the
+GC each one buys, and the rewritten sequence as FASTA.
+
+**What this does not promise.** Lowering local GC removes one plausible obstacle to
+expression. It does not make the gene express — every cause listed at the top of
+this tab is still in play.
+
+---
+
+## 6. In-silico cloning
 
 One screen, three steps.
 
@@ -1090,7 +1108,7 @@ FASTA. Plus a short protocol paragraph.
 
 ---
 
-## 6. How your data is handled
+## 7. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file, logged,
 or sent to a third party**. They are processed in the server's memory.
@@ -1110,7 +1128,7 @@ Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
 ---
 
-## 7. Running it on your own machine
+## 8. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -1133,7 +1151,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 8. Limits and caveats, in one place
+## 9. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -1152,7 +1170,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **"Some modules are out of date."** `app.py` and the analysis modules are released
 together. Update `vhh_core.py`, `sanger.py` and `cloning.py` alongside it.
@@ -1180,7 +1198,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 10. Under the hood
+## 11. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for IMGT
 numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the alignment

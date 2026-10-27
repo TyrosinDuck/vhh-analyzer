@@ -27,13 +27,14 @@ source of truth.
 
 ## Layout
 
-The app opens on a home page with three sections, also reachable from the sidebar,
+The app opens on a home page with four sections, also reachable from the sidebar,
 which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
 | **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
+| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, documented rare codons and their clusters, GC stretches, homopolymers — no invented CAI — plus synonymous swaps that lower GC without touching the protein |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
 The three share one sequence list: what you load in the analysis section is what the
@@ -256,7 +257,6 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
 | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
 | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
-| Gene diagnosis | paste an existing CDS: frame and stop checks, documented rare codons and their clusters, GC stretches, homopolymers — no invented CAI — plus synonymous codon swaps to lower GC, checked against rare codons, restriction sites and homopolymers |
 | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
 | Download | CSV, figures as PNG, and a complete PDF report |
 

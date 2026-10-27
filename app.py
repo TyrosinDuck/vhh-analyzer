@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261027.1100"
+VERSION = "20261027.1200"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -78,7 +78,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.23a",
-                    "triage": "2026.10.26a", "codons": "2026.10.27a"}
+                    "triage": "2026.10.26a", "codons": "2026.10.27b"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -543,6 +543,11 @@ SECTIONS = {
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "
                    "sequences from the expression cassette, spot frameshifts and "
                    "duplicates — then send the clones you want to the analysis."),
+    "genes": ("🔧", "Gene diagnosis",
+              "Paste coding sequences that are already in a plasmid and ask what "
+              "might be wrong with them: frame and stop checks, documented rare "
+              "codons and their clusters, GC stretches — plus synonymous swaps "
+              "that lower GC without touching the protein."),
     "cloning": ("🧬", "In-silico cloning",
                 "Load a backbone and an insert, and get the restriction enzymes that "
                 "open the vector in the right place without cutting the VHH, plus "
@@ -594,6 +599,8 @@ def footer() -> None:
 # reruns; it is moved into place before the widget is created.
 if "pending_seq_text" in st.session_state:
     st.session_state["seq_text"] = st.session_state.pop("pending_seq_text")
+if "pending_gene_dna" in st.session_state:
+    st.session_state["gene_dna"] = st.session_state.pop("pending_gene_dna")
 st.session_state.setdefault("seq_text", "")
 
 section = st.session_state["section"]
@@ -666,13 +673,17 @@ if section == "home":
         "A workbench for single-domain antibodies: characterize them, pull them out "
         "of sequencing reads, and plan the cloning. Pick where to start.")
 
-    cols = st.columns(3)
-    for col, (key, (icon, label, desc)) in zip(cols, SECTIONS.items()):
-        with col, st.container(border=True):
-            st.markdown(f"### {icon} {label}")
-            st.markdown(desc)
-            st.button(f"Open {label.lower()}", key=f"home_{key}", type="primary",
-                      **FIT, on_click=go_to, args=(key,))
+    # Two rows of two rather than one row of four: four cards side by side are
+    # too narrow for their descriptions to be readable.
+    entries = list(SECTIONS.items())
+    for row_start in range(0, len(entries), 2):
+        for col, (key, (icon, label, desc)) in zip(
+                st.columns(2), entries[row_start:row_start + 2]):
+            with col, st.container(border=True):
+                st.markdown(f"### {icon} {label}")
+                st.markdown(desc)
+                st.button(f"Open {label.lower()}", key=f"home_{key}",
+                          type="primary", **FIT, on_click=go_to, args=(key,))
 
     st.write("")
     hcols = st.columns([1, 2])
@@ -862,6 +873,228 @@ if section == "sequencing":
 # --------------------------------------------------------------------------- #
 # In-silico cloning
 # --------------------------------------------------------------------------- #
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def gene_summary(seqs, gc_window, cluster_window):
+    return cdn.summarise(seqs, gc_window=gc_window, cluster_window=cluster_window)
+
+
+def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
+    """The per-sequence view: findings, figure, tables, and the GC suggestions."""
+    orf = diag["orf"]
+    gm = st.columns(5)
+    gm[0].metric("Length", f"{orf['length_nt']} nt")
+    gm[1].metric("Codons", orf["n_codons"])
+    gm[2].metric("GC", f"{diag['gc_overall']:.1%}")
+    gm[3].metric("Rare codons", diag["n_rare"],
+                 help="Codons whose scarcity in E. coli is well established and "
+                      "supplemented by the Rosetta and CodonPlus strains.")
+    gm[4].metric("Rare clusters", len(diag["clusters"]))
+
+    st.subheader("Findings")
+    renderers = {"error": st.error, "warning": st.warning,
+                 "ok": st.success, "info": st.info}
+    for level, message in diag["findings"]:
+        renderers.get(level, st.info)(message)
+
+    st.image(png_gene_diagnosis(gene_dna, expected, cluster_window, gc_window),
+             **FIT)
+
+    if len(diag["clusters"]):
+        st.subheader("Rare-codon clusters")
+        st.dataframe(diag["clusters"], hide_index=True, **FIT)
+        st.caption("Clustered and tandem rare codons are the ones associated "
+                   "with ribosome stalling. Isolated ones are generally "
+                   "tolerated, which is why they are counted but not listed.")
+
+    if len(diag["gc_regions"]):
+        st.subheader("Extreme GC stretches")
+        st.dataframe(diag["gc_regions"], hide_index=True, **FIT)
+
+    gc_rich = (diag["gc_regions"][diag["gc_regions"]["direction"] == "GC-rich"]
+               if len(diag["gc_regions"]) else [])
+    if len(gc_rich):
+        st.subheader("Suggested codon changes")
+        st.markdown(
+            "A GC-rich stretch is one of the few sequence problems with a clean "
+            "fix: swap codons for lower-GC synonyms. Every suggestion below has "
+            "been checked — it is not a documented rare codon, it creates none "
+            "of the restriction sites you select, it opens no homopolymer run, "
+            "and the protein is verified unchanged.")
+        fx = st.columns([1, 2])
+        with fx[0]:
+            strategy = st.radio(
+                "How far to go", ["minimal", "maximal"], key=f"strat_{name}",
+                format_func=lambda x: ("Minimal — stop once the band is cleared"
+                                       if x == "minimal"
+                                       else "Maximal — swap everything possible"),
+                help="Minimal applies the biggest reductions first and stops as "
+                     "soon as no GC-rich stretch survives. You are paying to "
+                     "synthesise this gene, and a construct differing in twenty "
+                     "places is easier to reason about than one differing in "
+                     "sixty.")
+        with fx[1]:
+            fix_avoid = st.multiselect(
+                "Restriction sites to preserve", sorted(vc.DEFAULT_AVOID_SITES),
+                default=sorted(vc.DEFAULT_AVOID_SITES), key=f"gcfix_{name}",
+                help="No suggestion will create one of these.")
+
+        fix = gc_fix_for(gene_dna, gc_window, strategy, tuple(sorted(fix_avoid)))
+        fm = st.columns(4)
+        fm[0].metric("Codons changed", fix["n_changes"])
+        fm[1].metric("GC", f"{fix['gc_after']:.1%}",
+                     delta=f"{(fix['gc_after'] - fix['gc_before']) * 100:+.1f} pts",
+                     delta_color="off")
+        fm[2].metric("GC-rich stretches left",
+                     int((fix["remaining_regions"]["direction"] == "GC-rich").sum())
+                     if len(fix["remaining_regions"]) else 0)
+        fm[3].metric("Protein",
+                     "unchanged" if fix["protein_unchanged"] else "CHANGED")
+
+        if not fix["protein_unchanged"]:
+            st.error("The rewritten sequence does not translate to the same "
+                     "protein. Do not use it, and please report it.")
+        elif not fix["n_changes"]:
+            st.info("No synonymous swap satisfies all the constraints here — "
+                    "every lower-GC alternative is either a rare codon, creates "
+                    "a site you asked to keep, or opens a homopolymer run.")
+        else:
+            st.dataframe(fix["regions"], hide_index=True, **FIT)
+            st.dataframe(fix["suggestions"], hide_index=True, **FIT)
+            st.markdown("**Rewritten sequence**")
+            st.code(fix["dna"], language="text")
+            st.download_button(
+                "Rewritten DNA (FASTA)",
+                f">{name}_gc_{strategy}\n{fix['dna']}\n",
+                file_name=f"{name}_gc_{strategy}.fasta", mime="text/plain",
+                key=f"dl_fix_{name}")
+            st.caption("Lowering local GC removes one plausible obstacle to "
+                       "expression. It does not promise the gene will then "
+                       "express — the causes at the top of this page are all "
+                       "still in play.")
+
+    with st.expander("Every codon"):
+        st.dataframe(diag["codons"], hide_index=True, **FIT)
+        st.download_button("Codon table (CSV)", diag["codons"].to_csv(index=False),
+                           file_name=f"{name}_codons.csv", mime="text/csv",
+                           key=f"dl_codons_{name}")
+
+    with st.expander("Translation"):
+        st.code(orf["protein"] or "—", language="text")
+        st.caption(f"{orf['protein_length']} residues.")
+
+    st.caption(
+        "**No CAI is reported.** A Codon Adaptation Index needs a full codon "
+        "usage table for the host; this app does not ship one, and inventing the "
+        "values would give a number that looks precise and means nothing.")
+
+
+# --------------------------------------------------------------------------- #
+# Gene diagnosis
+# --------------------------------------------------------------------------- #
+
+if section == "genes":
+    st.title("🔧 Gene diagnosis")
+    st.markdown(
+        "The reverse of designing a gene: paste coding sequences that already "
+        "exist — in a plasmid, from a vendor, from a colleague — and ask what "
+        "might be wrong with them. Several at a time.")
+    st.warning(
+        "**Codon usage is rarely the first suspect.** A VHH that expresses badly "
+        "in *E. coli* is more often explained by periplasmic toxicity, "
+        "inefficient signal-peptide cleavage, failure to form the intradomain "
+        "disulfide, inclusion bodies, plasmid loss or induction conditions. A "
+        "gene with flawless codon usage expresses badly for all of those "
+        "reasons. This section tells you whether the sequence is *part* of the "
+        "problem; it cannot tell you that it is the problem.", icon="⚠️")
+
+    gcol_in, gcol_act = st.columns([3, 1])
+    with gcol_act:
+        st.write("")
+        if st.button("Load example", key="gene_example", **FIT):
+            st.session_state["pending_gene_dna"] = (
+                ">example\n"
+                + vc.reverse_translate(
+                    list(vc.parse_input(EXAMPLE).values())[0])["dna"]
+                + "\n")
+            st.rerun()
+        if st.button("🗑️ Clear", key="gene_clear", **FIT,
+                     disabled=not st.session_state.get("gene_dna", "").strip()):
+            st.session_state["gene_dna"] = ""
+            st.rerun()
+        gene_upload = st.file_uploader("or upload FASTA", type=["fasta", "fa", "txt"],
+                                       key="gene_upload")
+        if gene_upload is not None and gene_upload.file_id != st.session_state.get(
+                "last_gene_upload"):
+            st.session_state["last_gene_upload"] = gene_upload.file_id
+            st.session_state["pending_gene_dna"] = gene_upload.read().decode(
+                "utf-8", errors="replace")
+            st.rerun()
+        st.caption("FASTA, or one bare sequence, or several separated by blank "
+                   "lines. Up to 20 sequences, 6000 nt each.")
+        st.button("🔬 Design DNA from protein instead", key="genes_to_analysis",
+                  **FIT, on_click=go_to, args=("analysis",),
+                  help="The analysis section's DNA tab back-translates a protein "
+                       "and can send the result here.")
+
+    with gcol_in:
+        gene_text = st.text_area("Coding DNA (5'→3')", height=200, key="gene_dna",
+                                 placeholder=">clone_1\nCAGGTGCAGCTGCAGGAAAGCGGC…")
+        st.button("Diagnose", type="primary", key="gene_run", **FIT)
+
+    gset = st.columns(3)
+    with gset[0]:
+        g_cluster = st.slider("Cluster window (codons)", 2, 20,
+                              int(cdn.CLUSTER_WINDOW), key="g_cluster")
+    with gset[1]:
+        g_gcwin = st.slider("GC window (nt)", 15, 120, int(cdn.GC_WINDOW), step=5,
+                            key="g_gcwin")
+    with gset[2]:
+        g_expected = st.text_input(
+            "Expected protein (optional)", key="g_expected",
+            help="Compared against the translation of the sequence selected "
+                 "below. Worth doing: a mismatch makes everything else beside "
+                 "the point.")
+
+    if not gene_text.strip():
+        st.info("Paste one or more coding sequences to diagnose.")
+    else:
+        try:
+            gene_seqs = cdn.parse_dna_input(gene_text)
+        except ValueError as exc:
+            st.error(f"Input error — {exc}")
+            gene_seqs = {}
+
+        if gene_seqs:
+            st.subheader(f"Overview — {len(gene_seqs)} sequence(s)")
+            overview = gene_summary(gene_seqs, int(g_gcwin), int(g_cluster))
+            st.dataframe(overview, hide_index=True, **FIT)
+            st.caption(
+                "`in_frame` and `internal_stops` are the deterministic checks — "
+                "wrong there means wrong. The rest is triage: `rare_clusters` "
+                "matters more than `rare_codons`, and `gc_rich_stretches` is what "
+                "the suggestions below act on.")
+            st.download_button("Overview (CSV)", overview.to_csv(index=False),
+                               file_name="gene_overview.csv", mime="text/csv")
+
+            st.divider()
+            picked = (list(gene_seqs)[0] if len(gene_seqs) == 1
+                      else st.selectbox("Look at one in detail", list(gene_seqs),
+                                        key="gene_pick"))
+            gene_dna = gene_seqs[picked]
+            try:
+                diag = diagnose_gene(gene_dna, g_expected.strip(),
+                                     int(g_cluster), int(g_gcwin))
+            except ValueError as exc:
+                st.error(f"Could not read that sequence — {exc}")
+                diag = None
+
+            if diag:
+                render_gene_detail(picked, gene_dna, diag, g_expected.strip(),
+                                   int(g_cluster), int(g_gcwin))
+    footer()
+    st.stop()
+
 
 if section == "cloning":
     st.title("🧬 In-silico cloning")
@@ -1391,7 +1624,7 @@ def type_of(name: str) -> str:
 TAB_LABELS = ["Triage", "Properties", "Plots", "CDR / Framework",
               "Hallmarks & germline", "Liabilities", "Aggregation", "Alignment",
               "vs Reference", "Repertoire", "Clonal families", "DNA",
-              "Gene diagnosis", "Constructs", "Download"]
+              "Constructs", "Download"]
 tabs = dict(zip(TAB_LABELS, st.tabs(TAB_LABELS)))
 
 # --- Triage ----------------------------------------------------------------- #
@@ -2497,172 +2730,18 @@ with tabs["DNA"]:
         "cloning-unfriendly motifs — it does not model mRNA secondary structure near "
         "the ribosome binding site, codon-pair bias or tRNA availability. Run the "
         "sequence through your synthesis vendor's checker before ordering.")
-    st.button("🧬 Use these in the cloning section", key="to_cloning", **FIT,
-              on_click=go_to, args=("cloning",))
-
-# --- Gene diagnosis --------------------------------------------------------- #
-with tabs["Gene diagnosis"]:
-    st.markdown(
-        "The reverse of the DNA tab: paste a coding sequence that is already in "
-        "a plasmid and ask what might be wrong with it.")
-    st.warning(
-        "**Codon usage is rarely the first suspect.** A VHH that expresses badly "
-        "in *E. coli* is more often explained by periplasmic toxicity, "
-        "inefficient signal-peptide cleavage, failure to form the intradomain "
-        "disulfide, inclusion bodies, plasmid loss or induction conditions. A "
-        "gene with flawless codon usage expresses badly for all of those "
-        "reasons. This tab tells you whether the sequence is *part* of the "
-        "problem; it cannot tell you that it is the problem.", icon="⚠️")
-
-    gene_dna = st.text_area(
-        "Coding DNA (5'→3')", height=140, key="gene_dna",
-        placeholder="CAGGTGCAGCTGCAGGAAAGCGGC…")
-    gc1, gc2, gc3 = st.columns([2, 1, 1])
-    with gc1:
-        expected = st.text_input(
-            "Expected protein (optional)",
-            help="If given, the translation is compared to it. Worth doing: a "
-                 "mismatch makes everything else here beside the point.")
-    with gc2:
-        cluster_window = st.slider("Cluster window (codons)", 2, 20,
-                                   int(cdn.CLUSTER_WINDOW))
-    with gc3:
-        gc_window = st.slider("GC window (nt)", 15, 120, int(cdn.GC_WINDOW),
-                              step=5)
-
-    if not gene_dna.strip():
-        st.info("Paste a coding sequence to diagnose.")
-    else:
-        try:
-            diag = diagnose_gene(gene_dna, expected.strip(), int(cluster_window),
-                                 int(gc_window))
-        except ValueError as exc:
-            st.error(f"Could not read that sequence — {exc}")
-            diag = None
-
-        if diag:
-            orf = diag["orf"]
-            gm = st.columns(5)
-            gm[0].metric("Length", f"{orf['length_nt']} nt")
-            gm[1].metric("Codons", orf["n_codons"])
-            gm[2].metric("GC", f"{diag['gc_overall']:.1%}")
-            gm[3].metric("Rare codons", diag["n_rare"],
-                         help="Codons whose scarcity in E. coli is well "
-                              "established and supplemented by the Rosetta and "
-                              "CodonPlus strains.")
-            gm[4].metric("Rare clusters", len(diag["clusters"]))
-
-            st.subheader("Findings")
-            icons = {"error": st.error, "warning": st.warning,
-                     "ok": st.success, "info": st.info}
-            for level, message in diag["findings"]:
-                icons.get(level, st.info)(message)
-
-            st.image(png_gene_diagnosis(gene_dna, expected.strip(),
-                                        int(cluster_window), int(gc_window)),
-                     **FIT)
-
-            if len(diag["clusters"]):
-                st.subheader("Rare-codon clusters")
-                st.dataframe(diag["clusters"], hide_index=True, **FIT)
-                st.caption(
-                    "Clustered and tandem rare codons are the ones associated "
-                    "with ribosome stalling. Isolated ones are generally "
-                    "tolerated, which is why they are counted but not listed "
-                    "here.")
-
-            if len(diag["gc_regions"]):
-                st.subheader("Extreme GC stretches")
-                st.dataframe(diag["gc_regions"], hide_index=True, **FIT)
-
-            gc_rich = (diag["gc_regions"][
-                diag["gc_regions"]["direction"] == "GC-rich"]
-                if len(diag["gc_regions"]) else [])
-            if len(gc_rich):
-                st.subheader("Suggested codon changes")
-                st.markdown(
-                    "A GC-rich stretch is one of the few sequence problems with "
-                    "a clean fix: swap codons for lower-GC synonyms. Every "
-                    "suggestion below has been checked — it is not a documented "
-                    "rare codon, it creates none of the restriction sites you "
-                    "select, it opens no homopolymer run, and the protein is "
-                    "verified unchanged.")
-                fx = st.columns([1, 2])
-                with fx[0]:
-                    strategy = st.radio(
-                        "How far to go", ["minimal", "maximal"],
-                        format_func=lambda x: ("Minimal — stop once the band is "
-                                               "cleared" if x == "minimal"
-                                               else "Maximal — swap everything "
-                                                    "possible"),
-                        help="Minimal applies the biggest reductions first and "
-                             "stops as soon as no GC-rich stretch survives. You "
-                             "are paying to synthesise this gene, and a "
-                             "construct differing in twenty places is easier to "
-                             "reason about than one differing in sixty.")
-                with fx[1]:
-                    fix_avoid = st.multiselect(
-                        "Restriction sites to preserve",
-                        sorted(vc.DEFAULT_AVOID_SITES),
-                        default=sorted(vc.DEFAULT_AVOID_SITES),
-                        key="gcfix_avoid",
-                        help="No suggestion will create one of these.")
-
-                fix = gc_fix_for(gene_dna, int(gc_window), strategy,
-                                 tuple(sorted(fix_avoid)))
-                fm = st.columns(4)
-                fm[0].metric("Codons changed", fix["n_changes"])
-                fm[1].metric("GC", f"{fix['gc_after']:.1%}",
-                             delta=f"{(fix['gc_after'] - fix['gc_before']) * 100:+.1f} pts",
-                             delta_color="off")
-                fm[2].metric("GC-rich stretches left",
-                             int((fix["remaining_regions"]["direction"]
-                                  == "GC-rich").sum())
-                             if len(fix["remaining_regions"]) else 0)
-                fm[3].metric("Protein", "unchanged" if fix["protein_unchanged"]
-                             else "CHANGED")
-
-                if not fix["protein_unchanged"]:
-                    st.error("The rewritten sequence does not translate to the "
-                             "same protein. Do not use it, and please report it.")
-                elif not fix["n_changes"]:
-                    st.info("No synonymous swap satisfies all the constraints "
-                            "here — every lower-GC alternative is either a rare "
-                            "codon, creates a site you asked to keep, or opens a "
-                            "homopolymer run.")
-                else:
-                    st.dataframe(fix["regions"], hide_index=True, **FIT)
-                    st.dataframe(fix["suggestions"], hide_index=True, **FIT)
-                    st.markdown("**Rewritten sequence**")
-                    st.code(fix["dna"], language="text")
-                    st.download_button(
-                        "Rewritten DNA (FASTA)",
-                        f">gc_adjusted_{strategy}\n{fix['dna']}\n",
-                        file_name=f"gc_adjusted_{strategy}.fasta",
-                        mime="text/plain")
-                    st.caption(
-                        "Lowering local GC removes one plausible obstacle to "
-                        "expression. It does not promise the gene will then "
-                        "express — the causes listed at the top of this tab are "
-                        "all still in play.")
-
-            with st.expander("Every codon"):
-                st.dataframe(diag["codons"], hide_index=True, **FIT)
-                st.download_button("Codon table (CSV)",
-                                   diag["codons"].to_csv(index=False),
-                                   file_name="codon_table.csv", mime="text/csv")
-
-            with st.expander("Translation"):
-                st.code(orf["protein"] or "—", language="text")
-                st.caption(f"{orf['protein_length']} residues.")
-
-            st.caption(
-                "**No CAI is reported.** A Codon Adaptation Index needs a full "
-                "codon usage table for the host; this app does not ship one, and "
-                "inventing the values would give you a number that looks precise "
-                "and means nothing. What is reported instead are the codons "
-                "whose scarcity is well documented, and where they sit.")
-
+    dna_out = st.columns(2)
+    with dna_out[0]:
+        st.button("🧬 Use these in the cloning section", key="to_cloning", **FIT,
+                  on_click=go_to, args=("cloning",))
+    with dna_out[1]:
+        if st.button("🔧 Send to gene diagnosis", key="to_genes", **FIT,
+                     help="Run these sequences through the frame, rare-codon and "
+                          "GC checks, and get synonymous swaps where GC runs "
+                          "high."):
+            st.session_state["pending_gene_dna"] = "\n".join(fasta_parts) + "\n"
+            go_to("genes")
+            st.rerun()
 
 # --- Constructs ------------------------------------------------------------- #
 with tabs["Constructs"]:
