@@ -25,6 +25,10 @@ the home page and from the sidebar. It documents every screen, what each number 
 and how far to trust it. Edit the Markdown file and the app picks it up — there is one
 source of truth.
 
+### Bundled data
+
+`data/ecoli_codon_usage.csv` — *E. coli* codon usage (Kazusa Codon Usage Database, taxid 316407), redistributed from the `python-codon-tables` package under **CC0-1.0**, a public-domain dedication. Used for the CAI, the usage floor on codon substitutions, and the back-translation preference order.
+
 ## Layout
 
 The app opens on a home page with four sections, also reachable from the sidebar,
@@ -34,7 +38,7 @@ which carries a **Home** button on every screen:
 |---|---|
 | **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
-| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, documented rare codons and their clusters, GC stretches, homopolymers — no invented CAI — plus synonymous swaps that lower GC without touching the protein |
+| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table — plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
 The three share one sequence list: what you load in the analysis section is what the

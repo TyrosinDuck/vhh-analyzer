@@ -55,7 +55,7 @@ RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
 # users would notice — it is what someone will quote back to you in a bug report.
-VERSION = "20261027.1500"
+VERSION = "20261027.1600"
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
@@ -74,11 +74,11 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.10.27a", "sanger": "2026.10.21b",
+REQUIRED_MODULES = {"vhh_core": "2026.10.27b", "sanger": "2026.10.21b",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
-                    "triage": "2026.10.26a", "codons": "2026.10.27d"}
+                    "triage": "2026.10.26a", "codons": "2026.10.27e"}
 _stale = [f"`{name}.py` (has {getattr(mod, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want, mod in (("vhh_core", REQUIRED_MODULES["vhh_core"], vc),
@@ -423,15 +423,15 @@ def diagnose_gene(dna, expected, cluster_window, gc_window):
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
-def gc_fix_for(dna, gc_window, strategy, avoid, rank_cap):
+def gc_fix_for(dna, gc_window, strategy, avoid, min_usage):
     sites = {k: v for k, v in vc.DEFAULT_AVOID_SITES.items() if k in avoid}
     return cdn.suggest_gc_fix(dna, avoid_sites=sites, gc_window=gc_window,
-                              strategy=strategy, max_preference_rank=rank_cap)
+                              strategy=strategy, min_usage=min_usage)
 
 
 @st.cache_data(**_FIG_CACHE)
-def png_gc_comparison(dna, gc_window, strategy, avoid, rank_cap):
-    fix = gc_fix_for(dna, gc_window, strategy, avoid, rank_cap)
+def png_gc_comparison(dna, gc_window, strategy, avoid, min_usage):
+    fix = gc_fix_for(dna, gc_window, strategy, avoid, min_usage)
     if not fix["n_changes"]:
         return None
     return fig_to_png(cdn.plot_gc_comparison(dna, fix["dna"],
@@ -906,6 +906,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                  help="Codons whose scarcity in E. coli is well established and "
                       "supplemented by the Rosetta and CodonPlus strains.")
     gm[4].metric("Rare clusters", len(diag["clusters"]))
+    cai_now = cdn.cai(gene_dna).get("cai")
+    if cai_now is not None:
+        st.caption(
+            f"**CAI {cai_now:.3f}** — Codon Adaptation Index against the measured "
+            "*E. coli* usage table (Kazusa, CC0). 1.0 would mean the preferred "
+            "codon everywhere. It describes codon choice; it does not predict "
+            "expression level.")
 
     st.subheader("Findings")
     renderers = {"error": st.error, "warning": st.warning,
@@ -939,13 +946,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
             "and the protein is verified unchanged.")
         fx = st.columns([1, 1, 1])
         with fx[2]:
-            rank_cap = st.slider(
-                "Stay within the top N E. coli codons", 1, 6,
-                int(cdn.DEFAULT_RANK_CAP), key=f"rank_{name}",
+            min_usage = st.slider(
+                "Minimum E. coli usage of the substitute (%)", 0, 50,
+                int(cdn.MIN_USAGE * 100), step=5, key=f"usage_{name}",
                 help="The safeguard against trading a GC problem for a codon "
-                     "one. Only synonyms this far down the host's preference "
-                     "order are considered. 1 allows only the most-used codon "
-                     "and usually means no swap at all.")
+                     "one. A substitute must carry at least this share of its "
+                     "amino acid in E. coli. Leucine's CTG carries 50% and TTA "
+                     "13%, so a floor of 20% refuses that swap.") / 100
         with fx[0]:
             strategy = st.radio(
                 "How far to go", ["minimal", "maximal"], key=f"strat_{name}",
@@ -964,8 +971,8 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                 help="No suggestion will create one of these.")
 
         fix = gc_fix_for(gene_dna, gc_window, strategy, tuple(sorted(fix_avoid)),
-                         int(rank_cap))
-        fm = st.columns(4)
+                         float(min_usage))
+        fm = st.columns(5)
         fm[0].metric("Codons changed", fix["n_changes"])
         fm[1].metric("GC", f"{fix['gc_after']:.1%}",
                      delta=f"{(fix['gc_after'] - fix['gc_before']) * 100:+.1f} pts",
@@ -973,7 +980,16 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         fm[2].metric("GC-rich stretches left",
                      int((fix["remaining_regions"]["direction"] == "GC-rich").sum())
                      if len(fix["remaining_regions"]) else 0)
-        fm[3].metric("Protein",
+        fm[3].metric("CAI", f"{fix['cai_after']:.3f}"
+                     if fix["cai_after"] is not None else "—",
+                     delta=(f"{fix['cai_after'] - fix['cai_before']:+.3f}"
+                            if None not in (fix["cai_after"], fix["cai_before"])
+                            else None),
+                     help="Codon Adaptation Index, computed from the measured "
+                          "E. coli usage table. It falls as swaps move away "
+                          "from preferred codons — this is the price of the GC "
+                          "fix, in a number.")
+        fm[4].metric("Protein",
                      "unchanged" if fix["protein_unchanged"] else "CHANGED")
 
         if not fix["protein_unchanged"]:
@@ -986,7 +1002,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         else:
             comparison = png_gc_comparison(gene_dna, gc_window, strategy,
                                            tuple(sorted(fix_avoid)),
-                                           int(rank_cap))
+                                           float(min_usage))
             if comparison:
                 st.image(comparison, **FIT)
                 st.caption(
@@ -999,13 +1015,11 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
             st.dataframe(fix["regions"], hide_index=True, **FIT)
             st.dataframe(fix["suggestions"], hide_index=True, **FIT)
             st.caption(
-                "`rank_from` and `rank_to` are each codon's position in the "
-                "*E. coli* preference order. Worth a look before ordering: rank "
-                "is **ordinal, not proportional** — for leucine, the top codon "
-                "carries about half of all leucines and the second perhaps a "
-                "seventh, so even a rank-2 swap is a real drop in usage. The app "
-                "cannot say by how much, because that needs a codon usage table "
-                "it does not ship and will not invent.")
+                "`usage_from` and `usage_to` are the measured share each codon "
+                "carries of its amino acid in *E. coli* — real frequencies from "
+                "the Kazusa table, not an ordering. A swap from 0.50 to 0.13 is "
+                "a genuine drop even though neither codon is rare; the CAI above "
+                "is the same cost expressed over the whole gene.")
             st.markdown("**Rewritten sequence**")
             st.code(fix["dna"], language="text")
             st.download_button(

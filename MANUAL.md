@@ -973,10 +973,23 @@ and ranks are **clusters**, not the total: clustered and tandem rare codons are
 the ones associated with ribosome stalling, while scattered ones are generally
 tolerated. A gene can carry twenty rare codons and be perfectly fine.
 
-**No CAI is reported.** A Codon Adaptation Index needs a full codon usage table
-for the host. This app does not ship one, and inventing sixty-four relative
-adaptiveness values would produce a number that looks precise and means nothing.
-The documented rare codons and where they sit is what can be said honestly.
+**The CAI is real, and it was not always.** An earlier version of this section
+refused to report a Codon Adaptation Index, because computing one needs a codon
+usage table and inventing sixty-four values from memory would have produced a
+precise-looking number that meant nothing. That refusal has been resolved rather
+than relaxed: the app now ships the measured table — `data/ecoli_codon_usage.csv`,
+from the Kazusa Codon Usage Database (taxid 316407), released under CC0 and
+redistributed via the `python-codon-tables` package. Every usage figure and the
+CAI come from it.
+
+A CAI near 1 means the gene uses the host's preferred codons throughout.
+Methionine, tryptophan and stop codons are excluded, having no synonym to choose
+between. It describes codon choice; it does not predict expression level.
+
+The same table also rebuilt the codon preference order the **DNA** tab uses for
+back-translation (§3.13). The previous ordering was written from memory and was
+right for 18 of the 20 most-used codons, but wrong in the minor ranks of
+isoleucine, leucine, arginine and serine.
 
 **GC.** Overall, and as a sliding window. Stretches that stay outside 30–70% for
 at least a window length are listed — merged into regions rather than counted as
@@ -996,26 +1009,23 @@ offers the swaps.
 Every suggestion is checked against four constraints before it is offered.
 
 The substitute is not one of the documented rare codons. On its own that is not
-enough, so there is a second, stricter brake: **only synonyms within the top N of
-the host's preference order are considered**, N being the *Stay within the top N
-E. coli codons* slider. Without it the algorithm takes the lowest-GC synonym
-whatever its usage — and leucine's CTG, which carries about half of all *E. coli*
-leucines, would be swapped for a codon used a seventh as often. That is exactly
-the trade you did not want to make.
+enough, so there is a second brake, expressed in the only terms that mean
+anything: **the substitute must carry at least a given share of its amino acid in
+real *E. coli*.** Without it the algorithm takes the lowest-GC synonym whatever
+its usage — leucine's CTG carries 50% of all *E. coli* leucines and TTA 13%, so it
+would happily make that swap. Neither codon is rare; the swap is still a real
+drop. That is the trade you did not want.
 
-The default is 2, because on test sequences it already clears every GC-rich
-stretch while staying among the two most-used synonyms: 19 codon changes instead
-of 26 at rank 3, and the same result. At rank 1 only the single most-used codon is
-allowed, which usually means too few swaps to fix anything — the *GC-rich
-stretches left* figure tells you when that has happened, so raise the cap only if
-it reports a leftover.
+The floor is 20% by default, chosen by measurement rather than by feel. On a
+GC-rich test gene it clears every stretch at a cost of 0.044 of CAI, where a 10%
+floor costs 0.080 by allowing exactly the CTG→TTA swap above. Raise it to 40% and
+the CAI stops falling altogether — but four GC-rich stretches survive, which the
+*GC-rich stretches left* figure tells you.
 
-**One honest limit.** Rank is ordinal, not proportional. For leucine the top codon
-carries roughly half of all leucines and the second perhaps a seventh, so even a
-rank-2 swap is a real drop in usage — and this app cannot tell you by how much,
-because quantifying it needs a codon usage table it does not ship and will not
-invent. The suggestions table shows `rank_from` and `rank_to` for every change;
-read them before ordering. Treat the cap as a brake, not a guarantee.
+The suggestions table shows `usage_from` and `usage_to` for every change: measured
+frequencies, not an ordering. The **CAI** above the table is the same cost summed
+over the whole gene, so the trade-off reads as two numbers rather than as a
+judgement call.
 
 The remaining two constraints are unchanged: the substitute It creates none of the restriction sites you
 choose to preserve — the same list the DNA tab uses, and you can shorten it if a

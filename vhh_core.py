@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.27a"
+__version__ = "2026.10.27b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -2637,16 +2637,31 @@ def plot_chou_fasman(seq: str, name: str = "", window: int = 5,
 # ordered from most to least preferred. Rare codons (AGG/AGA, CTA, ATA, CGA)
 # are kept at the end of their list so they are only used as a last resort when
 # a forbidden site has to be broken.
+# Ordered by measured relative frequency in E. coli, from
+# data/ecoli_codon_usage.csv (Kazusa, CC0) rather than from recollection.
+# This replaced a hand-written ordering that was right for 18 of 20 top
+# codons but wrong in the minor ranks of I, L, R and S.
 ECOLI_CODONS = {
-    "A": ["GCG", "GCC", "GCA", "GCT"], "R": ["CGT", "CGC", "CGG", "CGA"],
-    "N": ["AAC", "AAT"], "D": ["GAT", "GAC"], "C": ["TGC", "TGT"],
-    "Q": ["CAG", "CAA"], "E": ["GAA", "GAG"], "G": ["GGC", "GGT", "GGG", "GGA"],
-    "H": ["CAT", "CAC"], "I": ["ATC", "ATT", "ATA"],
-    "L": ["CTG", "TTA", "CTT", "CTC", "TTG", "CTA"], "K": ["AAA", "AAG"],
-    "M": ["ATG"], "F": ["TTT", "TTC"], "P": ["CCG", "CCA", "CCT", "CCC"],
-    "S": ["AGC", "TCT", "TCC", "AGT", "TCG", "TCA"],
-    "T": ["ACC", "ACG", "ACT", "ACA"], "W": ["TGG"], "Y": ["TAT", "TAC"],
+    "A": ["GCG", "GCC", "GCA", "GCT"],
+    "C": ["TGC", "TGT"],
+    "D": ["GAT", "GAC"],
+    "E": ["GAA", "GAG"],
+    "F": ["TTT", "TTC"],
+    "G": ["GGC", "GGT", "GGG", "GGA"],
+    "H": ["CAT", "CAC"],
+    "I": ["ATT", "ATC", "ATA"],
+    "K": ["AAA", "AAG"],
+    "L": ["CTG", "TTA", "TTG", "CTC", "CTT", "CTA"],
+    "M": ["ATG"],
+    "N": ["AAC", "AAT"],
+    "P": ["CCG", "CCA", "CCT", "CCC"],
+    "Q": ["CAG", "CAA"],
+    "R": ["CGC", "CGT", "CGG", "CGA", "AGA", "AGG"],
+    "S": ["AGC", "AGT", "TCC", "TCG", "TCT", "TCA"],
+    "T": ["ACC", "ACG", "ACT", "ACA"],
     "V": ["GTG", "GTT", "GTC", "GTA"],
+    "W": ["TGG"],
+    "Y": ["TAT", "TAC"],
 }
 
 # Restriction sites commonly used for cloning, avoided by default

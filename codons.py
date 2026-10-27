@@ -12,18 +12,23 @@ induction conditions. A gene with perfect codon usage expresses badly for all of
 those reasons. This module tells you whether the *sequence* is part of the
 problem — it cannot tell you that it is the problem.
 
-**There is no CAI here.** A Codon Adaptation Index needs a full codon usage table
-for the host, and this module does not ship one; inventing sixty-four relative
-adaptiveness values from memory would produce a number that looks precise and
-means nothing. What it does instead is report the handful of codons whose scarcity
-in *E. coli* is well established and routinely supplemented by the Rosetta and
-CodonPlus strains, where they sit, and whether they cluster — tandem rare codons
-being the documented problem rather than isolated ones.
+**The CAI is real.** An earlier version of this module refused to report one,
+because computing it needs a codon usage table and inventing sixty-four values
+from memory would have produced a precise-looking number that meant nothing.
+That is no longer necessary: ``data/ecoli_codon_usage.csv`` carries the measured
+table (Kazusa Codon Usage Database, taxid 316407, CC0), so the index and every
+usage figure here come from data rather than recollection.
+
+Alongside it, the module reports the codons whose scarcity is well established
+and routinely supplemented by the Rosetta and CodonPlus strains, where they sit,
+and whether they cluster — tandem rare codons being the documented problem rather
+than isolated ones.
 """
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -33,15 +38,21 @@ import vhh_core as vc
 __all__ = [
     "RARE_CODONS", "orf_report", "codon_table", "rare_clusters", "gc_windows",
     "gc_regions", "suggest_gc_fix", "parse_dna_input", "summarise",
+    "codon_usage", "relative_adaptiveness", "cai", "MIN_USAGE",
     "plot_gc_comparison",
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.27d"
+__version__ = "2026.10.27e"
 
 # Codons whose scarcity in E. coli is well established — these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
 # name is given only where it is unambiguous.
+# Cross-checked against the measured table: AGG 2%, AGA 4%, CTA 4%, CGA 6% and
+# ATA 7% are genuinely scarce, while CGG 10%, GGA 11% and CCC 12% are not rare by
+# frequency at all. They are kept because the Rosetta and CodonPlus strains
+# supplement their tRNAs, and tRNA abundance is not the same thing as codon
+# frequency — but the real figure is reported alongside so you can judge.
 RARE_CODONS: dict[str, dict] = {
     "AGA": {"aa": "R", "trna": "argU", "note": "rare arginine, the classic one"},
     "AGG": {"aa": "R", "trna": "argU/argW", "note": "rare arginine"},
@@ -54,15 +65,95 @@ RARE_CODONS: dict[str, dict] = {
 }
 
 CLUSTER_WINDOW = 6        # codons; two rare codons this close count as a cluster
-# How far down the host's preference order a GC-lowering swap may go. 2 by
-# default because on test sequences it already clears every GC-rich stretch
-# while staying among the two most-used synonyms; raise it only when the UI
-# reports stretches left over.
-DEFAULT_RANK_CAP = 2
+
 GC_WINDOW = 30            # nucleotides
 GC_LOW, GC_HIGH = 0.30, 0.70   # practical synthesis band, not a biological one
 HEAD_CODONS = 15          # the translation initiation region, in codons
 STOPS = {"TAA", "TAG", "TGA"}
+
+
+
+# ---------------------------------------------------------------------------
+# Real E. coli codon usage
+# ---------------------------------------------------------------------------
+# An earlier version of this module said no CAI could be reported, because
+# computing one needs a codon usage table and inventing sixty-four values from
+# memory would produce a precise-looking number that means nothing. That was the
+# right call at the time; it is no longer necessary. ``data/ecoli_codon_usage.csv``
+# carries the measured table (Kazusa, taxid 316407, CC0), so usage can be stated
+# as a frequency rather than as a rank, and the CAI is computable honestly.
+
+USAGE_FILE = Path(__file__).parent / "data" / "ecoli_codon_usage.csv"
+MIN_USAGE = 0.20          # a substitute must carry at least this share of its codon family
+# 20% chosen by measurement, not by feel: on test genes it clears every GC-rich
+# stretch while costing 0.04 of CAI, where a 10% floor costs 0.08 by letting
+# leucine's TTA (13%) replace CTG (50%).
+
+_USAGE: dict[str, float] | None = None
+_USAGE_BY_AA: dict[str, dict[str, float]] | None = None
+
+
+def codon_usage() -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    """``(usage_by_codon, usage_by_amino_acid)``, relative frequencies."""
+    global _USAGE, _USAGE_BY_AA
+    if _USAGE is None:
+        import csv
+
+        by_codon: dict[str, float] = {}
+        by_aa: dict[str, dict[str, float]] = {}
+        with open(USAGE_FILE) as handle:
+            rows = csv.DictReader(line for line in handle
+                                  if not line.startswith("#"))
+            for row in rows:
+                codon = row["codon"].upper().replace("U", "T")
+                freq = float(row["relative_frequency"])
+                by_codon[codon] = freq
+                by_aa.setdefault(row["amino_acid"], {})[codon] = freq
+        _USAGE, _USAGE_BY_AA = by_codon, by_aa
+    return _USAGE, _USAGE_BY_AA
+
+
+def relative_adaptiveness() -> dict[str, float]:
+    """``w`` per codon: its frequency over the most frequent synonym's."""
+    _by_codon, by_aa = codon_usage()
+    out = {}
+    for aa, codons in by_aa.items():
+        top = max(codons.values()) or 1.0
+        for codon, freq in codons.items():
+            out[codon] = freq / top
+    return out
+
+
+def cai(dna: str) -> dict:
+    """Codon Adaptation Index (Sharp & Li): geometric mean of the ``w`` values.
+
+    Methionine, tryptophan and stop codons are excluded — they have no synonym,
+    so they carry no information about adaptation and would only inflate the
+    score. A CAI near 1 means the gene uses the host's preferred codons
+    throughout; a low one means it does not. It is a *description of codon
+    choice*, not a prediction of expression level.
+    """
+    import numpy as np
+
+    dna = _clean_dna(dna)
+    weights = relative_adaptiveness()
+    _by_codon, by_aa = codon_usage()
+    values, skipped = [], 0
+    for i in range(0, len(dna) - len(dna) % 3, 3):
+        codon = dna[i:i + 3]
+        aa = vc.translate_dna(codon)
+        if aa in ("", "*", "X", "M", "W") or len(by_aa.get(aa, {})) < 2:
+            skipped += 1
+            continue
+        w = weights.get(codon)
+        if not w:
+            skipped += 1
+            continue
+        values.append(w)
+    if not values:
+        return {"cai": None, "n_codons": 0, "n_skipped": skipped}
+    return {"cai": round(float(np.exp(np.mean(np.log(values)))), 3),
+            "n_codons": len(values), "n_skipped": skipped}
 
 
 def _clean_dna(dna: str) -> str:
@@ -367,7 +458,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                    max_homopolymer: int = 6,
                    allow_rare: bool = False,
                    strategy: str = "minimal",
-                   max_preference_rank: int = DEFAULT_RANK_CAP) -> dict:
+                   min_usage: float = MIN_USAGE) -> dict:
     """Synonymous swaps that lower GC inside the flagged stretches.
 
     Only codons inside a GC-rich region are considered — there is no reason to
@@ -410,6 +501,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
     rich = (regions[regions["direction"] == "GC-rich"]
             if len(regions) else pd.DataFrame())
 
+    usage, _by_aa = codon_usage()
     protein_before = vc.translate_dna(dna)
     codons = [dna[i:i + 3] for i in range(0, len(dna) - len(dna) % 3, 3)]
     working = list(codons)
@@ -433,12 +525,10 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
     if strategy == "minimal":
         def gain(i: int) -> float:
             aa = vc.translate_dna(codons[i])
-            pref = vc.ECOLI_CODONS.get(aa, [])
             alts = [c for c in syn.get(aa, []) if c != codons[i]]
             if not allow_rare:
                 alts = [c for c in alts if c not in RARE_CODONS]
-            alts = [c for c in alts
-                    if (pref.index(c) + 1 if c in pref else 99) <= max_preference_rank]
+            alts = [c for c in alts if usage.get(c, 0.0) >= min_usage]
             return -(_gc(codons[i]) - min((_gc(c) for c in alts), default=_gc(codons[i])))
         order = sorted(targets, key=gain)
 
@@ -450,21 +540,16 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
         aa = vc.translate_dna(codon)
         if aa in ("", "*", "X"):
             continue
-        preference = vc.ECOLI_CODONS.get(aa, [])
-
-        def rank(c: str) -> int:
-            """1-based position in the host's preference order; 99 if unlisted."""
-            return preference.index(c) + 1 if c in preference else 99
-
         options = [c for c in syn.get(aa, []) if c != codon]
         if not allow_rare:
             options = [c for c in options if c not in RARE_CODONS]
         options = [c for c in options if _gc(c) < _gc(codon)]
-        # the usage safeguard: stay inside the commonly used synonyms
-        options = [c for c in options if rank(c) <= max_preference_rank]
+        # the usage safeguard, in real frequencies rather than in rank order
+        options = [c for c in options if usage.get(c, 0.0) >= min_usage]
         if not options:
             continue
-        options.sort(key=lambda c: (_gc(c), rank(c)))
+        # lowest GC first, and among equals the one E. coli uses most
+        options.sort(key=lambda c: (_gc(c), -usage.get(c, 0.0)))
 
         for candidate in options:
             trial = list(working)
@@ -485,7 +570,8 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                 "from": codon, "to": candidate,
                 "gc_from": round(_gc(codon), 2), "gc_to": round(_gc(candidate), 2),
                 "rare_substitute": candidate in RARE_CODONS,
-                "rank_from": rank(codon), "rank_to": rank(candidate),
+                "usage_from": round(usage.get(codon, 0.0), 3),
+                "usage_to": round(usage.get(candidate, 0.0), 3),
             })
             break
 
@@ -513,6 +599,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
         "gc_before": round(_gc(dna), 4),
         "gc_after": round(_gc(fixed), 4),
         "n_changes": len(suggestions),
+        "cai_before": cai(dna).get("cai"), "cai_after": cai(fixed).get("cai"),
         "remaining_regions": gc_regions(gc_windows(fixed, gc_window), gc_window),
     }
 
