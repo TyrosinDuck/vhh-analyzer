@@ -44,9 +44,18 @@ which carries a **Home** button on every screen:
 | **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
-The three share one sequence list: what you load in the analysis section is what the
-cloning section offers as an insert, and the sequencing section writes into it. Each
-section still works on its own.
+They share one sequence list: what you load in the analysis section is what the
+cloning section offers as an insert, the sequencing section writes into it, the
+analysis section's DNA tab hands its back-translations to gene diagnosis, and the
+library feeds both. Each section still works on its own.
+
+Inside the analysis section the views are grouped into six **families** chosen with
+a selector — Triage, Identity, Developability, Comparison, Repertoire, Outputs.
+Only the selected family executes, which is why it is a selector and not another
+row of tabs: Streamlit runs the body of every tab, nested or not. First display
+after **Analyze** is 1.7 s on seven sequences, against roughly 12 s when all
+fifteen views were tabs; the expensive family (Comparison, 9 s — alignment, logo,
+identity matrices) is now paid for only when asked for.
 
 ## Run locally
 
@@ -245,27 +254,27 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 
 ## What the app reports
 
-| Tab | Contents |
-|---|---|
-| Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
-| Triage | every flag the app raises, one row per sequence, sortable — no composite score, deliberately |
-| Properties | physico-chemical descriptors, developability flags, lysines and primary amines for conjugation planning, custom features |
-| Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
-| CDR / Framework | region table, coloured sequences, both annotation methods explained |
-| Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
-| Humanness | framework-only identity to the closest human germline V gene, computed position by position in IMGT numbering, with every divergent position listed and the hallmarks flagged |
-| Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
-| Disulfides | the canonical IMGT 23/104 pair, plausible additional CDR1–CDR3 or FR2–CDR3 pairs, and orphan thiols told apart |
-| Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
-| Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
-| Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
-| Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
-| vs Reference | positions differing from a chosen reference, matched by IMGT number so an indel reports as one change rather than shifting everything downstream |
-| Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
-| Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
-| DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
-| Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
-| Download | CSV, figures as PNG, and a complete PDF report |
+| Family | Tab | Contents |
+|---|---|---|
+| — | Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
+| 🎯 Triage | Triage | every flag the app raises, one row per sequence, sortable — no composite score, deliberately |
+| 🔍 Identity | Properties | physico-chemical descriptors, developability flags, lysines and primary amines for conjugation planning, custom features |
+| 🔍 Identity | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
+| 🔍 Identity | CDR / Framework | region table, coloured sequences, both annotation methods explained |
+| 🔍 Identity | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
+| 🔍 Identity | Humanness | framework-only identity to the closest human germline V gene, computed position by position in IMGT numbering, with every divergent position listed and the hallmarks flagged |
+| ⚠️ Developability | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
+| ⚠️ Developability | Disulfides | the canonical IMGT 23/104 pair, plausible additional CDR1–CDR3 or FR2–CDR3 pairs, and orphan thiols told apart |
+| ⚠️ Developability | Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
+| ⚠️ Developability | Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
+| 🔗 Comparison | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
+| 🔗 Comparison | Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
+| 🔗 Comparison | vs Reference | positions differing from a chosen reference, matched by IMGT number so an indel reports as one change rather than shifting everything downstream |
+| 🌍 Repertoire | Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
+| 🔗 Comparison | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
+| 🧪 Outputs | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
+| 🧪 Outputs | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
+| 🧪 Outputs | Download | CSV, figures as PNG, and a complete PDF report |
 
 Three of these deserve a word of caution. The **Chou–Fasman plot** is a
 composition-based heuristic, roughly 50–60% accurate: it shows where the sequence

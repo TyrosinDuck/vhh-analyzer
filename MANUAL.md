@@ -59,9 +59,59 @@ the analysis section's **DNA** tab hands its back-translated sequences to gene
 diagnosis in one click; and the library feeds proteins to the analysis and DNA to
 gene diagnosis. Each section still works entirely on its own.
 
+Inside the analysis section, the views are grouped into six families chosen with a
+selector across the top — see §3.0, which also explains why it is a selector and
+not another row of tabs.
+
 ---
 
 ## 3. Sequence analysis
+
+### 3.0 How the analysis is laid out
+
+The analysis produces about fifteen different views of a set of sequences. Showing
+them as fifteen tabs made two problems at once: nobody could find anything, and
+**Streamlit executes the body of every tab on every interaction** — including the
+tabs you never open. Moving one slider redrew nineteen figures.
+
+So the views are grouped into six **families**, chosen with the selector across the
+top. Each family answers one question:
+
+| Family | The question |
+|---|---|
+| 🎯 **Triage** | Which of these do I keep? (§3.2b) |
+| 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
+| ⚠️ **Developability** | Will it behave? (§3.7–3.8) |
+| 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
+| 🌍 **Repertoire** | How do they compare with real VHHs? (§3.11) |
+| 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
+
+Only the selected family executes. That is the whole point of a selector rather
+than nested tabs — Streamlit would run the bodies of nested tabs too. The effect,
+on seven sequences:
+
+| | Time |
+|---|---|
+| First display after **Analyze** | 1.7 s |
+| 🎯 Triage | 0.3 s |
+| 🔍 Identity | 5.8 s |
+| ⚠️ Developability | 2.1 s |
+| 🔗 Comparison | 9.1 s |
+| 🌍 Repertoire | 3.3 s |
+| 🧪 Outputs | 0.9 s |
+
+Before this, every analysis paid all of it at once: roughly twelve seconds before
+anything appeared, on every single interaction. Comparison is still the expensive
+one, because it carries the alignment, the logo and the identity matrices — but you
+only pay for it when you ask for it, and the cost has stopped being silent.
+
+Repertoire sits in its own family rather than inside Comparison for the same
+reason: it is a different question (your sequences against 1958 natural VHHs rather
+than against each other), and keeping it separate takes Comparison from 14 s to
+9 s.
+
+Inside a family, the views are still tabs — there are at most four, and they are
+cheap relative to the family itself.
 
 ### 3.1 Giving it sequences
 
@@ -583,14 +633,13 @@ is enough.
 With two or more sequences: a FAMSA alignment rendered with `pymsaviz`, with the CDR
 bands of the first sequence marked, downloadable as aligned FASTA.
 
-**Both figures are drawn on request.** The alignment and the logo are by some
-distance the two most expensive figures in the app, and Streamlit re-executes every
-tab body on every interaction — so left to themselves they are redrawn constantly,
-whether or not anyone is looking at this tab. A **Draw the alignment and logo**
-button replaces them until you ask. One click per set of sequences, and it takes
-roughly a quarter off the time to build the page for everyone who never opens this
-tab. Submitting a different set brings the button back, which is the point: a new
-analysis should not silently pay for figures nobody asked to see.
+These two figures are the most expensive in the app, and they used to sit behind a
+**Draw the alignment and logo** button because Streamlit re-executes every tab body
+on every interaction — so left to themselves they were redrawn constantly, whether
+or not anyone was looking. The family selector (§3.0) solves that properly: the
+Comparison family only executes when you select it, so the button became pure
+friction and was removed. The cost of these figures is now paid when you ask for
+the family that contains them, and at no other time.
 
 A *Positions per row* slider sets the wrap, 20 to 140 columns, exactly as the logo
 below has its own. Fewer positions per row gives more rows and wider letters, which
@@ -1152,7 +1201,7 @@ to fix, and the message carries the line number.
 
 One screen, three steps.
 
-### 5.1 Recipient vector
+### 7.1 Recipient vector
 
 Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can also
 upload your own in SnapGene `.dna`, GenBank or FASTA.
@@ -1171,7 +1220,7 @@ tag. That is where the insert will land, and the app shows the coordinates it fo
 The **Expected tags** selector says which cassette layout the finished construct should
 have; it is used when the construct is translated back.
 
-### 5.2 Donor DNA
+### 7.2 Donor DNA
 
 Two kinds of donor:
 
@@ -1192,7 +1241,7 @@ bracketing product wins, and the app tells you which form of which primer it use
 The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can upload your
 own CSV with `name,sequence` columns; nothing is stored.
 
-### 5.3 The plan
+### 7.3 The plan
 
 The app cuts, joins and translates **every candidate enzyme pair for real**, then
 compares the VHH the construct encodes with the VHH in the donor. A pair is only
@@ -1235,7 +1284,7 @@ with the leader until a correctly sized VHH is cloned in. Comparing against the 
 vector's frame would flag every correct construct. Translating the finished construct
 is the only check that means anything.
 
-### 5.4 What you get
+### 7.4 What you get
 
 The recommended enzyme pair, the construct size, the VHH length, how much vector is
 removed. The donor and construct VHH side by side. The translated cassette — signal
@@ -1245,7 +1294,7 @@ Downloads: the construct as **GenBank**, annotated with the insert and the casse
 parts so SnapGene or Benchling opens it ready to read; as FASTA; and the amplicon as
 FASTA. Plus a short protocol paragraph.
 
-### 5.5 Folded-away detail
+### 7.5 Folded-away detail
 
 - **All enzyme pairs considered** — every pair with its verdict and, when rejected, why.
 - **Restriction sites** — every enzyme that cuts the backbone, how often, where, and
