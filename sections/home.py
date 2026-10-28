@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from shell import APP_ICON, APP_NAME, FIT, SECTIONS, current_sequences, footer, go_to
+from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT,
+                   LICENCE, REPO_URL, SECTIONS, current_sequences,
+                   footer, go_to)
 
-__version__ = "2026.10.28c"
+__version__ = "2026.10.28d"
 
 
 def render() -> None:
@@ -72,6 +74,36 @@ proteins to the analysis and the DNA to gene diagnosis.
 Each section also works on its own: you can go straight to cloning with a pasted
 DNA insert, or straight to analysis with a FASTA file.
 """)
+
+    st.write("")
+    with st.expander("📑 Citing this tool"):
+        st.markdown(
+            f"Archived on Zenodo, which mints a DOI and keeps a copy of the "
+            f"code. That matters more than the links: a GitHub repository and a "
+            f"Streamlit URL both depend on accounts somebody has to keep alive, "
+            f"and a DOI does not.\n\n"
+            f"The DOI below is the **concept DOI** — it always resolves to the "
+            f"latest release. If you need to say exactly which code produced a "
+            f"result, use the version DOI of the release you ran, shown on the "
+            f"Zenodo record.")
+        st.code(
+            f"Vaneyck, J. {APP_NAME} [Computer software]. "
+            f"https://doi.org/{DOI}", language=None)
+        st.caption("BibTeX")
+        st.code(
+            "@software{vaneyck_vhh_tool_box,\n"
+            "  author  = {Vaneyck, Jonathan},\n"
+            f"  title   = {{{APP_NAME}}},\n"
+            f"  doi     = {{{DOI}}},\n"
+            f"  url     = {{{REPO_URL}}},\n"
+            "  license = {MIT}\n"
+            "}", language="bibtex")
+        st.markdown(
+            f"[DOI]({DOI_URL}) · [Source]({REPO_URL}) · "
+            f"[ORCID]({AUTHOR_URL}) · {LICENCE} licence\n\n"
+            f"The {LICENCE} licence covers this app's own code. One dependency, "
+            f"`pyfamsa` (FAMSA, used for the multiple alignment), is "
+            f"GPL-3.0-or-later — see `LICENSE` in the repository.")
 
     # No footer() here: the router draws it after render() returns, so
     # that every screen gets exactly one and a new screen cannot forget

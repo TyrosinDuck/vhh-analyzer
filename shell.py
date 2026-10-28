@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -46,13 +46,32 @@ FTISRDNAANTVYLQMNSLKPEDTAVYYCNVKDYGAVLYEYDYWGQGTQVTVSS
 """
 
 
-VERSION = "20261028.2530"
+VERSION = "20261028.2600"
 
 
-AUTHOR = "TyrosinDuck"
+# The author as the work should be attributed, not as a platform handle: the
+# citation metadata, the licence and the Zenodo record all carry the real name,
+# and a footer that disagrees with them is a small way of making the tool harder
+# to credit.
+AUTHOR = "Jonathan Vaneyck"
 
 
-AUTHOR_URL = "https://github.com/TyrosinDuck"
+AUTHOR_URL = "https://orcid.org/0000-0003-3095-7420"
+
+
+REPO_URL = "https://github.com/TyrosinDuck/vhh-analyzer"
+
+
+# The Zenodo *concept* DOI: it always resolves to the latest archived release,
+# which is the one that belongs in a reference list. Each release also has a
+# version DOI of its own, for citing the exact code that produced a result.
+DOI = "10.5281/zenodo.23742269"
+
+
+DOI_URL = f"https://doi.org/{DOI}"
+
+
+LICENCE = "MIT"
 
 
 APP_NAME = "VHH tool box"
@@ -136,7 +155,9 @@ def footer() -> None:
                "dna_features_viewer. Theoretical predictions — validate "
                "experimentally. Sequences are not stored; for confidential work, "
                "run the app locally.")
-    st.caption(f"{APP_NAME} · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
+    st.caption(
+        f"{APP_NAME} · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL}) · "
+        f"{LICENCE} licence · [source]({REPO_URL}) · [doi:{DOI}]({DOI_URL})")
 
 
 SECTIONS = {

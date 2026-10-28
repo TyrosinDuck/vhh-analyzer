@@ -116,3 +116,22 @@ def test_the_licence_states_the_gpl_dependency():
 def test_the_licence_is_declared_in_the_citation_file(citation):
     assert citation["license"] == "MIT", \
         f"CITATION.cff declares {citation['license']!r}, LICENSE is MIT"
+
+
+def test_the_app_and_the_citation_file_agree(citation):
+    """`shell.py` shows the DOI in the footer; it must be the same one.
+
+    Two copies of an identifier in one repository is one copy too many, and the
+    failure is silent: the app would advertise a DOI that cites something else,
+    on every page, and nothing would look wrong.
+    """
+    import shell
+
+    assert shell.DOI == citation["doi"], (
+        f"shell.DOI is {shell.DOI!r} but CITATION.cff says {citation['doi']!r}")
+    assert shell.AUTHOR_URL == citation["authors"][0]["orcid"], \
+        "the ORCID in the footer and in CITATION.cff differ"
+    assert citation["authors"][0]["family-names"] in shell.AUTHOR, \
+        f"the footer credits {shell.AUTHOR!r}, which does not contain the " \
+        f"family name in CITATION.cff"
+    assert shell.LICENCE == citation["license"]

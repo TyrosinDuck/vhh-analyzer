@@ -1642,6 +1642,8 @@ notice. One caveat is spelled out in `LICENSE`: that covers the app's own code
 and cannot change its dependencies' terms, and one of them, `pyfamsa` (FAMSA,
 used for the multiple alignment), is GPL-3.0-or-later.
 
-If you use the app in published work, `CITATION.cff` in the repository carries
-the citation metadata, and GitHub turns it into a **Cite this repository**
-button.
+If you use the app in published work, cite it by its DOI:
+**10.5281/zenodo.23742269**. That is the *concept* DOI — it always resolves to
+the latest archived release. The home page has a **Citing this tool** panel with
+the citation and a BibTeX entry ready to copy, and each release has a version DOI
+of its own on Zenodo for saying exactly which code produced a result.
