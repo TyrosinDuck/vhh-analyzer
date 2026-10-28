@@ -135,3 +135,35 @@ def test_the_app_and_the_citation_file_agree(citation):
         f"the footer credits {shell.AUTHOR!r}, which does not contain the " \
         f"family name in CITATION.cff"
     assert shell.LICENCE == citation["license"]
+    assert shell.RELEASE == citation.get("version"), (
+        f"the app reports release {shell.RELEASE!r} but CITATION.cff says "
+        f"{citation.get('version')!r} — the footer, the git tag and the Zenodo "
+        f"record are supposed to name the same thing")
+
+
+def test_the_release_number_is_semantic_versioning():
+    """A build datestamp in the footer names a version nobody else knows.
+
+    The footer used to read `version 20261028.2600`, which matched no git tag and
+    no Zenodo record, so a bug report or a citation referred to something
+    unfindable. RELEASE is the tag; BUILD distinguishes two builds of it.
+    """
+    import shell
+
+    assert re.fullmatch(r"\d+\.\d+\.\d+", shell.RELEASE), \
+        f"RELEASE is {shell.RELEASE!r}, expected MAJOR.MINOR.PATCH"
+    assert re.fullmatch(r"\d{8}", shell.BUILD), \
+        f"BUILD is {shell.BUILD!r}, expected YYYYMMDD"
+    assert shell.RELEASE in shell.VERSION and shell.BUILD in shell.VERSION
+
+
+def test_the_changelog_documents_the_current_release():
+    """A changelog that stops before the current version is a stale changelog."""
+    import shell
+
+    path = ROOT / "CHANGELOG.md"
+    assert path.exists(), "CHANGELOG.md is missing"
+    text = path.read_text(encoding="utf-8")
+    assert f"[{shell.RELEASE}]" in text, (
+        f"CHANGELOG.md has no entry for {shell.RELEASE} — bump the changelog "
+        f"when you bump the release")

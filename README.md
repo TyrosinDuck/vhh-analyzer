@@ -334,7 +334,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-44 tests, about 35 seconds (`pytest -m "not smoke"` runs the fast ones in under
+47 tests, about 32 seconds (`pytest -m "not smoke"` runs the fast ones in under
 ten). `requirements-dev.txt` is **not** installed on
 Streamlit Community Cloud — the app itself needs `requirements.txt` alone — so
 adding a test dependency can never break the deployment.
@@ -430,6 +430,35 @@ in `compute.py`), and no screen reads another screen's globals (every screen is 
 redeployable. If it lapses, every published link breaks — including any in a
 paper. Keep auto-renew on, and make sure the card behind it is one that will
 still exist next year.
+
+## Releases
+
+Versions follow `MAJOR.MINOR.PATCH`. The major number is not hypothetical here:
+the analysis modules are importable from a notebook, so changing the signature of
+a `vhh_core` function breaks somebody's notebook even when the app looks
+identical.
+
+To cut a release:
+
+1. Update `CHANGELOG.md` with an entry for the new version — Added / Changed /
+   Fixed, written for someone who uses the app.
+2. Bump `RELEASE` (and `BUILD`) in `shell.py`, and `version` / `date-released`
+   in `CITATION.cff`.
+3. `pytest` — three tests check that the footer, `CITATION.cff` and the changelog
+   all name the same version. They exist because a footer reading
+   `version 20261028.2600` matched no git tag and no Zenodo record, so a bug
+   report or a citation referred to something nobody could find.
+4. Commit, push, then **Releases → Draft a new release** on GitHub with the tag
+   `vX.Y.Z` and the changelog entry as the notes.
+5. Zenodo archives it automatically and mints a version DOI.
+
+Cut one when something meaningful has changed — a new section, a batch of fixes
+— not on every push. Three empty releases in a week read worse than one real one
+a quarter.
+
+**Before citing the tool in a paper, cut a release and cite that release's
+version DOI**, not the concept DOI. A reader then gets the exact code that
+produced the result rather than whatever the latest version happens to be.
 
 ## Making the tool citable
 

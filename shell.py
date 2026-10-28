@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.28b"
+__version__ = "2026.10.28c"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -46,7 +46,26 @@ FTISRDNAANTVYLQMNSLKPEDTAVYYCNVKDYGAVLYEYDYWGQGTQVTVSS
 """
 
 
-VERSION = "20261028.2600"
+# The release this build belongs to, as semantic versioning: MAJOR.MINOR.PATCH.
+# It must match the git tag and the Zenodo record, so that a user reporting a bug
+# or citing a version names something those two know about. Bump it when you cut
+# a release, not on every change.
+#
+#   PATCH  a fix, nothing new                     (1.0.0 -> 1.0.1)
+#   MINOR  a new feature, nothing broken          (1.0.1 -> 1.1.0)
+#   MAJOR  a change that breaks an existing use   (1.1.0 -> 2.0.0)
+#
+# MAJOR is not hypothetical here: the analysis modules are importable from a
+# notebook, so changing the signature of a vhh_core function breaks somebody's
+# notebook even though the app looks identical.
+RELEASE = "1.0.0"
+
+# The day this particular build was assembled. Two builds of the same release
+# are possible - a fix pushed between releases - and this is what tells them
+# apart in a bug report.
+BUILD = "20261028"
+
+VERSION = f"{RELEASE} (build {BUILD})"
 
 
 # The author as the work should be attributed, not as a platform handle: the
@@ -156,7 +175,7 @@ def footer() -> None:
                "experimentally. Sequences are not stored; for confidential work, "
                "run the app locally.")
     st.caption(
-        f"{APP_NAME} · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL}) · "
+        f"{APP_NAME} · v{VERSION} · by [{AUTHOR}]({AUTHOR_URL}) · "
         f"{LICENCE} licence · [source]({REPO_URL}) · [doi:{DOI}]({DOI_URL})")
 
 
