@@ -379,6 +379,18 @@ meaningless and nothing asks anything of it; what is being tested is the
 bookkeeping, and for that a synthetic chain beats a real one because the right
 answer is known by construction.
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md): how to report a bug, how to ask a
+question, what is out of scope and why, and the two conventions the interface
+code follows.
+
+One point from it is worth repeating here. **GitHub issues are public and so is
+`data/library.csv`** — do not paste unpublished or confidential sequences into
+either. A defect can nearly always be reproduced with one of the 22 published
+sequences in the library. To analyse confidential sequences at all, run the app
+locally rather than using the public deployment.
+
 ## Licence
 
 MIT — see `LICENSE`. Use it, change it, redistribute it, build on it; keep the

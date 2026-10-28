@@ -113,6 +113,23 @@ def test_the_licence_states_the_gpl_dependency():
         "LICENSE no longer mentions the GPL-3.0 dependency on pyfamsa"
 
 
+def test_the_community_guidelines_exist():
+    """JOSS requires guidance for contributing, reporting issues and support.
+
+    Checked here rather than left to memory because the file is documentation
+    nobody runs: it can be deleted in a reorganisation without anything failing.
+    """
+    path = ROOT / "CONTRIBUTING.md"
+    assert path.exists(), "CONTRIBUTING.md is missing"
+    text = path.read_text(encoding="utf-8").lower()
+    for topic, needle in (("reporting bugs", "reporting a bug"),
+                          ("asking for help", "asking for help"),
+                          ("contributing code", "contributing code")):
+        assert needle in text, f"CONTRIBUTING.md says nothing about {topic}"
+    assert "public" in text, \
+        "CONTRIBUTING.md no longer warns that issues and the library are public"
+
+
 def test_the_licence_is_declared_in_the_citation_file(citation):
     assert citation["license"] == "MIT", \
         f"CITATION.cff declares {citation['license']!r}, LICENSE is MIT"
