@@ -1576,8 +1576,11 @@ somewhere other than Community Cloud.
 
 ## 12. Troubleshooting
 
-**"Some modules are out of date."** `app.py` and the analysis modules are released
-together. Update `vhh_core.py`, `sanger.py` and `cloning.py` alongside it.
+**"Some modules are out of date."** Every file is released together, and each one
+carries a version `app.py` checks on startup. The message names the file and both
+versions; copy the whole folder rather than individual files. If it persists after
+a correct update, Streamlit is serving a cached import — **Reboot app** from the
+Community Cloud dashboard clears it.
 
 **No CDR annotation, or no germline table.** ANARCI is not installed in this
 deployment. The sidebar caption confirms it. The regex annotator still works.
@@ -1613,13 +1616,24 @@ The synthetic-sequence generator uses a position-frequency matrix derived from
 **PLAbDab-nano** (OPIG, University of Oxford); please cite that resource if you
 publish anything built on the generated sequences.
 
-The analysis logic lives in four importable modules — `vhh_core.py`, `sanger.py`,
-`cloning.py` and `generator.py` — with no dependency on the interface, so a Jupyter notebook can use them
+The code is in two layers. The science is in importable modules with no dependency
+on the interface — `vhh_core.py`, `structure.py`, `codons.py`, `cloning.py`,
+`sanger.py`, `repertoire.py`, `generator.py`, `constructs.py`, `triage.py`,
+`library.py` — so a Jupyter notebook can use them
 exactly the same way:
 
 ```python
 import vhh_core as vc
 df, annotations, errors = vc.analyze({"MyNb": "EVQLVESGGG..."})
 ```
+
+The interface is the second layer: `app.py` routes, `shell.py` holds the chrome,
+`compute.py` holds every cached call, and `sections/` holds one module per screen
+— each a `render()` function that draws and computes nothing. `app.py` was a
+single 3 911-line script before those screens were pulled out of it; the README
+lists the files and the two rules that keep it from growing back.
+
+There is a test suite: `pip install -r requirements-dev.txt` then `pytest`. Almost
+every test in it is a bug the app actually had, frozen so it cannot return.
 
 The source is at <https://github.com/TyrosinDuck/vhh-analyzer>.

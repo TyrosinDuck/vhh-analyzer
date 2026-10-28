@@ -1,0 +1,170 @@
+"""
+shell - the app's chrome: identity, navigation, caching policy, footer.
+
+Everything here is shared by every section and belongs to none of them. It lives
+in its own module so that `app.py` can be a router and a section file can import
+what it needs without importing the app.
+
+Nothing in here computes anything about a sequence. That is `compute.py`.
+"""
+
+from __future__ import annotations
+
+import io
+import re
+import tempfile
+import time
+import zipfile
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+
+import cloning as cl
+import codons as cdn
+import constructs as ctm
+import generator as gn
+import library as lib
+import repertoire as rep
+import sanger as sg
+import structure as stx
+import triage as tg
+import vhh_core as vc
+
+__version__ = "2026.10.28a"
+
+EXAMPLE = """>caplacizumab
+EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
+RFTISRDNAKRMVYLQMNSLRAEDTAVYYCAAAGVRAEDGRVRTLPSEYTFWGQGTQVTVSS
+>cAbLys3
+DVQLQASGGGSVQAGGSLRLSCAASGYTIGPYCMGWFRQAPGKEREGVAAINMGGGITYYADSVKG
+RFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS
+>Nb80
+QVQLQESGGGLVQAGGSLRLSCAASGSIFSINTMGWYRQAPGKQRELVAAIHSGGSTNYANSVKGR
+FTISRDNAANTVYLQMNSLKPEDTAVYYCNVKDYGAVLYEYDYWGQGTQVTVSS
+"""
+
+
+VERSION = "20261028.2300"
+
+
+AUTHOR = "TyrosinDuck"
+
+
+AUTHOR_URL = "https://github.com/TyrosinDuck"
+
+
+APP_NAME = "VHH tool box"
+
+
+APP_ICON = "🧰"
+
+
+def _fit() -> dict:
+    """Return the right 'fill the container' kwarg for the installed Streamlit.
+
+    `use_container_width` is deprecated in favour of `width="stretch"` from 1.49
+    onwards; this keeps the app working on both old and new versions.
+    """
+    try:
+        from packaging.version import Version
+        if Version(st.__version__.split("+")[0]) >= Version("1.49"):
+            return {"width": "stretch"}
+    except Exception:
+        pass
+    return {"use_container_width": True}
+
+
+FIT = _fit()
+
+
+CACHE_TTL = 600        # seconds
+
+
+CACHE_MAX_ENTRIES = 8
+
+
+_FIG_CACHE = dict(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=24)
+
+
+def fig_to_png(fig, dpi: int = 200, close: bool = False) -> bytes:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    if close:
+        plt.close(fig)
+    return buf.getvalue()
+
+
+@st.cache_resource
+def anarci_status() -> bool:
+    """Probe ANARCI once per server process, not once per request."""
+    return vc.anarci_available()
+
+
+def go_to(target: str) -> None:
+    """Switch section on the next rerun."""
+    st.session_state["section"] = target
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=2)
+def load_manual() -> str:
+    """The user manual, read from MANUAL.md so there is one source of truth."""
+    path = Path(__file__).parent / "MANUAL.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"The manual file could not be read ({exc})."
+
+
+def current_sequences() -> dict[str, str]:
+    """Sequences currently in the analysis input, parsed — or an empty dict.
+
+    The cloning section needs them without depending on the analysis section
+    having been rendered, so the text box is the single source of truth.
+    """
+    try:
+        return vc.parse_input(st.session_state.get("seq_text", ""))
+    except Exception:
+        return {}
+
+
+def footer() -> None:
+    """Page footer — shown on every screen."""
+    st.divider()
+    st.caption("Built on Biopython (ProtParam), ANARCI, FAMSA, pymsaviz and "
+               "dna_features_viewer. Theoretical predictions — validate "
+               "experimentally. Sequences are not stored; for confidential work, "
+               "run the app locally.")
+    st.caption(f"{APP_NAME} · version {VERSION} · by [{AUTHOR}]({AUTHOR_URL})")
+
+
+SECTIONS = {
+    "analysis": ("🔬", "Sequence analysis",
+                 "Characterize VHHs you provide: physico-chemical properties, "
+                 "CDR/framework annotation, hallmarks and germline, liabilities, "
+                 "alignment, codon-optimised DNA and a PDF report."),
+    "structure": ("🧊", "Structure",
+                  "Upload a PDB, mmCIF or AlphaFold model and replace the "
+                  "sequence-based guesses with measurements: which cysteines "
+                  "actually pair, which liabilities are buried and which are "
+                  "exposed, where the hydrophobic surface is, and — for a "
+                  "complex — which residues contact the antigen."),
+    "sequencing": ("🧪", "Sanger sequencing",
+                   "Upload .ab1 chromatograms from a screening run, extract the VHH "
+                   "sequences from the expression cassette, spot frameshifts and "
+                   "duplicates — then send the clones you want to the analysis."),
+    "genes": ("🔧", "Gene diagnosis",
+              "Paste coding sequences that are already in a plasmid and ask what "
+              "might be wrong with them: frame and stop checks, documented rare "
+              "codons and their clusters, GC stretches — plus synonymous swaps "
+              "that lower GC without touching the protein."),
+    "library": ("📚", "Sequence library",
+                "The sequences you come back to, kept in the repository and one "
+                "click away: send the proteins to the analysis section or the "
+                "DNA to gene diagnosis, instead of pasting them again."),
+    "cloning": ("🧬", "In-silico cloning",
+                "Load a backbone and an insert, and get the restriction enzymes that "
+                "open the vector in the right place without cutting the VHH, plus "
+                "which of your primers actually bind."),
+}

@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -2156,7 +2156,24 @@ def apply_repairs(seq: str, substitutions: list[str]) -> tuple[str, list[str]]:
     import re as _re
 
     seq = clean_sequence(seq)
+
+    # Conflicts are resolved before anything is applied. Applying the first of
+    # two conflicting substitutions and merely reporting the second would be
+    # letting the order of the list decide a question the caller has not
+    # answered - and the order of a list is not an opinion.
+    conflicted: set[int] = set()
+    wanted: dict[int, set[str]] = {}
+    for sub in substitutions:
+        m = _re.fullmatch(r"([A-Z])(\d+)([A-Z])", sub.strip().upper())
+        if m:
+            wanted.setdefault(int(m.group(2)), set()).add(m.group(3))
+    conflicted = {pos for pos, targets in wanted.items() if len(targets) > 1}
+
     chars, problems, seen = list(seq), [], {}
+    for pos in sorted(conflicted):
+        problems.append(
+            f"position {pos}: conflicting substitutions to "
+            f"{', '.join(sorted(wanted[pos]))} - none applied, pick one")
     for sub in substitutions:
         m = _re.fullmatch(r"([A-Z])(\d+)([A-Z])", sub.strip().upper())
         if not m:
@@ -2169,9 +2186,8 @@ def apply_repairs(seq: str, substitutions: list[str]) -> tuple[str, list[str]]:
         if seq[pos - 1] != frm:
             problems.append(f"{sub}: residue {pos} is {seq[pos - 1]}, not {frm}")
             continue
-        if pos in seen and seen[pos] != to:
-            problems.append(f"{sub}: conflicts with {seen[pos]} already set at {pos}")
-            continue
+        if pos in conflicted:
+            continue          # already reported above, and deliberately not applied
         chars[pos - 1] = to
         seen[pos] = to
     return "".join(chars), problems

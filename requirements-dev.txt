@@ -1,0 +1,3 @@
+# Only needed to run the test suite; not installed on Streamlit Community Cloud.
+# The app itself needs requirements.txt alone.
+pytest>=8.0

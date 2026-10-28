@@ -69,7 +69,7 @@ __all__ = [
     "PATCH_CONTACT", "PATCH_MIN_SIZE", "PATCH_MIN_REL", "__version__",
 ]
 
-__version__ = "2026.10.28d"
+__version__ = "2026.10.28e"
 
 
 def _three_to_one(resname: str) -> str | None:
@@ -760,11 +760,22 @@ def annotate_liabilities(liabilities: pd.DataFrame, model: Model, chain_id: str,
             frame[column] = pd.Series(dtype="object")
         return frame
 
-    mapping, _ = map_structure_to_sequence(structure_seq, target_seq)
-    target_to_structure = {t: s for s, t in mapping.items()}
-
     residues = [r for r in _residues(model.model[chain_id])
                 if _three_to_one(r.get_resname()) is not None]
+
+    # ``structure_seq`` must be this chain's own sequence, not the full-length
+    # construct. Passing the wrong one does not fail: the mapping comes back
+    # looking plausible and every position after a gap is quietly off. Since the
+    # two arguments are both sequences and easy to swap, the mismatch is refused
+    # rather than discovered later in a table nobody can check by eye.
+    if len(structure_seq) != len(residues):
+        raise StructureError(
+            f"structure_seq has {len(structure_seq)} residues but chain "
+            f"{chain_id} has {len(residues)} - pass the chain's own sequence "
+            f"from chain_sequence(), not the full-length construct.")
+
+    mapping, _ = map_structure_to_sequence(structure_seq, target_seq)
+    target_to_structure = {t: s for s, t in mapping.items()}
     exposure = residue_sasa(model, chain_id, in_context=True)
     by_resnum = {int(r.resnum): r for r in exposure.itertuples()}
 

@@ -31,6 +31,43 @@ source of truth.
 
 `data/ecoli_codon_usage.csv` — *E. coli* codon usage (Kazusa Codon Usage Database, taxid 316407), redistributed from the `python-codon-tables` package under **CC0-1.0**, a public-domain dedication. Used for the CAI, the usage floor on codon substitutions, and the back-translation preference order.
 
+## Files
+
+| File | Lines | What it is |
+|---|---|---|
+| `app.py` | 459 | the router: version check, sidebar, and one call per screen |
+| `shell.py` | 170 | the chrome — identity, navigation, `footer()`, caching policy |
+| `compute.py` | 508 | every cached computation, and nothing that draws |
+| `sections/analysis.py` | 1804 | the Sequence analysis screen, six families |
+| `sections/structure.py` | 619 | the Structure screen |
+| `sections/cloning.py` | 331 | the In-silico cloning screen |
+| `sections/genes.py` | 273 | the Gene diagnosis screen |
+| `sections/sequencing.py` | 150 | the Sanger screen |
+| `sections/library.py` | 145 | the Sequence library screen |
+| `sections/home.py`, `sections/manual.py` | 100 | the landing page and the manual |
+
+Plus the science, which the screens only arrange: `vhh_core.py` (2821),
+`cloning.py` (1157), `structure.py` (1041), `codons.py` (775), `repertoire.py`,
+`sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`.
+
+`app.py` was a single 3 911-line script until the screens were pulled out of it.
+Two rules keep it from growing back:
+
+- **A screen module draws; it does not compute.** Anything cached belongs in
+  `compute.py`, where the whole caching policy can be read in one file instead of
+  found in fifty-seven decorators spread through three thousand lines of UI.
+- **Nothing reads a global from another screen.** Every screen is a `render()`
+  function, which is not tidiness: in the old module-scope version the Structure
+  screen's `kinds` assignment silently overwrote the analysis screen's variable
+  of the same name, and the analysis family selector was shadowed by a
+  same-named germline selectbox. Neither ever broke anything, because two screens
+  never render in the same run — a function scope removes the class of accident
+  rather than its instances.
+
+Each module carries a `__version__`, and `REQUIRED_MODULES` in `app.py` lists the
+version it expects. A mismatch stops the app with a message naming the file, and
+`test_module_versions_match_app` catches it before a deploy does.
+
 ## Layout
 
 The app opens on a home page with six sections, also reachable from the sidebar,
@@ -289,6 +326,50 @@ is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs 
 between the two profiles. **Germline identity** measures similarity to the closest
 germline gene — it is a first-pass humanness indicator, not an immunogenicity
 prediction.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+32 tests, about 7 seconds. `requirements-dev.txt` is **not** installed on
+Streamlit Community Cloud — the app itself needs `requirements.txt` alone — so
+adding a test dependency can never break the deployment.
+
+These are regression tests, not a correctness proof. Almost every one of them
+is a bug this app actually had: it shipped, it was noticed by accident, it was
+fixed. Each test names the bug it guards in its docstring, so a failure tells
+you what the wrong behaviour looked like rather than just which assertion blew
+up. Among them:
+
+- hen lysozyme's eight ordinary cysteines being reported as eight free thiols,
+  twice — once in `find_liabilities`, once again in the triage table
+- repairs proposing to substitute the conserved FR2 and FR4 tryptophans
+- a clean sequence producing a liabilities table with no columns, which killed
+  the repair panel with `KeyError: 'score'`
+- overlapping GC windows counted as 98 separate findings
+- the structure mapping keyed by sequential index while every consumer read it
+  as residue numbers
+
+Two more were found by writing the tests themselves: `apply_repairs` applied the
+first of two conflicting substitutions instead of refusing the pair as its own
+docstring promised, and `annotate_liabilities` accepted the full-length
+construct where the chain's own sequence belongs, silently shifting every
+position after a gap. Both are fixed and both now have a test.
+
+One test earns its place for a different reason. `test_module_versions_match_app`
+compares every module's `__version__` against `REQUIRED_MODULES` in `app.py`.
+That dict drives the staleness banner, and forgetting to update it is the
+easiest way to ship a deploy that refuses to start while complaining about a
+file you did update. It is caught here instead of in the browser.
+
+The structure tests build their own PDB files in-process — CA atoms on a line,
+with a deliberate numbering offset and a deliberate gap. The geometry is
+meaningless and nothing asks anything of it; what is being tested is the
+bookkeeping, and for that a synthetic chain beats a real one because the right
+answer is known by construction.
 
 ## Making the tool citable
 
