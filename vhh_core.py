@@ -50,12 +50,12 @@ __all__ = [
     "humanness", "human_germlines", "disulfides",
     "suggest_repairs", "apply_repairs", "LIABILITY_REPAIRS",
     "compare_to_reference", "plot_differences",
-    "CONSERVED_IMGT",
+    "CONSERVED_IMGT", "protein_aligner", "region_of",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.27b"
+__version__ = "2026.10.28a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1413,6 +1413,16 @@ def _family_aligner():
         aligner.mode = "global"
         _FAMILY_ALIGNER = aligner
     return _FAMILY_ALIGNER
+
+
+def protein_aligner():
+    """The app's standard global protein aligner, for other modules to reuse.
+
+    A public name for `_family_aligner`, so that modules outside this one do not
+    have to reach for a private function or, worse, define their own scoring and
+    silently disagree with this one.
+    """
+    return _family_aligner()
 
 
 def _blosum(x: str, y: str) -> float:

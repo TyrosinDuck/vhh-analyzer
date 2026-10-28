@@ -12,8 +12,9 @@ and how far you should trust it.
 ## 1. What it does, and what it does not
 
 **It does** compute descriptors from an amino-acid sequence, annotate CDRs and
-frameworks, read VHHs out of Sanger chromatograms, and plan a restriction cloning
-between two plasmids.
+frameworks, read VHHs out of Sanger chromatograms, plan a restriction cloning
+between two plasmids, and — if you upload a model — measure on a structure what
+the rest of the app can only infer from sequence.
 
 **It is built around VHHs, but it accepts any protein.** Each submitted sequence is
 classified. Conventional VH domains get the same full analysis as VHHs, labelled
@@ -24,16 +25,19 @@ Only the VHH-specific tabs are skipped for the rest. A mixed submission works: s
 §3.1c.
 
 **It does not** predict structure, affinity, expression yield or immunogenicity.
-Every value it reports is derived from sequence alone. Treat the output as triage —
-it tells you where to look, not what will happen at the bench.
+Apart from the structure section — which measures a model **you** supply, and never
+produces one — every value it reports is derived from sequence alone. Treat the
+output as triage: it tells you where to look, not what will happen at the bench.
 
 Three things are worth stating plainly before you rely on any number:
 
 - The physico-chemical values are **theoretical**. Confirm the isoelectric point by
   IEF or cIEF and the extinction coefficient against a measured A280 before using
   them quantitatively.
-- The secondary-structure output is a **composition-based propensity**, not a
-  structure prediction. For real secondary structure, run DSSP on a model.
+- The secondary-structure output in the analysis section is a **composition-based
+  propensity**, not a structure prediction. For real secondary structure, run DSSP
+  on a model. Uploading that model to §4 gives you the accessibility, the real
+  disulfides and the interface, but not a DSSP assignment.
 - The cloning section is a **design check**. It verifies that your construct would
   encode what you intend; it says nothing about ligation efficiency or whether the
   protein will express.
@@ -42,12 +46,13 @@ Three things are worth stating plainly before you rely on any number:
 
 ## 2. Getting around
 
-The app opens on a home page with five sections. The sidebar carries the same five
+The app opens on a home page with six sections. The sidebar carries the same six
 entries plus a **Home** button, available from every screen.
 
 | Section | Use it for |
 |---|---|
 | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
+| 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
 | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
@@ -56,8 +61,10 @@ entries plus a **Home** button, available from every screen.
 They are connected rather than separate. The sequencing section writes into the
 analysis input; the analysis input is what the cloning section offers as an insert;
 the analysis section's **DNA** tab hands its back-translated sequences to gene
-diagnosis in one click; and the library feeds proteins to the analysis and DNA to
-gene diagnosis. Each section still works entirely on its own.
+diagnosis in one click; the library feeds proteins to the analysis and DNA to gene
+diagnosis; and the structure section reads the analysis input, so a model can be
+annotated against the full-length sequence it came from. Each section still works
+entirely on its own.
 
 Inside the analysis section, the views are grouped into six families chosen with a
 selector across the top — see §3.0, which also explains why it is a selector and
@@ -122,7 +129,7 @@ Three ways in:
 - **Upload a FASTA file** with the uploader on the right.
 - **Load example** fills the box with three published VHHs — caplacizumab, cAbLys3
   and Nb80 — so you can see what every tab looks like before committing your own
-  data. They come from the library (§6), where their PDB entries are given.
+  data. They come from the library (§7), where their PDB entries are given.
 
 Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The button
 exists because the keyboard shortcut is not discoverable; both do the same thing,
@@ -842,7 +849,7 @@ motifs. It does **not** model mRNA secondary structure near the ribosome binding
 codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
 own checker before ordering.
 
-A **Send to gene diagnosis** button passes the sequences straight to §5, where the
+A **Send to gene diagnosis** button passes the sequences straight to §6, where the
 frame, rare-codon and GC checks run on them — including the GC balancing this
 optimiser does globally but not window by window.
 
@@ -906,9 +913,197 @@ most of the file size and most of the build time.
 
 ---
 
-## 4. Sanger sequencing
+## 4. Structure
 
-### 4.1 What it does
+Every other section reasons from sequence alone, because a sequence is what you
+always have. But several of the questions this app answers are structural
+questions being approximated from sequence, and once a model exists the
+approximation can be replaced by a measurement:
+
+| Asked from sequence | Measured here |
+|---|---|
+| which cysteines pair — from IMGT positions and a canonical-pair assumption | the SG–SG distances |
+| a liability motif, wherever it occurs | whether that motif is buried or on the surface |
+| hydrophobicity in a sliding window | hydrophobic area that is contiguous **in space** |
+| — | which residues contact the antigen |
+
+The last row is the point: contact residues are not inferable from sequence at
+all.
+
+### 4.1 What it accepts
+
+`.pdb`, `.cif`/`.mmcif`, and gzipped versions of either. Crystal structures from
+the PDB, AlphaFold2, AlphaFold3 and ColabFold models are all read directly,
+pLDDT included — for AlphaFold3, use the `.cif` it writes.
+
+The app does **not** fetch structures for you, deliberately: downloading on your
+behalf would mean this server making requests that look like they came from you.
+Download from `rcsb.org` or `alphafold.ebi.ac.uk` yourself and upload the file.
+
+For a VHH–antigen complex, download the **whole entry** rather than one chain,
+otherwise there is no interface left to compute.
+
+If the file holds several models — an NMR ensemble, or several predictions —
+only the first is used, and the app says so.
+
+### 4.2 Choosing the chain, and what to annotate against
+
+**Chain of interest** is the VHH, usually; everything per-residue describes it.
+**Binding partner(s)** are the chains treated as the antigen.
+
+**Annotate against** is the one that is easy to skip and worth understanding. A
+model is routinely missing termini and disordered loops, and its residue
+numbering may be sequential, IMGT, Kabat or whatever the depositor chose. Left
+at *(the structure's own sequence)* the section works on exactly what is in the
+file. Point it at one of the sequences loaded in the analysis section instead and
+the model is aligned onto that full-length construct, so CDR bands, regions and
+liability positions line up with the rest of the app. The app reports how many
+residues aligned and at what identity, and warns below 90% — if you see that,
+check you have picked the same molecule.
+
+Internally the mapping is keyed by **residue number**, not by position in the
+chain. Those differ the moment a chain does not start at 1 or has a gap, which is
+most of the time.
+
+### 4.3 Chains & confidence
+
+A predicted model stores **pLDDT** in the column a crystal structure uses for the
+**B-factor**. The two mean opposite things — high pLDDT is good, high B is bad —
+and no field in either format states which it is. The app guesses from the value
+range and the header, says why, and lets you override it.
+
+For pLDDT the usual confidence bands are drawn, because the number is close to
+meaningless without them: 90 and 60 are both "high-ish" until you know that **70
+is the line below which the backbone should not be trusted**. The residues below
+it are listed.
+
+pLDDT is the model's confidence in itself. It is neither accuracy nor a
+measurement of flexibility, although low pLDDT and genuine disorder do tend to
+coincide. Side-chain placement is less reliable than the backbone even at high
+pLDDT, which matters when you read the accessibility of a long side chain.
+
+### 4.4 Disulfides
+
+Measured, not inferred. A pair of SG atoms closer than **2.5 Å** is a bond;
+anything else is a free thiol. The counts are compared with the sequence-based
+prediction from §3.7 and with the `SSBOND` records in the file, and
+disagreements are reported rather than resolved silently.
+
+When the counts disagree, the measurement is the one to believe — but check first
+that the model covers every cysteine: a cysteine in an unmodelled loop cannot be
+seen to pair.
+
+### 4.5 Exposure
+
+Absolute accessibility in Å², divided by the maximum that residue type can have,
+so a Trp and a Gly are comparable. At or below **20%** is called buried, at or
+above **50%** exposed, and the band between is left as *intermediate* rather than
+forced into one of the two.
+
+Computed with Biopython's Shrake–Rupley implementation (1.4 Å probe) and
+normalised by the residue maxima of Tien et al. 2013 (PLoS ONE 8:e80635). One
+caveat worth stating because it is easy to miss: those maxima were derived with
+DSSP, i.e. the Lee–Richards definition, and Shrake–Rupley is a different
+numerical approximation of the same quantity. The buried/exposed call is robust
+to that; a relative accessibility quoted to the percent is not.
+
+Waters are removed first. Ligands are kept, because a bound ligand really does
+cover the surface underneath it. When a binding partner is selected, these are
+the accessibilities the residues have **in the complex**.
+
+### 4.6 Liabilities in 3D
+
+The join worth uploading a structure for. The analysis section flags a
+deamidation, oxidation or glycosylation motif wherever it occurs; it cannot know
+whether the motif is on the surface or packed into the core. A buried motif is
+largely inert. An exposed one in a CDR is a real problem.
+
+Each liability from §3.7 gets its measured relative accessibility, its
+buried/intermediate/exposed call, and the residue number it has in the model, so
+you can find it in the 3D view. Motifs in unmodelled regions are reported as
+*not modelled* rather than as buried — the two are very different claims.
+
+The sequence-based `risk` column is left untouched on purpose. Downgrading it
+automatically because a residue looks buried in one static conformer would be
+overclaiming. Read the two columns together.
+
+### 4.7 Surface patches
+
+What drives aggregation is hydrophobic area that is **contiguous on the
+surface**, which a sliding window over the sequence cannot see: two residues far
+apart in sequence can sit side by side on the fold. This groups solvent-exposed
+V, I, L, M, F, W, Y residues whose side chains come within a contact distance of
+each other — measured between closest heavy atoms, not between centroids, since
+Trp and Arg carry their bulk far from the backbone.
+
+Three thresholds, all sliders:
+
+*Minimum relative accessibility* (default **0.15**) is deliberately well below
+the 0.50 that counts as "exposed" elsewhere, for a structural reason: a residue
+in the middle of a patch is half-covered by the patch's own other residues, so
+requiring each one to be exposed in its own right is a good way of never finding
+a patch. On the one complex this was checked against, the known dimerisation
+patch is found at 0.15 and missed at 0.20 — a cliff one residue wide. Treat the
+default as a starting point, not a validated parameter.
+
+*Contact distance* (default 5.0 Å) barely changed the answer over 5.0–7.0 Å in
+that same check.
+
+*Minimum patch size* (default 3) — fewer than three residues is not a patch.
+
+**A transparent composite, not SAP or CamSol.** Those methods are parameterised
+against experimental aggregation data this app does not have. This asks a simpler
+and fully stated question, and the thresholds are yours to move. Read it as *here
+is a hydrophobic area worth looking at*, never as a predicted aggregation rate.
+
+### 4.8 Interface
+
+Only shown when you select a binding partner.
+
+A residue is at the interface if it loses solvent accessibility when the partner
+is present. **ΔSASA** — accessible alone minus accessible in the complex — is the
+standard operational definition, and unlike a distance cutoff it weights each
+residue by how much surface it actually commits to the contact.
+
+With one partner you also get the buried surface area per side. For reference, an
+antibody–antigen interface typically buries 600–900 Å² per side; a VHH, with one
+domain instead of two, often sits at the lower end or below it. A much smaller
+number is worth suspicion — in a crystal structure it may be a packing contact
+rather than the biological interface.
+
+When the model is annotated against a sequence, the buried surface is also broken
+down **by region**, which answers the question people actually have: how much of
+the binding is done by the CDRs. A framework contribution is normal for a VHH —
+the FR2 face that would be the VL interface in a conventional antibody is
+solvent-exposed and often takes part in binding.
+
+The same calculation run the other way round gives the **epitope**: the residues
+of the antigen that the VHH covers. That is a structural epitope from one model,
+not a functional one — it says which residues are covered, not which ones the
+binding energy depends on. Those are different sets, and telling them apart needs
+mutagenesis.
+
+### 4.9 3D view
+
+3Dmol.js, loaded from a CDN. Colour by chain, N→C rainbow, pLDDT/B-factor or
+buried→exposed; optionally show the surface; and highlight the disulfides, the
+free thiols, the largest hydrophobic patch or the exposed liabilities as sticks.
+
+If the panel stays blank your browser could not reach the CDN. Every table and
+figure in this section is computed server-side with Biopython and is unaffected.
+
+### 4.10 What this section is not
+
+It measures **one static conformer of one model**. It does not predict structure,
+does not dock, does not estimate affinity, and does not model flexibility. For a
+predicted model, side-chain accessibility is indicative rather than measured,
+because side chains are the part a predictor places least reliably.
+
+---
+
+## 5. Sanger sequencing
+
+### 5.1 What it does
 
 You upload the chromatograms from a screening run. For each read the app:
 
@@ -921,7 +1116,7 @@ You upload the chromatograms from a screening run. For each read the app:
 Because all six frames are searched, forward and reverse reads are handled without
 being told which is which.
 
-### 4.2 Settings
+### 5.2 Settings
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -934,7 +1129,7 @@ To add a vector, edit `sanger.VECTORS` — and take the tag layout from the actu
 plasmid map rather than from memory. A wrong layout makes the app report missing tags
 on clones that are perfectly fine.
 
-### 4.3 Reading the results table
+### 5.3 Reading the results table
 
 Four counters at the top: reads, VHHs extracted, unique sequences, failures.
 
@@ -964,12 +1159,12 @@ derived from the anchor that actually matched.
 **Identical protein sequences are grouped.** The same colony picked twice shows up as
 one sequence with a copy count, and the duplicates are marked.
 
-### 4.4 Quality traces
+### 5.4 Quality traces
 
 An expander draws the Phred quality along each read, with the window kept after
 trimming in blue and a dashed line at Phred 20. Up to twelve reads are drawn.
 
-### 4.5 Sending clones to the analysis
+### 5.5 Sending clones to the analysis
 
 Below the table, pick the clones worth keeping and press **Send selected to analysis**.
 The app switches to the analysis section with those sequences loaded.
@@ -977,13 +1172,13 @@ The app switches to the analysis section with those sequences loaded.
 **Duplicates are deselected by default** — one entry per unique protein sequence. Tick
 them back on if you want to see them separately.
 
-### 4.6 Downloads
+### 5.6 Downloads
 
 The full per-read table as CSV, and the extracted VHHs as protein or DNA FASTA.
 
 ---
 
-## 5. Gene diagnosis
+## 6. Gene diagnosis
 
 Its own section, reached from the home page or from the **DNA** tab of the
 analysis section, which hands its back-translated sequences straight over.
@@ -1106,7 +1301,7 @@ this tab is still in play.
 
 ---
 
-## 6. Sequence library
+## 7. Sequence library
 
 The sequences you come back to, kept as a file in the repository so they are one
 click away instead of being pasted again every time.
@@ -1123,7 +1318,7 @@ app makes deliberately.
 anyone whether or not they ever open the app. Nothing unpublished, nothing under
 an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
-### 6.1 What is in it
+### 7.1 What is in it
 
 Twenty-two published sequences, every one taken from the source named in its note —
 a PDB entry or KEGG — rather than written from memory. They are chosen
@@ -1162,7 +1357,7 @@ trimmed to the variable domain and the note says exactly what was removed. Three
 entries carry DNA, labelled in the note as **back-translated by this app, not the
 published gene**.
 
-### 6.2 Using it
+### 7.2 Using it
 
 Filter by free text over names and notes, by tag, or by whether an entry carries
 a protein, DNA, or either. Select the entries you want and send them on: the
@@ -1173,7 +1368,7 @@ a protein-only entry and asking for DNA simply sends nothing for it.
 
 Both kinds also download as FASTA if you want them outside the app.
 
-### 6.3 Editing it
+### 7.3 Editing it
 
 The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
 commit, push — the app serves the new version on its next deploy.
@@ -1197,11 +1392,11 @@ to fix, and the message carries the line number.
 
 ---
 
-## 7. In-silico cloning
+## 8. In-silico cloning
 
 One screen, three steps.
 
-### 7.1 Recipient vector
+### 8.1 Recipient vector
 
 Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can also
 upload your own in SnapGene `.dna`, GenBank or FASTA.
@@ -1220,7 +1415,7 @@ tag. That is where the insert will land, and the app shows the coordinates it fo
 The **Expected tags** selector says which cassette layout the finished construct should
 have; it is used when the construct is translated back.
 
-### 7.2 Donor DNA
+### 8.2 Donor DNA
 
 Two kinds of donor:
 
@@ -1241,7 +1436,7 @@ bracketing product wins, and the app tells you which form of which primer it use
 The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can upload your
 own CSV with `name,sequence` columns; nothing is stored.
 
-### 7.3 The plan
+### 8.3 The plan
 
 The app cuts, joins and translates **every candidate enzyme pair for real**, then
 compares the VHH the construct encodes with the VHH in the donor. A pair is only
@@ -1284,7 +1479,7 @@ with the leader until a correctly sized VHH is cloned in. Comparing against the 
 vector's frame would flag every correct construct. Translating the finished construct
 is the only check that means anything.
 
-### 7.4 What you get
+### 8.4 What you get
 
 The recommended enzyme pair, the construct size, the VHH length, how much vector is
 removed. The donor and construct VHH side by side. The translated cassette — signal
@@ -1294,7 +1489,7 @@ Downloads: the construct as **GenBank**, annotated with the insert and the casse
 parts so SnapGene or Benchling opens it ready to read; as FASTA; and the amplicon as
 FASTA. Plus a short protocol paragraph.
 
-### 7.5 Folded-away detail
+### 8.5 Folded-away detail
 
 - **All enzyme pairs considered** — every pair with its verdict and, when rejected, why.
 - **Restriction sites** — every enzyme that cuts the backbone, how often, where, and
@@ -1309,7 +1504,7 @@ FASTA. Plus a short protocol paragraph.
 
 ---
 
-## 8. How your data is handled
+## 9. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file, logged,
 or sent to a third party**. They are processed in the server's memory.
@@ -1329,7 +1524,7 @@ Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
 ---
 
-## 9. Running it on your own machine
+## 10. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -1352,7 +1547,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 10. Limits and caveats, in one place
+## 11. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -1368,10 +1563,18 @@ somewhere other than Community Cloud.
   does not predict efficiency, and it does not simulate the transformation.
 - A Sanger read flagged as a frameshift has its VHH withheld on purpose, because a
   reconstructed sequence across an indel would be wrong.
+- The structure section measures one static conformer of one model you supply. It
+  does not predict structure, dock, estimate affinity or model flexibility.
+- On a predicted model, side-chain accessibility is indicative: side chains are the
+  part a predictor places least reliably, even at high pLDDT.
+- Surface patches use a transparent threshold, not SAP or CamSol, and the default
+  exposure cut-off was checked against a single complex.
+- A structural epitope says which residues are covered, not which ones the binding
+  energy depends on.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 **"Some modules are out of date."** `app.py` and the analysis modules are released
 together. Update `vhh_core.py`, `sanger.py` and `cloning.py` alongside it.
@@ -1399,7 +1602,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 12. Under the hood
+## 13. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for IMGT
 numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the alignment

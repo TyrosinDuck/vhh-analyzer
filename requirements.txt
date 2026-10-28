@@ -11,6 +11,10 @@ streamlit>=1.30
 reportlab>=4.0
 dna_features_viewer>=3.1
 packaging>=23.0
+# Only the 3D viewer in the structure section. It loads 3Dmol.js from a CDN, so
+# the viewer needs the browser to reach cdn.jsdelivr.net; every table and figure
+# in that section is computed with Biopython and works without it.
+py3Dmol>=2.0
 # ANARCI needs the HMMER binary, which comes from packages.txt.
 # Remove this line (and packages.txt) to run with the regex annotator only.
 anarci>=2024.0

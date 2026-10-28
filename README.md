@@ -33,12 +33,13 @@ source of truth.
 
 ## Layout
 
-The app opens on a home page with five sections, also reachable from the sidebar,
+The app opens on a home page with six sections, also reachable from the sidebar,
 which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
 | **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
+| **Structure** | upload a PDB, mmCIF or AlphaFold model: measured SG–SG disulfides, relative solvent accessibility, which flagged liabilities are actually exposed, hydrophobic surface patches, the ΔSASA interface and epitope of a complex, and a 3Dmol.js viewer |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table — plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
 | **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
