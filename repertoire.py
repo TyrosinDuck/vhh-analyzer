@@ -1,12 +1,12 @@
 """
-repertoire — compare sequences against the natural VHH repertoire.
+repertoire, compare sequences against the natural VHH repertoire.
 
 The app already ships an IMGT position-frequency matrix built from 1958 real
 VHHs (PLAbDab-nano), used so far only to *generate* synthetic sequences. Turned
 around, the same table answers two questions about sequences you actually have:
 
 * **Is any framework residue unusual?** A position carrying a residue seen in
-  under a percent or two of the natural repertoire is worth a second look — it
+  under a percent or two of the natural repertoire is worth a second look, it
   catches Sanger miscalls, PCR errors and constructs that have drifted without
   anyone noticing.
 * **Is my selection output biased?** CDR3 lengths and per-region composition
@@ -63,7 +63,7 @@ def rare_residues(seq: str, matrix: pd.DataFrame | None = None,
                   frameworks_only: bool = True) -> pd.DataFrame:
     """Framework positions whose residue is rare in the reference repertoire.
 
-    Returns one row per compared position — every position, not only the rare
+    Returns one row per compared position, every position, not only the rare
     ones, so the caller can show the distribution as well as the outliers.
     Columns: the IMGT number, the region, the residue, its frequency in the
     reference, the most frequent residue there and its frequency, the support,
@@ -122,7 +122,7 @@ def rarity_table(seqs: dict[str, str], matrix: pd.DataFrame | None = None,
             "n_rare": int(len(rare)),
             "n_absent": int(len(absent)),
             "rarest": (f"{rarest['residue']}{rarest['imgt']} "
-                       f"({rarest['frequency']:.1%})") if rarest is not None else "—",
+                       f"({rarest['frequency']:.1%})") if rarest is not None else ", ",
             "low_support_positions": int(table["low_support"].sum()),
             "note": "",
         })
@@ -167,7 +167,7 @@ def plot_rarity(seq: str, name: str = "", matrix: pd.DataFrame | None = None,
     ax.set_ylim(-0.03, 1.05)
     ax.set_xlabel("Residue")
     ax.set_ylabel("Frequency in the\nnatural repertoire", fontsize=9)
-    ax.set_title(f"{name} — framework residues against the reference repertoire"
+    ax.set_title(f"{name}, framework residues against the reference repertoire"
                  if name else "Framework residues against the reference repertoire",
                  fontsize=10)
     for side in ("top", "right"):
@@ -227,7 +227,7 @@ def cdr_length_context(per_seq: pd.DataFrame,
                        distribution: pd.DataFrame) -> pd.DataFrame:
     """Where each submitted CDR length sits in the reference distribution.
 
-    With one or two sequences a frequency bar is meaningless — a single sequence
+    With one or two sequences a frequency bar is meaningless, a single sequence
     is 100% of itself, which says nothing and flattens the reference it is drawn
     against. What is worth knowing is how common that length is among real VHHs,
     and what fraction of them are shorter. That is what this returns.
@@ -333,7 +333,7 @@ def composition_comparison(seqs: dict[str, str], annotations: dict,
 
     The reference composition is the position-frequency matrix averaged over the
     positions of each region, weighted by their support. ``delta`` is the
-    submitted fraction minus the reference fraction — positive means enriched.
+    submitted fraction minus the reference fraction, positive means enriched.
     """
     matrix = _matrix() if matrix is None else matrix
 
@@ -389,7 +389,7 @@ def plot_composition(comparison: pd.DataFrame, regions: list[str] | None = None)
         ax.bar(gn.AA, values, color=colours)
         ax.axhline(0, color="0.4", lw=0.8)
         ax.set_ylabel("Δ fraction", fontsize=8)
-        ax.set_title(f"{region} — enriched above the line, depleted below "
+        ax.set_title(f"{region}, enriched above the line, depleted below "
                      f"(n = {int(block['n_residues'].iloc[0])} residues)",
                      fontsize=9, loc="left")
         for side in ("top", "right"):

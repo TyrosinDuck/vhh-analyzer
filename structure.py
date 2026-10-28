@@ -1,5 +1,5 @@
 """
-structure — what a 3D model says, as opposed to what the sequence suggests.
+structure, what a 3D model says, as opposed to what the sequence suggests.
 
 Every other module in this app reasons from sequence alone. That is the right
 default, because a sequence is what you always have. But several of the questions
@@ -126,8 +126,8 @@ PATCH_MIN_SIZE = 3       # fewer than three residues is not a patch
 # patch's own other residues, so requiring each one to be exposed in its own
 # right is a good way of never finding a patch.
 #
-# On the one complex this was checked against — the HIV-1 capsid C-terminal
-# domain — the known W184/M185 dimerisation patch is found at 0.15 and missed at
+# On the one complex this was checked against, the HIV-1 capsid C-terminal
+# domain, the known W184/M185 dimerisation patch is found at 0.15 and missed at
 # 0.20, and the contact distance barely matters over 5.0–7.0 Å. That cliff is one
 # residue wide (M185 sits at 0.195), so it is an observation on a single
 # structure and emphatically not a validated parameter. It is a slider in the app
@@ -170,7 +170,7 @@ def _parse_ssbond(text: str) -> list[dict]:
     """SSBOND records, when the file is a PDB that carries them.
 
     These are the depositor's annotation, not a measurement. They are read so
-    that the measured bonds can be checked against them — if the two disagree
+    that the measured bonds can be checked against them, if the two disagree
     that is worth knowing, and silently trusting either one would hide it.
     """
     bonds = []
@@ -252,7 +252,7 @@ def _residues(chain):
     """Amino-acid residues of a chain, in order, waters and ligands excluded.
 
     Modified residues are kept. Selenomethionine in particular is flagged as a
-    heteroatom by the PDB but is unambiguously part of the chain — dropping it
+    heteroatom by the PDB but is unambiguously part of the chain, dropping it
     silently shortens the sequence, puts a hole in the middle of the numbering,
     and shifts every downstream mapping. It is mapped to its parent amino acid
     instead, which is what ``PDBData``'s extended table is for.
@@ -277,7 +277,7 @@ def _strip_solvent(entity):
 
     Crystallographic waters are part of the model, not of the protein. Left in,
     Shrake-Rupley treats each one as an obstacle and every residue it sits on
-    comes back more buried than it is — on a typical structure that is enough to
+    comes back more buried than it is, on a typical structure that is enough to
     turn exposed residues into intermediate ones and lose surface patches
     entirely. Ligands are deliberately left alone: a bound ligand really does
     occlude the surface underneath it, and saying so is the honest answer.
@@ -301,7 +301,7 @@ def chain_sequence(chain) -> tuple[str, list]:
 
 
 def _numbering_gaps(residues) -> int:
-    """Breaks in the residue numbering — unmodelled loops, usually."""
+    """Breaks in the residue numbering, unmodelled loops, usually."""
     gaps = 0
     for previous, current in zip(residues, residues[1:]):
         if current.id[1] - previous.id[1] > 1:
@@ -328,7 +328,7 @@ def chain_table(model: Model) -> pd.DataFrame:
         })
     if not rows:
         raise StructureError(
-            "no polypeptide chain found — the file may contain only nucleic "
+            "no polypeptide chain found, the file may contain only nucleic "
             "acids, ligands or waters.")
     return pd.DataFrame(rows)
 
@@ -341,7 +341,7 @@ def confidence_kind(model: Model) -> tuple[str, str]:
     """Guess whether the B-factor column holds pLDDT, and say why.
 
     The B-factor column of a predicted model carries pLDDT instead; the two
-    mean opposite things — high pLDDT is good, high B is bad — so reading one
+    mean opposite things (high pLDDT is good, high B is bad) so reading one
     as the other inverts every conclusion. There is no field that states which
     it is, so this guesses from the values and the header, and the app lets the
     guess be overridden. Returns ``(kind, reason)``.
@@ -359,7 +359,7 @@ def confidence_kind(model: Model) -> tuple[str, str]:
     in_range = float(((values >= 0) & (values <= 100)).mean())
     if in_range > 0.999 and values.mean() > 40 and values.max() <= 100:
         return "pLDDT", ("every value sits in 0–100 with a high mean, and the "
-                         "header names no experimental method — the signature of "
+                         "header names no experimental method, the signature of "
                          "a predicted model.")
     if values.max() > 100:
         return "B-factor", (f"values run up to {values.max():.0f}, above the "
@@ -566,7 +566,7 @@ def interface_table(model: Model, chain_id: str, partners: list[str],
                     min_delta: float = INTERFACE_MIN_DELTA) -> pd.DataFrame:
     """Residues of ``chain_id`` that lose accessibility when ``partners`` are present.
 
-    ΔSASA — accessible alone, minus accessible in the complex — is the standard
+    ΔSASA (accessible alone, minus accessible in the complex) is the standard
     operational definition of an interface residue, and unlike a distance cutoff
     it weights a residue by how much surface it actually commits.
     """
@@ -634,7 +634,7 @@ def interface_summary(model: Model, chain_a: str, chain_b: str) -> dict:
 def _side_chain_coords(residue) -> np.ndarray | None:
     """Heavy-atom coordinates of the side chain, backbone and hydrogens excluded.
 
-    Glycine has no side chain, so it falls back to CA — it is not in
+    Glycine has no side chain, so it falls back to CA, it is not in
     ``PATCH_RESIDUES`` anyway, but the fallback keeps the function total.
     """
     atoms = [a for a in residue
@@ -804,7 +804,7 @@ def resnum_map(model: Model, chain_id: str, structure_seq: str,
 
     :func:`map_structure_to_sequence` is keyed by the structure's *sequential*
     index, because that is what aligning two strings gives you. Everything that
-    consumes the mapping — the figures, the region column, the 3D viewer — speaks
+    consumes the mapping (the figures, the region column, the 3D viewer) speaks
     **residue numbers** instead, since that is what the file and the viewer use
     and the two differ as soon as the chain does not start at 1 or has a gap.
     Converting once, here, is what keeps that distinction from leaking.
@@ -823,7 +823,7 @@ def identity_resnum_map(model: Model, chain_id: str) -> dict:
     """The mapping for "annotate against the structure's own sequence".
 
     The chain is then its own reference, so residue number *n* is whatever
-    sequential position it occupies — not *n* itself.
+    sequential position it occupies, not *n* itself.
     """
     residues = [r for r in _residues(model.model[chain_id])
                 if _three_to_one(r.get_resname()) is not None]

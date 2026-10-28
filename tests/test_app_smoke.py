@@ -1,5 +1,5 @@
 """
-Smoke tests — does every screen of the app actually render?
+Smoke tests, does every screen of the app actually render?
 
 The other two test files exercise the computation modules. Nothing in them would
 notice if `app.py` itself stopped working, and `app.py` is where the damage from
@@ -15,7 +15,7 @@ of break without anyone having to remember to click through six sections and
 thirteen panels.
 
 They drive the real app through Streamlit's own ``AppTest`` harness, so they are
-slower than the rest of the suite — roughly a minute, against seven seconds for
+slower than the rest of the suite, roughly a minute, against seven seconds for
 everything else. Skip them while iterating with:
 
     pytest -m "not smoke"
@@ -106,7 +106,7 @@ def test_every_section_actually_draws_something(app):
     Splitting the screens out of `app.py` put the Gene diagnosis screen's body
     inside its own helper function by accident: `render()` was left holding
     nothing but a docstring. It imported cleanly, raised nothing, and drew an
-    empty page — and ``test_every_section_renders`` passed it, because all that
+    empty page, and ``test_every_section_renders`` passed it, because all that
     test asked was whether anything had blown up.
 
     So this one asks for evidence instead: the screen's own title, and enough
@@ -125,7 +125,7 @@ def test_every_section_actually_draws_something(app):
 
         count = _content_count(app)
         assert count >= 6, \
-            f"{label}: only {count} text elements — the screen looks empty"
+            f"{label}: only {count} text elements, the screen looks empty"
 
 
 def test_the_footer_is_drawn_exactly_once(app):
@@ -133,7 +133,7 @@ def test_the_footer_is_drawn_exactly_once(app):
 
     The router calls ``footer()`` once ``render()`` returns. Each screen module
     also ended with its own ``footer()``, left behind when the section bodies
-    were lifted out of `app.py` — the extraction stripped the trailing
+    were lifted out of `app.py`, the extraction stripped the trailing
     ``st.stop()`` and not the ``footer()`` in front of it. Nothing raised and
     nothing looked empty, so neither of the other smoke tests noticed; the only
     symptom was the licence notice and the version line appearing twice at the
@@ -172,7 +172,7 @@ def test_structure_renders_every_view(app, tmp_path):
     """A synthetic two-chain PDB: enough to reach the interface and 3D views.
 
     Built here rather than shipped so the suite needs no data files, and
-    deliberately tiny — nothing in this test reads the geometry.
+    deliberately tiny, nothing in this test reads the geometry.
     """
     lines, serial = [], 0
     for chain, offset in (("A", 0.0), ("B", 6.0)):
@@ -206,7 +206,7 @@ def test_sequence_input_survives_leaving_the_section(app):
 
     Leaving a section is exactly that, so the text area is re-asserted on every
     run. If that stops happening, your sequences vanish when you glance at
-    another section and come back — which is worse than an error, because
+    another section and come back, which is worse than an error, because
     nothing tells you it happened.
     """
     _click(app, "🔬 Sequence analysis")

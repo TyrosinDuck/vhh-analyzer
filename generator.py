@@ -1,5 +1,5 @@
 """
-generator — synthetic VHH sequences built from real position frequencies.
+generator, synthetic VHH sequences built from real position frequencies.
 
 Frameworks are sampled position by position from an IMGT position-frequency
 matrix derived from real VHHs, so they look like natural frameworks. CDRs are
@@ -8,7 +8,7 @@ reference set.
 
 The bundled matrix comes from **PLAbDab-nano** (OPIG, University of Oxford),
 1958 unique VHH sequences numbered with ANARCI against the alpaca germlines.
-You can supply your own matrix instead — a panning campaign of your own gives a
+You can supply your own matrix instead, a panning campaign of your own gives a
 generator that mimics your library rather than the literature.
 
 Two honest limitations, both inherent to sampling a position-frequency matrix:
@@ -82,7 +82,7 @@ def load_meta(path: str | Path | None = None) -> dict:
 
 
 def matrix_report(matrix: pd.DataFrame, meta: dict | None = None) -> dict:
-    """What the matrix is made of — shown to the user before they trust it."""
+    """What the matrix is made of, shown to the user before they trust it."""
     meta = meta or {}
     by_region = (matrix.groupby("region")["n_residues"]
                  .agg(["count", "min", "max"]).rename(
@@ -147,8 +147,8 @@ def generate(matrix: pd.DataFrame, meta: dict | None = None,
     and then, which would make the output fail the app's own hallmark check.
 
     ``framework_cys`` allows cysteines outside the canonical IMGT 23/104 pair.
-    They do occur in the reference set — about 2% of sequences carry one at IMGT
-    50, where it pairs with a CDR cysteine — but in a generator with random CDRs
+    They do occur in the reference set, about 2% of sequences carry one at IMGT
+    50, where it pairs with a CDR cysteine, but in a generator with random CDRs
     that partner does not exist, so such a residue would be left as an orphan
     thiol. It is therefore off by default.
     """

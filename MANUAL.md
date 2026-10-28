@@ -1,10 +1,12 @@
-# VHH tool box — user manual
+# VHH tool box, user manual
 
-A browser-based workbench for single-domain antibodies. Nothing to install, no code
+A browser-based workbench for single-domain antibodies. Nothing to install, no
+code
 to write: you paste sequences or drop files, and it gives you characterization,
 sequencing read-back and cloning plans.
 
-This manual describes every screen and, just as importantly, what each number means
+This manual describes every screen and, just as importantly, what each number
+means
 and how far you should trust it.
 
 ---
@@ -13,40 +15,49 @@ and how far you should trust it.
 
 **It does** compute descriptors from an amino-acid sequence, annotate CDRs and
 frameworks, read VHHs out of Sanger chromatograms, plan a restriction cloning
-between two plasmids, and — if you upload a model — measure on a structure what
+between two plasmids, and (if you upload a model) measure on a structure what
 the rest of the app can only infer from sequence.
 
 **It is built around VHHs, but it accepts any protein.** Each submitted sequence is
-classified. Conventional VH domains get the same full analysis as VHHs, labelled
-as VH. For everything else, the analyses that are not antibody-specific — mass, pI, extinction
-coefficient, charge, hydrophobicity, secondary-structure propensity, aggregation,
-chemical liabilities, codon-optimised DNA, fusion constructs — run on all of them.
-Only the VHH-specific tabs are skipped for the rest. A mixed submission works: see
+classified. Conventional VH domains get the same full analysis as VHHs,
+labelled
+as VH. For everything else, the analyses that are not antibody-specific (mass,
+pI, extinction coefficient, charge, hydrophobicity, secondary-structure
+propensity, aggregation, chemical liabilities, codon-optimised DNA, fusion
+constructs) run on all of them.
+Only the VHH-specific tabs are skipped for the rest. A mixed submission works:
+see
 §3.1c.
 
 **It does not** predict structure, affinity, expression yield or immunogenicity.
-Apart from the structure section — which measures a model **you** supply, and never
-produces one — every value it reports is derived from sequence alone. Treat the
-output as triage: it tells you where to look, not what will happen at the bench.
+Apart from the structure section (which measures a model **you** supply, and
+never produces one) every value it reports is derived from sequence alone.
+Treat the
+output as triage: it tells you where to look, not what will happen at the
+bench.
 
 Three things are worth stating plainly before you rely on any number:
 
 - The physico-chemical values are **theoretical**. Confirm the isoelectric point by
-  IEF or cIEF and the extinction coefficient against a measured A280 before using
+  IEF or cIEF and the extinction coefficient against a measured A280 before
+using
   them quantitatively.
 - The secondary-structure output in the analysis section is a **composition-based
-  propensity**, not a structure prediction. For real secondary structure, run DSSP
+  propensity**, not a structure prediction. For real secondary structure, run
+DSSP
   on a model. Uploading that model to §4 gives you the accessibility, the real
   disulfides and the interface, but not a DSSP assignment.
 - The cloning section is a **design check**. It verifies that your construct would
-  encode what you intend; it says nothing about ligation efficiency or whether the
+  encode what you intend; it says nothing about ligation efficiency or whether
+the
   protein will express.
 
 ---
 
 ## 2. Getting around
 
-The app opens on a home page with six sections. The sidebar carries the same six
+The app opens on a home page with six sections. The sidebar carries the same
+six
 entries plus a **Home** button, available from every screen.
 
 | Section | Use it for |
@@ -59,15 +70,20 @@ entries plus a **Home** button, available from every screen.
 | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
 
 They are connected rather than separate. The sequencing section writes into the
-analysis input; the analysis input is what the cloning section offers as an insert;
+analysis input; the analysis input is what the cloning section offers as an
+insert;
 the analysis section's **DNA** tab hands its back-translated sequences to gene
-diagnosis in one click; the library feeds proteins to the analysis and DNA to gene
-diagnosis; and the structure section reads the analysis input, so a model can be
-annotated against the full-length sequence it came from. Each section still works
+diagnosis in one click; the library feeds proteins to the analysis and DNA to
+gene
+diagnosis; and the structure section reads the analysis input, so a model can
+be
+annotated against the full-length sequence it came from. Each section still
+works
 entirely on its own.
 
-Inside the analysis section, the views are grouped into six families chosen with a
-selector across the top — see §3.0, which also explains why it is a selector and
+Inside the analysis section, the views are grouped into six families chosen
+with a
+selector across the top, see §3.0, which also explains why it is a selector and
 not another row of tabs.
 
 ---
@@ -76,12 +92,14 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces about fifteen different views of a set of sequences. Showing
+The analysis produces about fifteen different views of a set of sequences.
+Showing
 them as fifteen tabs made two problems at once: nobody could find anything, and
-**Streamlit executes the body of every tab on every interaction** — including the
+**Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
 
-So the views are grouped into six **families**, chosen with the selector across the
+So the views are grouped into six **families**, chosen with the selector across
+the
 top. Each family answers one question:
 
 | Family | The question |
@@ -94,7 +112,8 @@ top. Each family answers one question:
 | 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
 
 Only the selected family executes. That is the whole point of a selector rather
-than nested tabs — Streamlit would run the bodies of nested tabs too. The effect,
+than nested tabs, Streamlit would run the bodies of nested tabs too. The
+effect,
 on seven sequences:
 
 | | Time |
@@ -107,17 +126,21 @@ on seven sequences:
 | 🌍 Repertoire | 3.3 s |
 | 🧪 Outputs | 0.9 s |
 
-Before this, every analysis paid all of it at once: roughly twelve seconds before
-anything appeared, on every single interaction. Comparison is still the expensive
-one, because it carries the alignment, the logo and the identity matrices — but you
+Before this, every analysis paid all of it at once: roughly twelve seconds
+before
+anything appeared, on every single interaction. Comparison is still the
+expensive
+one, because it carries the alignment, the logo and the identity matrices, but
+you
 only pay for it when you ask for it, and the cost has stopped being silent.
 
 Repertoire sits in its own family rather than inside Comparison for the same
-reason: it is a different question (your sequences against 1958 natural VHHs rather
+reason: it is a different question (your sequences against 1958 natural VHHs
+rather
 than against each other), and keeping it separate takes Comparison from 14 s to
 9 s.
 
-Inside a family, the views are still tabs — there are at most four, and they are
+Inside a family, the views are still tabs, there are at most four, and they are
 cheap relative to the family itself.
 
 ### 3.1 Giving it sequences
@@ -127,55 +150,64 @@ Three ways in:
 - **Paste** into the text box: FASTA, or a bare sequence, or several bare sequences
   separated by blank lines. Whitespace, digits and gap characters are stripped.
 - **Upload a FASTA file** with the uploader on the right.
-- **Load example** fills the box with three published VHHs — caplacizumab, cAbLys3
-  and Nb80 — so you can see what every tab looks like before committing your own
+- **Load example** fills the box with three published VHHs (caplacizumab, cAbLys3 and Nb80) so you can see what every tab looks like before committing your own
   data. They come from the library (§7), where their PDB entries are given.
 
-Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The button
-exists because the keyboard shortcut is not discoverable; both do the same thing,
+Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The
+button
+exists because the keyboard shortcut is not discoverable; both do the same
+thing,
 which is to commit what you typed.
 
-A progress bar runs directly under the button while the analysis is working, and is
-replaced by a line that stays — which matters more than it sounds, because on a
+A progress bar runs directly under the button while the analysis is working,
+and is
+replaced by a line that stays, which matters more than it sounds, because on a
 handful of sequences the analysis itself takes a fraction of a second and a bar
 that cleared itself would leave no evidence anything had happened.
 
-That line reports **two** numbers, and the gap between them is the honest picture:
+That line reports **two** numbers, and the gap between them is the honest
+picture:
 
-- *characterised in …* — the physico-chemical analysis and the CDR annotation.
-  Typically well under a second.
-- *page built in …* — everything, including every figure. Streamlit re-executes
-  the whole script on each interaction, so all the tab bodies render whether you
+- *characterised in …* (the physico-chemical analysis and the CDR annotation. Typically well under a second. - *page built in …*) everything, including every figure. Streamlit re-executes
+  the whole script on each interaction, so all the tab bodies render whether
+you
   open them or not: the alignment, the logo, the identity matrices, the
-  aggregation profiles, the plasmid maps. On a fresh set of six sequences this is
+  aggregation profiles, the plasmid maps. On a fresh set of six sequences this
+is
   routinely a hundred times the analysis time.
 
-So when the bar fills and Streamlit's own spinner (top right, fixed position, not
+So when the bar fills and Streamlit's own spinner (top right, fixed position,
+not
 movable) keeps turning, that second number is what it is still working on. A
 second run over the same sequences is far quicker: the figures are cached.
 
 **Limits.** Up to 50 sequences per run, each between 25 and 1500 amino acids, and
-12 000 residues in total across the submission. Anything outside that is rejected
+12 000 residues in total across the submission. Anything outside that is
+rejected
 with a message naming the offending sequence.
 
 The total-residue ceiling is the one that may surprise you: one long protein is
 cheap to analyse, fifty of them are not, and on Community Cloud the instance is
-shared with whoever else is using the app at that moment. Split a large submission
+shared with whoever else is using the app at that moment. Split a large
+submission
 rather than working around it.
 
-A sequence containing a non-standard residue (B, X, Z, a stop…) is rejected by name.
+A sequence containing a non-standard residue (B, X, Z, a stop…) is rejected by
+name.
 Fix or remove it rather than letting it through.
 
 **Clearing the box.** The 🗑️ **Clear** button empties the sequence field in one
 click instead of selecting everything by hand. It is greyed out when the box is
-already empty, and it also resets the file uploader — so re-selecting the same
+already empty, and it also resets the file uploader, so re-selecting the same
 FASTA after clearing works, which it would not if the uploader still thought it
 had already handled that file.
 
 ### 3.1b Generating synthetic VHHs
 
-The panel **Generate synthetic VHH sequences** builds sequences that look like real
-VHHs without being any of them. Useful for negative controls, for benchmarking a
+The panel **Generate synthetic VHH sequences** builds sequences that look like
+real
+VHHs without being any of them. Useful for negative controls, for benchmarking
+a
 pipeline, or for testing this app itself.
 
 **How it works.** Frameworks are sampled position by position from an IMGT
@@ -183,9 +215,12 @@ position-frequency matrix built from real VHHs. CDRs are drawn at random, with
 lengths taken from the same reference set.
 
 **The reference set.** The bundled matrix comes from **PLAbDab-nano** (OPIG,
-University of Oxford): 1958 unique VHH sequences, numbered with ANARCI against the
-alpaca germlines, giving 212 IMGT positions with a median support of 1890 sequences
-per position. The panel states this, along with the support, because a frequency is
+University of Oxford): 1958 unique VHH sequences, numbered with ANARCI against
+the
+alpaca germlines, giving 212 IMGT positions with a median support of 1890
+sequences
+per position. The panel states this, along with the support, because a
+frequency is
 only as good as the number of sequences behind it.
 
 > *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
@@ -204,39 +239,47 @@ only as good as the number of sequences behind it.
 | CDR residues | `natural` uses the reference set's own CDR composition; `no_cys` is uniform over 19 residues; `uniform` is all 20 |
 | Enforce camelid hallmarks | resamples IMGT 42/49/50/52 until the tetrad is camelid |
 | Allow cysteines in frameworks | off by default, see below |
-| Fix the CDR lengths | otherwise lengths come from the reference distribution — CDR1 and CDR2 around 8, CDR3 a mean of 17 over a range of 2 to 30 |
+| Fix the CDR lengths | otherwise lengths come from the reference distribution: CDR1 and CDR2 around 8, CDR3 a mean of 17 over a range of 2 to 30 |
 | Random seed | the same seed always gives the same set, so a benchmark is reproducible |
 
 Generated sequences download as FASTA, or go straight into the analysis above.
 
 **Three things to know before using the output.**
 
-*Positions are sampled independently.* Real frameworks have correlated positions — a
-residue at one site constrains another — so a combination that never co-occurs in
-nature can come out. The hallmark tetrad is the usual casualty, which is why it is
+*Positions are sampled independently.* Real frameworks have correlated positions (a residue at one site constrains another) so a combination that never co-occurs in
+nature can come out. The hallmark tetrad is the usual casualty, which is why it
+is
 enforced by default.
 
 *Cysteines in frameworks are off by default.* About 2% of the reference sequences
-carry a cysteine at IMGT 50, where it pairs with a cysteine in a CDR. With randomly
-generated CDRs that partner does not exist, so such a residue would be left as an
+carry a cysteine at IMGT 50, where it pairs with a cysteine in a CDR. With
+randomly
+generated CDRs that partner does not exist, so such a residue would be left as
+an
 orphan thiol.
 
 *These are synthetic sequences.* Nothing here predicts that they fold, express or bind
 anything. They are statistically plausible strings, and that is all.
 
-A check worth running: generate a set and send it through the analysis. On the bundled
-matrix every generated sequence annotates cleanly and scores 4/4 on the hallmarks,
-with molecular weights around 13.5–14 kDa — which is the sanity test that the matrix
+A check worth running: generate a set and send it through the analysis. On the
+bundled
+matrix every generated sequence annotates cleanly and scores 4/4 on the
+hallmarks,
+with molecular weights around 13.5–14 kDa, which is the sanity test that the
+matrix
 and the assembly are behaving.
 
 ### 3.1c What kind of sequence is this?
 
-Every submitted sequence is classified before anything else runs, because the app
-has to know which analyses legitimately apply to it. There is no structure here, so
+Every submitted sequence is classified before anything else runs, because the
+app
+has to know which analyses legitimately apply to it. There is no structure
+here, so
 the decision is made from the sequence alone:
 
 1. **ANARCI numbering succeeds** → the sequence is an immunoglobulin variable
-   domain, and ANARCI also reports whether the chain is heavy (H) or light (K/L).
+   domain, and ANARCI also reports whether the chain is heavy (H) or light
+(K/L).
 2. For a **heavy-chain** domain, the FR2 hallmark tetrad separates a VHH from a
    conventional VH.
 3. **ANARCI fails** → not a variable domain. Everything generic still applies.
@@ -246,17 +289,18 @@ That gives six verdicts, shown in the `type` column of the Properties table:
 | Verdict | What happens |
 |---|---|
 | **VHH** | everything runs |
-| **V domain, VHH/VH ambiguous** | everything runs, with a caution — 1/4 hallmarks usually means a humanised VHH or a VH-like construct |
-| **Conventional VH** | everything runs, labelled VH throughout — see below |
+| **V domain, VHH/VH ambiguous** | everything runs, with a caution (1/4 hallmarks usually means a humanised VHH or a VH-like construct | | **Conventional VH** | everything runs, labelled VH throughout) see below |
 | **Light-chain V domain** | antibody-specific tabs skipped |
-| **Contains a V domain** | antibody-specific tabs skipped — a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
+| **Contains a V domain** | antibody-specific tabs skipped, a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
 | **Other protein** | antibody-specific tabs skipped |
 
 **A conventional VH gets the full analysis.** Most of what this app calls "the
 VHH analysis" is not camelid-specific at all: IMGT numbering, the CDR windows,
 germline assignment, humanness and CDR3 grouping are exactly the same operation
-on a VH. Withholding them would have been an arbitrary restriction, so a VH goes
-through all of it, with a `type` column in every per-sequence table saying which
+on a VH. Withholding them would have been an arbitrary restriction, so a VH
+goes
+through all of it, with a `type` column in every per-sequence table saying
+which
 is which, and a notice at the top naming the VH sequences.
 
 Exactly two readings are genuinely camelid, and both are flagged where they
@@ -267,7 +311,8 @@ appear rather than used to gate everything else:
   camelid `FERF` is the clearest possible illustration of the difference.
 - **The additional CDR1–CDR3 disulfide.** The pattern matched against is a
   camelid one. On a VH, an extra cysteine pair is reported as unverified rather
-  than as the known VHH motif. The canonical IMGT 23/104 disulfide is the same in
+  than as the known VHH motif. The canonical IMGT 23/104 disulfide is the same
+in
   both and applies to either.
 
 Humanness on a VH behaves as you would expect and the app says so: a high
@@ -275,26 +320,33 @@ framework identity to a human germline is expected rather than informative, and
 the hallmark rows are not a humanisation decision there, since a VH already
 carries the VH residues.
 
-When something that is **not** a heavy-chain domain is submitted, a notice names
-each sequence and says why. The tabs that skip them — **CDR / Framework**,
+When something that is **not** a heavy-chain domain is submitted, a notice
+names
+each sequence and says why. The tabs that skip them (**CDR / Framework**,
 **Hallmarks & germline** including humanness, **Clonal families**, and the
-disulfide section of **Liabilities** — say so rather than quietly showing a
+disulfide section of **Liabilities**) say so rather than quietly showing a
 shorter list.
 
 **Two behaviours worth knowing.**
 
 *Cysteines are judged differently.* For a VHH the app expects exactly one
-intradomain disulfide between FR1 and FR3, and flags anything else as a possible
-free thiol. That rule is wrong for any other protein — lysozyme's eight cysteines
-form four ordinary disulfides and are not eight liabilities. So for a non-VHH the
-app falls back to the only thing that holds generally: an odd number of cysteines
-guarantees at least one unpaired thiol; an even number tells you nothing without a
+intradomain disulfide between FR1 and FR3, and flags anything else as a
+possible
+free thiol. That rule is wrong for any other protein, lysozyme's eight
+cysteines
+form four ordinary disulfides and are not eight liabilities. So for a non-VHH
+the
+app falls back to the only thing that holds generally: an odd number of
+cysteines
+guarantees at least one unpaired thiol; an even number tells you nothing
+without a
 structure.
 
 *The alignment defaults to the antibody domains.* Aligning a 1200-residue protein
 against 120-residue VHHs produces a figure that is mostly gaps, and a logo to
-match. So the **Alignment** tab aligns the heavy-chain subset by default — VHH and
-VH together, which align perfectly well — with a checkbox to include the rest. If
+match. So the **Alignment** tab aligns the heavy-chain subset by default (VHH
+and VH together, which align perfectly well) with a checkbox to include the
+rest. If
 nothing in the submission is an antibody domain, it aligns what you gave it.
 
 ### 3.2 Sidebar settings
@@ -305,7 +357,8 @@ nothing in the submission is an antibody domain, it aligns what you gave it.
 | Profile window | 9 residues | the sliding window for the per-residue charge and hydropathy profiles |
 | CDR annotation method | auto | `auto` uses ANARCI when it is installed and falls back to the regex anchors; `regex` forces the dependency-free path; `anarci` appears only when ANARCI is actually available |
 
-The caption under the selector tells you which annotator is live. If it says *not
+The caption under the selector tells you which annotator is live. If it says
+*not
 installed*, every CDR boundary you see comes from the regex anchors.
 
 ### 3.2b Triage
@@ -315,24 +368,27 @@ study: sixteen clones out of a screening, ten slots in a synthesis order. Every
 flag the app can raise, one row per sequence, sortable by whichever column
 matters today.
 
-The columns come in groups you can show or hide — identity, physico-chemical,
-liabilities, aggregation, repertoire, cysteines, antibody-specific — and a
+The columns come in groups you can show or hide (identity, physico-chemical,
+liabilities, aggregation, repertoire, cysteines, antibody-specific) and a
 *flags* view reduces everything to booleans, so "show me only the sequences with
 something wrong" is one checkbox.
 
-Every number here is produced by the same function that fills its own tab, so the
+Every number here is produced by the same function that fills its own tab, so
+the
 triage table and the detailed tab can never disagree.
 
 **There is no overall score, deliberately.** Weighting a deamidation site against
 a hydrophobic patch against three divergent framework positions means choosing
-what matters, and that depends entirely on what the VHH is for — a reagent for
+what matters, and that depends entirely on what the VHH is for, a reagent for
 your own ELISA and a candidate you mean to humanise have nothing in common. A
-single number would hide that choice behind a decimal point. The columns sit next
+single number would hide that choice behind a decimal point. The columns sit
+next
 to each other; you sort.
 
-Empty cells are analyses that do not apply rather than failures. A sequence that
+Empty cells are analyses that do not apply rather than failures. A sequence
+that
 is not an antibody domain has no hallmark score, and its cysteines are not read
-against the VHH canonical pair — lysozyme's eight cysteines form four ordinary
+against the VHH canonical pair, lysozyme's eight cysteines form four ordinary
 disulfides and are not eight orphan thiols.
 
 ### 3.3 Properties
@@ -344,7 +400,7 @@ The main table, one row per sequence.
 | Length, MW | a VHH is typically 110–135 aa and 12–15 kDa |
 | Theoretical pI | pH of zero net charge, Bjellqvist pKa set. A pI close to your buffer pH predicts poor colloidal stability |
 | ε280 | molar extinction coefficient at 280 nm, reduced cysteines |
-| A280 (1 mg/mL) | ε / MW — **this is the number you divide your measured A280 by to get mg/mL** |
+| A280 (1 mg/mL) | ε / MW: **this is the number you divide your measured A280 by to get mg/mL** |
 | Instability index | Guruprasad dipeptide score; below 40 predicts a stable protein |
 | Aliphatic index | relative volume of A, V, I, L; higher correlates with thermostability |
 | GRAVY | mean Kyte–Doolittle hydropathy; negative means hydrophilic. Above about −0.2 flags an aggregation-prone candidate |
@@ -352,30 +408,36 @@ The main table, one row per sequence.
 | Charge | net charge at the working pH |
 | n_Cys | cysteine count; two is the canonical intradomain disulfide |
 
-GRAVY and the instability index are shaded green-to-red so the outliers in a set jump
+GRAVY and the instability index are shaded green-to-red so the outliers in a
+set jump
 out.
 
 **Developability flags** below the table turn those numbers into sentences. A flag is
-a threshold crossing, not a verdict: instability index ≥ 40, GRAVY above −0.2, net
+a threshold crossing, not a verdict: instability index ≥ 40, GRAVY above −0.2,
+net
 charge magnitude below 2, pI within one unit of the working pH, more than two
 cysteines, three or more methionines. Tune the thresholds to your own data in
 `vhh_core.stability_flags` if they do not match your experience.
 
 **Custom features** is a second table carrying descriptors that are easy to extend:
-charge at pH 5 (relevant for cation-exchange capture), the Lys+Arg fraction, CDR3
-length, CDR3-only GRAVY, and counts of NG and DP/DG motifs. Each definition is listed
+charge at pH 5 (relevant for cation-exchange capture), the Lys+Arg fraction,
+CDR3
+length, CDR3-only GRAVY, and counts of NG and DP/DG motifs. Each definition is
+listed
 in the expander underneath.
 
 **Lysines and primary amines.** `n_Lys` counts lysine side chains and
 `n_primary_amines` adds the free N-terminal α-amine, which an NHS ester labels
-just as readily. Together they are the sites a random amine-coupling chemistry —
-NHS-biotin, NHS-fluorophore, amine coupling onto a chip — will react with.
+just as readily. Together they are the sites a random amine-coupling chemistry
+(NHS-biotin, NHS-fluorophore, amine coupling onto a chip) will react with.
 
 An expander lists every one of them with its region, and warns when any sits
 inside a CDR. That warning is the point of the feature: random amine coupling
-hits a CDR lysine along with the rest, and it is the usual explanation for a VHH
-that binds on the bench and stops binding once labelled. Site-specific chemistry —
-a C-terminal cysteine, sortase, or an Avi tag — avoids the problem entirely, and
+hits a CDR lysine along with the rest, and it is the usual explanation for a
+VHH
+that binds on the bench and stops binding once labelled. Site-specific
+chemistry (a C-terminal cysteine, sortase, or an Avi tag) avoids the problem
+entirely, and
 the Constructs tab (§3.14) builds those.
 
 Counted from sequence, so this is how many amines **exist**, not how many are
@@ -386,33 +448,36 @@ labelling sites.
 
 Four figures:
 
-1. **Secondary-structure propensity** — stacked bars of helix/turn/sheet fractions.
-2. **Titration curves and net charge** — each curve crosses zero at that sequence's
+1. **Secondary-structure propensity** (stacked bars of helix/turn/sheet fractions. 2. **Titration curves and net charge**) each curve crosses zero at that sequence's
    theoretical pI, and the dotted line marks your working pH.
-3. **Per-residue profiles** — sliding-window charge and Kyte–Doolittle hydropathy
+3. **Per-residue profiles**, sliding-window charge and Kyte–Doolittle hydropathy
    along the sequence, with the CDRs shaded. This is where charged patches and
    hydrophobic stretches become visible.
-4. **Predicted secondary structure (Chou–Fasman)** — helix and sheet propensity
+4. **Predicted secondary structure (Chou–Fasman)**, helix and sheet propensity
    curves with a predicted-state track underneath.
 
-The Chou–Fasman heuristic is roughly 50–60% accurate. It shows where the sequence
+The Chou–Fasman heuristic is roughly 50–60% accurate. It shows where the
+sequence
 *tends* towards each conformation; it does not predict the fold. A VHH is an
-immunoglobulin β-sandwich, so a sheet-dominated profile is the expected result, and
+immunoglobulin β-sandwich, so a sheet-dominated profile is the expected result,
+and
 getting one is not evidence that anything was predicted correctly.
 
 With more than one sequence, only the selected Chou–Fasman panel is drawn. Tick
-**Show all** to see every one — with many sequences this is the slowest thing the app
+**Show all** to see every one, with many sequences this is the slowest thing the app
 does.
 
 ### 3.5 CDR / Framework
 
-A table of CDR1, CDR2 and CDR3 with their lengths, the coloured sequences, and the
+A table of CDR1, CDR2 and CDR3 with their lengths, the coloured sequences, and
+the
 framework regions in an expander.
 
 **Two annotation methods, and they do not agree by design.**
 
 *ANARCI (IMGT numbering)* aligns the sequence to germline HMMs, gives every residue an
-IMGT position, and takes the CDRs as the fixed windows 27–38, 56–65 and 105–117.
+IMGT position, and takes the CDRs as the fixed windows 27–38, 56–65 and
+105–117.
 Because it is numbering-based it tolerates unusual CDR lengths. It needs HMMER.
 
 *Regex anchors* needs nothing. It locates the conserved landmarks of a VHH and cuts
@@ -421,23 +486,28 @@ between them:
 | Anchor | Pattern | Role |
 |---|---|---|
 | conserved Cys23 | `C` in residues 16–30 | ends FR1 |
-| FR2 | `W[A-Z]RQ` — the `WFRQ`/`WYRQ` hallmark | starts FR2 |
-| FR3 | `[KR][FYW][TASV][IVLFM]S` — the `RFTIS` motif | ends CDR2 |
-| second Cys | `[YFHV][YFHVAC]C` — the `YYC` motif | ends FR3 |
+| FR2 | `W[A-Z]RQ` (the `WFRQ`/`WYRQ` hallmark | starts FR2 | | FR3 | `[KR][FYW][TASV][IVLFM]S`) the `RFTIS` motif | ends CDR2 |
+| second Cys | `[YFHV][YFHVAC]C`, the `YYC` motif | ends FR3 |
 | FR4 | `WG[A-Z]G[TAS][A-Z]{1,2}VTVSS` | ends CDR3 |
 
 **The two give different CDR1 and CDR2 lengths.** IMGT windows are tighter than the
-anchor-based cuts, which follow a more Kabat-like logic. CDR3 usually agrees. This
-matters when you compare CDR lengths across datasets: say which method produced them.
+anchor-based cuts, which follow a more Kabat-like logic. CDR3 usually agrees.
+This
+matters when you compare CDR lengths across datasets: say which method produced
+them.
 
-Where both run, a disagreement beyond that usually means a non-canonical framework,
-which is itself worth knowing. The regex method assumes a canonical VHH scaffold; if
-an anchor is missing the app names the one it could not find rather than guessing.
+Where both run, a disagreement beyond that usually means a non-canonical
+framework,
+which is itself worth knowing. The regex method assumes a canonical VHH
+scaffold; if
+an anchor is missing the app names the one it could not find rather than
+guessing.
 
 ### 3.6 Hallmarks & germline
 
 **The hallmark tetrad** is the four FR2 positions that distinguish a camelid VHH from
-a conventional VH. The table gives IMGT and Kabat numbering, the residue found, the
+a conventional VH. The table gives IMGT and Kabat numbering, the residue found,
+the
 VH3 consensus, and a verdict.
 
 | IMGT | Kabat | VH3 | Camelid |
@@ -447,23 +517,29 @@ VH3 consensus, and a verdict.
 | 50 | 45 | L | C, L, P, R |
 | 52 | 47 | W | F, G, L, S, W |
 
-A score of 4/4 is the canonical camelid profile. **IMGT 49 is shared with VH3, so 3/4
-with a G at 49 is common and still a genuine VHH.** Engineered or humanised constructs
+A score of 4/4 is the canonical camelid profile. **IMGT 49 is shared with VH3,
+so 3/4
+with a G at 49 is common and still a genuine VHH.** Engineered or humanised
+constructs
 sit between the two profiles. Read the score as an indication, never as a
 classification.
 
 **Closest germline** runs the assignment twice, once against alpaca and once against
-human, and reports the closest V and J gene with percent identity. The identity to the
-closest human germline is a first-pass humanness indicator — a sequence can be
-germline-like and still contain a T-cell epitope, so this is not an immunogenicity
+human, and reports the closest V and J gene with percent identity. The identity
+to the
+closest human germline is a first-pass humanness indicator, a sequence can be
+germline-like and still contain a T-cell epitope, so this is not an
+immunogenicity
 prediction.
 
-Both need ANARCI. Without it, the hallmarks fall back to reading the positions off the
+Both need ANARCI. Without it, the hallmarks fall back to reading the positions
+off the
 regex FR2 block, and the germline table is absent.
 
 **Humanness, position by position.** Underneath the germline table, percent
-identity to the closest human germline V gene — computed **over framework
-positions only**, because CDR divergence from a human germline is expected and is
+identity to the closest human germline V gene, computed **over framework
+positions only**, because CDR divergence from a human germline is expected and
+is
 not something you would ever try to fix.
 
 The identity is computed position by position in IMGT numbering against the
@@ -471,16 +547,22 @@ IMGT-gapped germline sequences that ship with ANARCI, not by a fresh alignment.
 On a typical VHH it agrees with ANARCI's own independent germline assignment to
 within 0.1%, which is a useful cross-check that the numbering is right.
 
-What makes it actionable is the divergence table: one row per framework position
-where the VHH differs from the closest human germline, with the IMGT number, the
-region, both residues, whether the substitution is conservative, and whether the
+What makes it actionable is the divergence table: one row per framework
+position
+where the VHH differs from the closest human germline, with the IMGT number,
+the
+region, both residues, whether the substitution is conservative, and whether
+the
 position is one of the four hallmarks.
 
-That last flag is the whole point. FR2 typically comes out around 65% human while
-FR1 and FR3 sit near 90% — not because FR2 is unusual, but because FR2 is where
-the hallmarks live. Reverting them raises the humanness number and simultaneously
+That last flag is the whole point. FR2 typically comes out around 65% human
+while
+FR1 and FR3 sit near 90%, not because FR2 is unusual, but because FR2 is where
+the hallmarks live. Reverting them raises the humanness number and
+simultaneously
 removes the hydrophilic camelid surface that lets a VHH stay soluble without a
-light chain. The other divergent positions are the cheap ones; the hallmarks are
+light chain. The other divergent positions are the cheap ones; the hallmarks
+are
 a real trade-off, and the table separates them so you can see which is which.
 
 **A limit worth repeating.** This is a first-pass humanness indicator and nothing
@@ -490,7 +572,8 @@ germline-like sequence can carry an epitope; a divergent one can be silent.
 
 ### 3.7 Liabilities
 
-Chemical and manufacturability liabilities, **scored** and placed along the sequence.
+Chemical and manufacturability liabilities, **scored** and placed along the
+sequence.
 
 **The scoring scale.** Each motif carries a base score, and the total per sequence is
 the sum:
@@ -506,64 +589,84 @@ the sum:
 | Oxidation (Met) | `M` | 4 |
 | Oxidation (Trp) | `W` | 3 |
 
-Risk categories follow the same scale: **Low** below 2, **Medium** below 6, **High**
+Risk categories follow the same scale: **Low** below 2, **Medium** below 6,
+**High**
 at 6 or above.
 
-Three further motifs — fragmentation (`DP`), integrin binding (`RGD`) and hydrophobic
-patches of four or more consecutive F/I/L/V/W/Y — are **additions**, marked as such in
-the `source` column. Untick *Include the motifs added on top of the in-house scale* to
+Three further motifs (fragmentation (`DP`), integrin binding (`RGD`) and
+hydrophobic patches of four or more consecutive F/I/L/V/W/Y) are **additions**,
+marked as such in
+the `source` column. Untick *Include the motifs added on top of the in-house
+scale* to
 reproduce the original totals exactly.
 
 **An important limitation.** In its original form each motif is also weighted by its
 **solvent exposure** (SASA) and by the **model confidence** (pLDDT), both taken from a
-3D structure. This section is sequence-only, so neither factor is applied: an `NG`
-scores 10 whether it is buried in the core or fully exposed on a loop. Two consequences
+3D structure. This section is sequence-only, so neither factor is applied: an
+`NG`
+scores 10 whether it is buried in the core or fully exposed on a loop. Two
+consequences
 follow, and they matter:
 
-- the categories **compress towards the top** — almost everything lands in Medium or
-  High, where the structure-weighted version would push buried motifs down to Low;
+- the categories **compress towards the top**, almost everything lands in Medium or
+  High, where the structure-weighted version would push buried motifs down to
+Low;
 - **comparing sequences with each other tells you more than the category of any single
   motif**. Use the totals to rank a panel, not to declare one motif dangerous.
 
-If you have an AlphaFold model, the structure-weighted analysis is a separate notebook
+If you have an AlphaFold model, the structure-weighted analysis is a separate
+notebook
 and gives a far sharper answer.
 
 **The liability map** places every motif at its residue position, one row per sequence,
-with bubble size proportional to the score and the CDRs shaded behind. This is the view
-that answers the question you actually ask of a panel: *where* do the problems sit, and
-do they fall in a binding loop. The **liability profile** underneath stacks each
+with bubble size proportional to the score and the CDRs shaded behind. This is
+the view
+that answers the question you actually ask of a panel: *where* do the problems
+sit, and
+do they fall in a binding loop. The **liability profile** underneath stacks
+each
 sequence's score by motif type, with the total on top.
 
 **The region column is what makes the table actionable.** The same `NG` means different
-things in FR3 and in CDR3: in a framework it is mainly a stability and heterogeneity
+things in FR3 and in CDR3: in a framework it is mainly a stability and
+heterogeneity
 concern, in a CDR it may alter binding.
 
 **Free cysteines.** With only the sequence, the app assumes the canonical intradomain
-disulfide joins the FR1 and FR3 cysteines, and flags any Cys outside those regions as a
-candidate free thiol. cAbLys3, which carries a genuine second disulfide between CDR1
-and CDR3, is therefore flagged twice — correctly in the sense that those cysteines are
-extra, and misleadingly in the sense that they are paired. With a structure you would
+disulfide joins the FR1 and FR3 cysteines, and flags any Cys outside those
+regions as a
+candidate free thiol. cAbLys3, which carries a genuine second disulfide between
+CDR1
+and CDR3, is therefore flagged twice, correctly in the sense that those
+cysteines are
+extra, and misleadingly in the sense that they are paired. With a structure you
+would
 measure the SG–SG distances instead.
 
 **Protease sites** sit in an expander: trypsin-like (after K/R, not before P),
 chymotrypsin-like (after F/W/Y, not before P), GluC-like, AspN-like, and the
-high-scoring Factor Xa and enterokinase recognition sites. Every protein has tryptic
-sites, so the count on its own means little. What is worth looking at is a high-scoring
+high-scoring Factor Xa and enterokinase recognition sites. Every protein has
+tryptic
+sites, so the count on its own means little. What is worth looking at is a
+high-scoring
 recognition site, or a cluster of sites inside a CDR.
 
 Everything downloads as a single CSV.
 
 **Cysteines and disulfides.** The liability table flags every cysteine outside
-the canonical FR1/FR3 pair as a possible free thiol. That is the right default and
+the canonical FR1/FR3 pair as a possible free thiol. That is the right default
+and
 it is wrong in one common case: camelid VHHs with long CDR3s frequently carry a
 **second, stabilising** disulfide, most often between CDR1 or FR2 and CDR3. Read
-as a liability, a stabiliser becomes a problem to fix — which would be exactly
+as a liability, a stabiliser becomes a problem to fix, which would be exactly
 backwards.
 
 This section tells the two apart. It numbers every cysteine in IMGT, identifies
 the canonical IMGT 23/104 pair, and then looks at what is left: two extra
-cysteines in regions that pair in real VHHs are reported as a plausible additional
-disulfide, one extra cysteine as an orphan thiol, three or more as something that
+cysteines in regions that pair in real VHHs are reported as a plausible
+additional
+disulfide, one extra cysteine as an orphan thiol, three or more as something
+that
 cannot be resolved from sequence.
 
 Pairing here is inferred from **position alone**. There is no structure in this
@@ -572,7 +675,8 @@ not a verified bond. A non-reducing gel or a structure is what confirms it.
 
 **Suggested repairs.** One conservative substitution per liability, so the table
 stops being merely descriptive: NG fixed at the glycine rather than the
-asparagine, DG likewise, sequons broken at the +2 residue, M→L, free Cys→Ser, and
+asparagine, DG likewise, sequons broken at the +2 residue, M→L, free Cys→Ser,
+and
 so on. Each row carries its rationale.
 
 Three behaviours are worth knowing about.
@@ -580,21 +684,26 @@ Three behaviours are worth knowing about.
 *Conserved positions are refused.* The oxidation rules match every Met and Trp in
 the sequence, which includes the conserved FR2 tryptophan (IMGT 41) and the FR4
 tryptophan of the WGxG motif (IMGT 118). Substituting either would "repair" a
-liability by breaking the fold, so those rows appear in a separate table with the
+liability by breaking the fold, so those rows appear in a separate table with
+the
 reason, and no substitution is offered. The canonical disulfide cysteines are
 treated the same way.
 
 *CDR positions are flagged, not hidden.* A liability in a CDR is often one you
-keep — fixing it may cost the affinity you selected for. The rows say so, and the
+keep, fixing it may cost the affinity you selected for. The rows say so, and
+the
 default selection is the framework-only subset.
 
 *Substitutions that do not match are refused rather than applied.* Each one is
 written `N55Q`, and if residue 55 is not an asparagine the substitution is
-rejected with a message instead of silently doing something else. Two conflicting
-substitutions at the same position are refused as a pair, because that conflict is
+rejected with a message instead of silently doing something else. Two
+conflicting
+substitutions at the same position are refused as a pair, because that conflict
+is
 your decision.
 
-Applying a selection shows the repaired sequence, the new liability score with the
+Applying a selection shows the repaired sequence, the new liability score with
+the
 delta, and a FASTA download. The recomputed score reuses the original region
 boundaries, which is correct for substitutions; re-run the full analysis on the
 repaired sequence before trusting anything else about it.
@@ -602,21 +711,27 @@ repaired sequence before trusting anything else about it.
 ### 3.8 Aggregation-prone regions
 
 Where along the sequence the aggregation-prone stretches are. A stretch becomes
-aggregation-prone when it is hydrophobic, β-prone and carries no charged residue
-to interrupt it, and the profile combines exactly those quantities: the absolute
-charge per residue, Kyte–Doolittle hydropathy, Chou–Fasman β-sheet propensity, and
+aggregation-prone when it is hydrophobic, β-prone and carries no charged
+residue
+to interrupt it, and the profile combines exactly those quantities: the
+absolute
+charge per residue, Kyte–Doolittle hydropathy, Chou–Fasman β-sheet propensity,
+and
 a gatekeeper term for P/D/E/K/R. Positive leans soluble, negative leans
 aggregation-prone.
 
 **This is not CamSol, AGGRESCAN or TANGO.** Those fit their coefficients to
 experimental data. The weights here are a transparent judgement call and sit in
 `SOLUBILITY_WEIGHTS` in `vhh_core.py` for you to change. The consequence is
-specific: read **where** the weak spots are, and compare candidates against each
+specific: read **where** the weak spots are, and compare candidates against
+each
 other, but do not read the absolute value as a predicted solubility. For a
 validated number, run the sequence through one of those servers.
 
-With that said, the profile behaves the way it should on controls. A poly-isoleucine
-stretch scores about −1.0, a poly-lysine stretch about +2.0, and a well-behaved VHH
+With that said, the profile behaves the way it should on controls. A
+poly-isoleucine
+stretch scores about −1.0, a poly-lysine stretch about +2.0, and a well-behaved
+VHH
 comes out around +0.3 with its weakest spots on the known hydrophobic framework
 segments. Give it a deliberately hydrophobic CDR3 and CDR3 goes straight to the
 top of the list.
@@ -626,57 +741,72 @@ to be to register; the *threshold* (default −0.3) sets what counts as
 aggregation-prone.
 
 **Two tables.** *Regions below the threshold* is the headline, but a good VHH
-often has none at all — which would leave the tab empty and tell you nothing. So
+often has none at all, which would leave the tab empty and tell you nothing. So
 *weakest windows* always lists the three lowest-scoring windows whether or not
-they cross the threshold, with their region and whether they fall in a CDR. That
+they cross the threshold, with their region and whether they fall in a CDR.
+That
 is the table to compare candidates on.
 
 In the summary, `Mean` is higher-is-better and `Worst` is the single lowest
-window. `Worst` is usually what decides whether a candidate behaves: one bad patch
+window. `Worst` is usually what decides whether a candidate behaves: one bad
+patch
 is enough.
 
 ### 3.9 Alignment
 
-With two or more sequences: a FAMSA alignment rendered with `pymsaviz`, with the CDR
+With two or more sequences: a FAMSA alignment rendered with `pymsaviz`, with
+the CDR
 bands of the first sequence marked, downloadable as aligned FASTA.
 
-These two figures are the most expensive in the app, and they used to sit behind a
+These two figures are the most expensive in the app, and they used to sit
+behind a
 **Draw the alignment and logo** button because Streamlit re-executes every tab body
-on every interaction — so left to themselves they were redrawn constantly, whether
+on every interaction, so left to themselves they were redrawn constantly,
+whether
 or not anyone was looking. The family selector (§3.0) solves that properly: the
 Comparison family only executes when you select it, so the button became pure
-friction and was removed. The cost of these figures is now paid when you ask for
+friction and was removed. The cost of these figures is now paid when you ask
+for
 the family that contains them, and at no other time.
 
-A *Positions per row* slider sets the wrap, 20 to 140 columns, exactly as the logo
-below has its own. Fewer positions per row gives more rows and wider letters, which
-is what you want for a figure; more keeps the whole domain on one or two lines for a
-quick look. The two sliders are independent — the alignment and the logo can be
+A *Positions per row* slider sets the wrap, 20 to 140 columns, exactly as the
+logo
+below has its own. Fewer positions per row gives more rows and wider letters,
+which
+is what you want for a figure; more keeps the whole domain on one or two lines
+for a
+quick look. The two sliders are independent, the alignment and the logo can be
 wrapped differently.
 
-Underneath, **two identity matrices**: full-length and CDR3-only. The second is the
-one that matters when triaging panning output. Two clones can share 90%+ full-length
-identity while having unrelated CDR3s — they are the same scaffold, not the same
-binder. To turn that observation into actual groups, use **Clonal families** (§3.12).
+Underneath, **two identity matrices**: full-length and CDR3-only. The second is
+the
+one that matters when triaging panning output. Two clones can share 90%+
+full-length
+identity while having unrelated CDR3s, they are the same scaffold, not the same
+binder. To turn that observation into actual groups, use **Clonal families**
+(§3.12).
 
 **Sequence logo.** Underneath, the same alignment as a logo: letter height shows
 what is conserved and what varies, which reads faster than the alignment itself
-when all you want to know is where the diversity sits. It reproduces the logo from
-the clinical-VHH alignment notebook — `logomaker`, gaps and X ignored, no
+when all you want to know is where the diversity sits. It reproduces the logo
+from
+the clinical-VHH alignment notebook (`logomaker`, gaps and X ignored, no
 pseudocount, amino acids that never occur dropped so the colouring only shows
-residues actually present — with the CDR bands of the first sequence mapped onto
+residues actually present) with the CDR bands of the first sequence mapped onto
 alignment columns.
 
 Three controls:
 
 *Height* is **Frequency** or **Information (bits)**. Frequency makes every column
-sum to 1, so the logo reads directly as composition — the notebook's choice.
+sum to 1, so the logo reads directly as composition, the notebook's choice.
 Information is the classic Schneider logo in bits, where a mixed column stays
-short even when one residue is commonest; it is the better one for spotting which
+short even when one residue is commonest; it is the better one for spotting
+which
 positions genuinely carry signal.
 
 *Positions per row* sets the wrap, 20 to 140 columns. Fewer positions per row means
-more rows and wider letters, which is what you want for a figure; more positions
+more rows and wider letters, which is what you want for a figure; more
+positions
 per row keeps the whole domain on one or two lines for a quick look.
 
 *Colours* offers the usual logomaker schemes, chemistry by default.
@@ -687,52 +817,73 @@ column per amino acid, if you want to plot it yourself.
 ### 3.10 vs Reference
 
 Which positions differ from a sequence you pick as the reference. Humanisation
-variants against the parent, a Sanger clone against the construct it was supposed
-to be, a panel against its ancestor — the same question each time.
+variants against the parent, a Sanger clone against the construct it was
+supposed
+to be, a panel against its ancestor, the same question each time.
 
-Choose the reference from the submitted sequences, or paste one that is not in the
+Choose the reference from the submitted sequences, or paste one that is not in
+the
 set. Everything else is compared against it.
 
 **Positions are matched by IMGT number, not by raw alignment.** That is the whole
-point of doing it this way: delete one residue from a CDR3 and an alignment-based
+point of doing it this way: delete one residue from a CDR3 and an
+alignment-based
 diff reports every downstream position as changed, whereas this reports one
-deletion. Insertions and deletions are reported as such rather than dropped — in a
+deletion. Insertions and deletions are reported as such rather than dropped, in
+a
 CDR3 they are usually the most interesting difference there is.
 
-One honest caveat, visible in the app: IMGT places insertions at the *centre* of a
-loop, so adding a residue to CDR3 can shift a couple of its neighbours. Those show
-up as substitutions alongside the insertion. It is a property of the numbering, not
+One honest caveat, visible in the app: IMGT places insertions at the *centre*
+of a
+loop, so adding a residue to CDR3 can shift a couple of its neighbours. Those
+show
+up as substitutions alongside the insertion. It is a property of the numbering,
+not
 a mistake, but it means an insertion rarely reports as exactly one change.
 
-The summary gives, per sequence, the number of differences split into substitutions
-and indels, how many fall in a CDR, and how many substitutions are conservative by
-BLOSUM62. The map underneath places every difference along the IMGT axis with the
-CDR bands marked — red for non-conservative, blue for conservative, grey for an
-indel — so a humanisation variant reads at a glance as "four changes, all in FR2".
-A *CDR positions only* toggle narrows everything to the loops, which is the view
+The summary gives, per sequence, the number of differences split into
+substitutions
+and indels, how many fall in a CDR, and how many substitutions are conservative
+by
+BLOSUM62. The map underneath places every difference along the IMGT axis with
+the
+CDR bands marked (red for non-conservative, blue for conservative, grey for an
+indel) so a humanisation variant reads at a glance as "four changes, all in
+FR2".
+A *CDR positions only* toggle narrows everything to the loops, which is the
+view
 you want when checking whether a clone kept its binding site.
 
 ### 3.11 Repertoire
 
 Your sequences against the natural VHH repertoire. This is the same IMGT
-position-frequency matrix the synthetic generator samples from (§3.1b, PLAbDab-nano,
+position-frequency matrix the synthetic generator samples from (§3.1b,
+PLAbDab-nano,
 1958 VHHs), used the other way round.
 
 **Unusual framework residues.** For each sequence, the framework positions whose
 residue is rare in the reference. This is what catches a Sanger miscall, a PCR
-error, or a construct that has quietly drifted. On a normal VHH it flags nothing
-across ninety-odd compared positions; plant a proline in the middle of FR3 and it
-comes out at 0.7% against a consensus alanine at 83%, with 1952 reference sequences
+error, or a construct that has quietly drifted. On a normal VHH it flags
+nothing
+across ninety-odd compared positions; plant a proline in the middle of FR3 and
+it
+comes out at 0.7% against a consensus alanine at 83%, with 1952 reference
+sequences
 behind the call.
 
-CDRs are excluded on purpose. A CDR is *supposed* to be unusual, and flagging it
+CDRs are excluded on purpose. A CDR is *supposed* to be unusual, and flagging
+it
 would bury the framework signal that actually matters.
 
-Two guards are built in rather than left to you. The *minimum support* slider sets
-aside positions backed by too few reference sequences instead of calling them rare —
-a frequency from 30 sequences is not a frequency from 1900, and every row carries
-its support. And the wording stays "unusual", never "error": **rare is not wrong**.
-A residue absent from the reference may be a genuine novelty, a germline this set
+Two guards are built in rather than left to you. The *minimum support* slider
+sets
+aside positions backed by too few reference sequences instead of calling them
+rare, a frequency from 30 sequences is not a frequency from 1900, and every row
+carries
+its support. And the wording stays "unusual", never "error": **rare is not
+wrong**.
+A residue absent from the reference may be a genuine novelty, a germline this
+set
 under-samples, or the very mutation you selected for.
 
 **Your set vs the natural repertoire.** CDR length distributions and per-region
@@ -741,49 +892,65 @@ amino-acid composition, your set shown against the reference.
 How your sequences are drawn depends on how many there are, and the reason is a
 real one. Plotted as a frequency, a single sequence is 100% of itself: its bar
 reaches 1.0, the reference distribution it is meant to be compared against is
-squashed into the bottom tenth of the axis, and the figure tells you nothing. So
-below eight sequences they are drawn as **markers placed on the reference curve**
+squashed into the bottom tenth of the axis, and the figure tells you nothing.
+So
+below eight sequences they are drawn as **markers placed on the reference
+curve**
 instead, each labelled with how common that length actually is among real VHHs.
-At eight or more, both are drawn as bars and the comparison of shapes becomes the
+At eight or more, both are drawn as bars and the comparison of shapes becomes
+the
 point.
 
 Either way, a **"where each CDR length sits"** table gives the number that
-matters: the frequency of that exact length in the reference, and the percentile —
-the fraction of natural VHHs with a shorter CDR there. A CDR3 of 13 comes out at
+matters: the frequency of that exact length in the reference, and the
+percentile, the fraction of natural VHHs with a shorter CDR there. A CDR3 of 13
+comes out at
 the 15th percentile against a distribution peaking at 17, which is a far more
-useful statement than any bar. Lengths below the 5th or above the 95th percentile
+useful statement than any bar. Lengths below the 5th or above the 95th
+percentile
 are called unusual, and unusual is not wrong: a long CDR3 is often exactly what
 you selected for. After a panning this is
 what says whether the selection was biased: a shift towards long CDR3s, an
-enrichment in charged residues, a depletion of the tyrosine and glycine that are the
-staples of natural CDR3s. Drop a deliberately charged set in and lysine comes out
-enriched by thirty points over the reference, with tyrosine and glycine depleted —
-which is exactly the kind of signature a charged target leaves behind.
+enrichment in charged residues, a depletion of the tyrosine and glycine that
+are the
+staples of natural CDR3s. Drop a deliberately charged set in and lysine comes
+out
+enriched by thirty points over the reference, with tyrosine and glycine
+depleted, which is exactly the kind of signature a charged target leaves
+behind.
 
 With only a handful of sequences the comparison is coarse by construction: one
 sequence in ten is a 10% bar. Read it for the direction, not the number.
 
 **A note if you submitted a conventional VH.** The reference is a *VHH* repertoire.
-A VH compared against it may legitimately show FR2 positions as unusual — that is
-the difference between a VH and a VHH, not a defect in your sequence. The app warns
+A VH compared against it may legitimately show FR2 positions as unusual, that
+is
+the difference between a VH and a VHH, not a defect in your sequence. The app
+warns
 when VH sequences are present.
 
 ### 3.12 Clonal families
 
-This is the tab for triaging panning output. The first question after a screening is
-not how good each clone is, but **how many different clones you actually have** — a
+This is the tab for triaging panning output. The first question after a
+screening is
+not how good each clone is, but **how many different clones you actually
+have**, a
 plate of picked colonies is routinely the same few lineages over and over, and
-properties computed on 16 reads that represent 3 lineages will mislead you three
+properties computed on 16 reads that represent 3 lineages will mislead you
+three
 times over.
 
 Grouping is done on **CDR3**, because CDR3 is what differs between independent
 lineages while the frameworks stay nearly constant.
 
 **How it works.** Every pair of CDR3s is aligned (global, BLOSUM62, gaps −11/−1) and
-scored for identity — strictly identical residues over the length of the longer
-CDR3. Those identities become a distance matrix (`1 − identity`), which is clustered
-hierarchically and cut at your threshold. This is the same procedure as the Sanger
-screening notebook, so the app and the notebook give the same families for the same
+scored for identity, strictly identical residues over the length of the longer
+CDR3. Those identities become a distance matrix (`1 − identity`), which is
+clustered
+hierarchically and cut at your threshold. This is the same procedure as the
+Sanger
+screening notebook, so the app and the notebook give the same families for the
+same
 reads.
 
 **The three controls.**
@@ -792,72 +959,95 @@ reads.
 to the same family. At 100% only strictly identical CDR3s group together.
 
 *Linkage.* `complete` guarantees that **every pair** inside a family meets the
-threshold — the conservative reading of "same family". `average` merges on the mean
-distance and is more permissive, so a family can then contain pairs that fall below
-your threshold. The family table's `min_identity` column is there to catch exactly
-that: it reports each family's worst internal pair, and a value under your threshold
+threshold, the conservative reading of "same family". `average` merges on the
+mean
+distance and is more permissive, so a family can then contain pairs that fall
+below
+your threshold. The family table's `min_identity` column is there to catch
+exactly
+that: it reports each family's worst internal pair, and a value under your
+threshold
 tells you `average` merged across it.
 
 *Same CDR3 length only* forces CDR3s of different lengths into different families
-whatever their alignment. Off by default, because a one-residue indel in a CDR3 is a
+whatever their alignment. Off by default, because a one-residue indel in a CDR3
+is a
 plausible sibling rather than a new lineage. Turn it on if you want strictly
 length-matched families.
 
-**What you get.** Four numbers at the top — sequences grouped, families, singletons,
+**What you get.** Four numbers at the top, sequences grouped, families, singletons,
 and redundancy (sequences per family). Redundancy above roughly 2 means you are
-re-picking the same lineages and could screen more colonies for the same effort.
+re-picking the same lineages and could screen more colonies for the same
+effort.
 
 Then a family table, with for each family its size, how many distinct CDR3s it
-contains, its worst internal identity and similarity, its CDR3 length range, and a
-**representative** — the family's most frequent CDR3, a reasonable default for the
+contains, its worst internal identity and similarity, its CDR3 length range,
+and a
+**representative**: the family's most frequent CDR3, a reasonable default for the
 clone to carry forward.
 
-A dendrogram draws your threshold as a dashed line; branches joining to its right
-are separate families. Move the slider and watch which groups merge: that is the
-honest way to judge how robust a family is. A grouping that holds from 70% to 95% is
+A dendrogram draws your threshold as a dashed line; branches joining to its
+right
+are separate families. Move the slider and watch which groups merge: that is
+the
+honest way to judge how robust a family is. A grouping that holds from 70% to
+95% is
 real; one that appears only at 78% is an artefact of where you put the line.
 
 Finally a per-sequence assignment table, and CSV downloads of the families, the
 assignment and the CDR3 identity matrix, plus a FASTA of one representative per
-family — which is usually what you actually want to order or subclone.
+family, which is usually what you actually want to order or subclone.
 
 **Two honest limits.** Families are a *hypothesis* about shared lineage drawn from
-CDR3 similarity alone; two unrelated lineages can converge on a similar CDR3, and
-true siblings with a heavily mutated CDR3 can be split. And sequences whose CDR3
-could not be annotated are left out rather than guessed at — they are listed
+CDR3 similarity alone; two unrelated lineages can converge on a similar CDR3,
+and
+true siblings with a heavily mutated CDR3 can be split. And sequences whose
+CDR3
+could not be annotated are left out rather than guessed at, they are listed
 explicitly when that happens.
 
 ### 3.13 DNA
 
 Back-translation into *E. coli* codon-optimised DNA.
 
-Each residue first takes the most frequent *E. coli* codon. The sequence is then
-repaired wherever it contains a restriction site you asked to avoid or a homopolymer
-run longer than six, by swapping the offending codon for the next synonymous one.
-Finally the GC content is balanced, because optimising codon frequency alone pushes GC
+Each residue first takes the most frequent *E. coli* codon. The sequence is
+then
+repaired wherever it contains a restriction site you asked to avoid or a
+homopolymer
+run longer than six, by swapping the offending codon for the next synonymous
+one.
+Finally the GC content is balanced, because optimising codon frequency alone
+pushes GC
 to about 63% and synthesis vendors flag anything above 60%.
 
-Controls: which restriction sites to avoid (17 available, all selected by default),
+Controls: which restriction sites to avoid (17 available, all selected by
+default),
 whether to append a TAA stop, and the maximum GC fraction.
 
 **Every output is verified by translating it back and comparing to the input.** If the
-round trip fails the app says so in red and tells you not to order that sequence. For
+round trip fails the app says so in red and tells you not to order that
+sequence. For
 DNA you are going to pay to have synthesised, that check is worth its cost.
 
-The optimiser maximises codon frequency, balances GC and removes cloning-unfriendly
-motifs. It does **not** model mRNA secondary structure near the ribosome binding site,
-codon-pair bias or tRNA availability. Run the output through your synthesis vendor's
+The optimiser maximises codon frequency, balances GC and removes
+cloning-unfriendly
+motifs. It does **not** model mRNA secondary structure near the ribosome
+binding site,
+codon-pair bias or tRNA availability. Run the output through your synthesis
+vendor's
 own checker before ordering.
 
-A **Send to gene diagnosis** button passes the sequences straight to §6, where the
-frame, rare-codon and GC checks run on them — including the GC balancing this
+A **Send to gene diagnosis** button passes the sequences straight to §6, where
+the
+frame, rare-codon and GC checks run on them, including the GC balancing this
 optimiser does globally but not window by window.
 
 ### 3.14 Constructs
 
 Assemble a VHH into the construct you will actually order, and get the mass, pI
 and DNA of the finished protein rather than of the bare domain. The practical
-reason: a VHH is 13 kDa with a pI near 8.6, and the same VHH with a FLAG tag is a
+reason: a VHH is 13 kDa with a pI near 8.6, and the same VHH with a FLAG tag is
+a
 different protein on a gel and on an ion-exchange column. Four aspartates will
 move the pI by two units, and you would rather know that before ordering than
 after the purification misbehaves.
@@ -865,26 +1055,31 @@ after the purification misbehaves.
 **Formats.** *Monovalent* is one VHH with whatever tags you add. *Bivalent* is the
 same VHH twice, which raises apparent affinity through avidity, not affinity.
 *Biparatopic* is two different VHHs against the same target, which needs
-non-overlapping epitopes — picking the same VHH twice there makes a bivalent
+non-overlapping epitopes, picking the same VHH twice there makes a bivalent
 construct and the app says so.
 
 **Linkers.** A list from a direct fusion up to (GGGGS)4, plus rigid (EAAAK)
-helices for when you want fixed spacing rather than a floppy tether. (GGGGS)3 is
-the default for a bivalent construct — long enough for both domains to bind
+helices for when you want fixed spacing rather than a floppy tether. (GGGGS)3
+is
+the default for a bivalent construct, long enough for both domains to bind
 independently. Fusing two VHHs with no linker raises a warning, because the
 domains will interfere and that is almost never what you want.
 
 **Tags.** His6, His8, HA, c-Myc, FLAG, Strep-II, Avi, the original SpyTag, and TEV,
-thrombin and sortase sites. Each carries a short note. The sortase motif has to be
-last — LPETG is cleaved between T and G, so anything after it is lost — and the app
+thrombin and sortase sites. Each carries a short note. The sortase motif has to
+be
+last (LPETG is cleaved between T and G, so anything after it is lost) and the
+app
 warns if you put something after it.
 
 **What is deliberately missing, and why.** SpyTag2 and SpyTag3 are not in the
 list, and neither are the camelid hinges. Only the original SpyTag is included.
 Writing the others from memory would risk handing you a sequence that is one
-residue wrong, which you would discover only after the synthesised gene arrived.
-The *Custom pieces* expander takes any peptide you paste, with a label, at either
-end — that is the honest way to handle a sequence this app cannot vouch for, and
+residue wrong, which you would discover only after the synthesised gene
+arrived.
+The *Custom pieces* expander takes any peptide you paste, with a label, at
+either
+end, that is the honest way to handle a sequence this app cannot vouch for, and
 it is where those belong.
 
 **Verify everything anyway.** Tag sequences differ between vectors and between
@@ -892,10 +1087,13 @@ papers. The app says so on every run, and it means it: a one-residue difference
 will not show up until the protein does not work.
 
 **What you get.** A schematic drawn to scale with VHHs, linkers and tags
-distinguished; length, mass, pI and A280 each with the delta against the bare VHH;
-a segment table giving every piece's exact coordinates; the full property set; the
-protein sequence; and codon-optimised DNA for the whole construct, with the same
-restriction-site avoidance as the DNA tab and the same round-trip verification —
+distinguished; length, mass, pI and A280 each with the delta against the bare
+VHH;
+a segment table giving every piece's exact coordinates; the full property set;
+the
+protein sequence; and codon-optimised DNA for the whole construct, with the
+same
+restriction-site avoidance as the DNA tab and the same round-trip verification,
 the DNA is translated back and compared to the construct before it is shown.
 
 ### 3.15 Download
@@ -903,12 +1101,16 @@ the DNA is translated back and compared to the construct before it is shown.
 The results table as CSV, the figures as 300 dpi PNG, and a full PDF report.
 
 The report is built on demand because it takes a few seconds. It contains the
-physico-chemical summary, then one section per sequence (properties, developability
-flags, regions, the sequence, hallmarks, germline, liabilities), all the figures, and
+physico-chemical summary, then one section per sequence (properties,
+developability
+flags, regions, the sequence, hallmarks, germline, liabilities), all the
+figures, and
 a page of caveats.
 
-The **Include the per-sequence secondary-structure plots** checkbox adds one page per
-sequence. It is ticked automatically up to six sequences; beyond that those plots are
+The **Include the per-sequence secondary-structure plots** checkbox adds one
+page per
+sequence. It is ticked automatically up to six sequences; beyond that those
+plots are
 most of the file size and most of the build time.
 
 ---
@@ -922,29 +1124,32 @@ approximation can be replaced by a measurement:
 
 | Asked from sequence | Measured here |
 |---|---|
-| which cysteines pair — from IMGT positions and a canonical-pair assumption | the SG–SG distances |
+| which cysteines pair: from IMGT positions and a canonical-pair assumption | the SG–SG distances |
 | a liability motif, wherever it occurs | whether that motif is buried or on the surface |
 | hydrophobicity in a sliding window | hydrophobic area that is contiguous **in space** |
-| — | which residues contact the antigen |
+|, | which residues contact the antigen |
 
 The last row is the point: contact residues are not inferable from sequence at
 all.
 
 ### 4.1 What it accepts
 
-`.pdb`, `.cif`/`.mmcif`, and gzipped versions of either. Crystal structures from
+`.pdb`, `.cif`/`.mmcif`, and gzipped versions of either. Crystal structures
+from
 the PDB, AlphaFold2, AlphaFold3 and ColabFold models are all read directly,
-pLDDT included — for AlphaFold3, use the `.cif` it writes.
+pLDDT included, for AlphaFold3, use the `.cif` it writes.
 
-The app does **not** fetch structures for you, deliberately: downloading on your
-behalf would mean this server making requests that look like they came from you.
+The app does **not** fetch structures for you, deliberately: downloading on
+your
+behalf would mean this server making requests that look like they came from
+you.
 Download from `rcsb.org` or `alphafold.ebi.ac.uk` yourself and upload the file.
 
 For a VHH–antigen complex, download the **whole entry** rather than one chain,
 otherwise there is no interface left to compute.
 
-If the file holds several models — an NMR ensemble, or several predictions —
-only the first is used, and the app says so.
+If the file holds several models (an NMR ensemble, or several predictions) only
+the first is used, and the app says so.
 
 ### 4.2 Choosing the chain, and what to annotate against
 
@@ -955,26 +1160,30 @@ only the first is used, and the app says so.
 model is routinely missing termini and disordered loops, and its residue
 numbering may be sequential, IMGT, Kabat or whatever the depositor chose. Left
 at *(the structure's own sequence)* the section works on exactly what is in the
-file. Point it at one of the sequences loaded in the analysis section instead and
+file. Point it at one of the sequences loaded in the analysis section instead
+and
 the model is aligned onto that full-length construct, so CDR bands, regions and
 liability positions line up with the rest of the app. The app reports how many
-residues aligned and at what identity, and warns below 90% — if you see that,
+residues aligned and at what identity, and warns below 90%, if you see that,
 check you have picked the same molecule.
 
 Internally the mapping is keyed by **residue number**, not by position in the
-chain. Those differ the moment a chain does not start at 1 or has a gap, which is
+chain. Those differ the moment a chain does not start at 1 or has a gap, which
+is
 most of the time.
 
 ### 4.3 Chains & confidence
 
-A predicted model stores **pLDDT** in the column a crystal structure uses for the
-**B-factor**. The two mean opposite things — high pLDDT is good, high B is bad —
-and no field in either format states which it is. The app guesses from the value
+A predicted model stores **pLDDT** in the column a crystal structure uses for
+the
+**B-factor**. The two mean opposite things (high pLDDT is good, high B is bad) and no field in either format states which it is. The app guesses from the value
 range and the header, says why, and lets you override it.
 
 For pLDDT the usual confidence bands are drawn, because the number is close to
-meaningless without them: 90 and 60 are both "high-ish" until you know that **70
-is the line below which the backbone should not be trusted**. The residues below
+meaningless without them: 90 and 60 are both "high-ish" until you know that
+**70
+is the line below which the backbone should not be trusted**. The residues
+below
 it are listed.
 
 pLDDT is the model's confidence in itself. It is neither accuracy nor a
@@ -989,15 +1198,19 @@ anything else is a free thiol. The counts are compared with the sequence-based
 prediction from §3.7 and with the `SSBOND` records in the file, and
 disagreements are reported rather than resolved silently.
 
-When the counts disagree, the measurement is the one to believe — but check first
-that the model covers every cysteine: a cysteine in an unmodelled loop cannot be
+When the counts disagree, the measurement is the one to believe, but check
+first
+that the model covers every cysteine: a cysteine in an unmodelled loop cannot
+be
 seen to pair.
 
 ### 4.5 Exposure
 
-Absolute accessibility in Å², divided by the maximum that residue type can have,
+Absolute accessibility in Å², divided by the maximum that residue type can
+have,
 so a Trp and a Gly are comparable. At or below **20%** is called buried, at or
-above **50%** exposed, and the band between is left as *intermediate* rather than
+above **50%** exposed, and the band between is left as *intermediate* rather
+than
 forced into one of the two.
 
 Computed with Biopython's Shrake–Rupley implementation (1.4 Å probe) and
@@ -1014,14 +1227,16 @@ the accessibilities the residues have **in the complex**.
 ### 4.6 Liabilities in 3D
 
 The join worth uploading a structure for. The analysis section flags a
-deamidation, oxidation or glycosylation motif wherever it occurs; it cannot know
+deamidation, oxidation or glycosylation motif wherever it occurs; it cannot
+know
 whether the motif is on the surface or packed into the core. A buried motif is
 largely inert. An exposed one in a CDR is a real problem.
 
 Each liability from §3.7 gets its measured relative accessibility, its
-buried/intermediate/exposed call, and the residue number it has in the model, so
+buried/intermediate/exposed call, and the residue number it has in the model,
+so
 you can find it in the 3D view. Motifs in unmodelled regions are reported as
-*not modelled* rather than as buried — the two are very different claims.
+*not modelled* rather than as buried, the two are very different claims.
 
 The sequence-based `risk` column is left untouched on purpose. Downgrading it
 automatically because a residue looks buried in one static conformer would be
@@ -1030,10 +1245,12 @@ overclaiming. Read the two columns together.
 ### 4.7 Surface patches
 
 What drives aggregation is hydrophobic area that is **contiguous on the
-surface**, which a sliding window over the sequence cannot see: two residues far
+surface**, which a sliding window over the sequence cannot see: two residues
+far
 apart in sequence can sit side by side on the fold. This groups solvent-exposed
-V, I, L, M, F, W, Y residues whose side chains come within a contact distance of
-each other — measured between closest heavy atoms, not between centroids, since
+V, I, L, M, F, W, Y residues whose side chains come within a contact distance
+of
+each other, measured between closest heavy atoms, not between centroids, since
 Trp and Arg carry their bulk far from the backbone.
 
 Three thresholds, all sliders:
@@ -1041,61 +1258,76 @@ Three thresholds, all sliders:
 *Minimum relative accessibility* (default **0.15**) is deliberately well below
 the 0.50 that counts as "exposed" elsewhere, for a structural reason: a residue
 in the middle of a patch is half-covered by the patch's own other residues, so
-requiring each one to be exposed in its own right is a good way of never finding
+requiring each one to be exposed in its own right is a good way of never
+finding
 a patch. On the one complex this was checked against, the known dimerisation
-patch is found at 0.15 and missed at 0.20 — a cliff one residue wide. Treat the
+patch is found at 0.15 and missed at 0.20, a cliff one residue wide. Treat the
 default as a starting point, not a validated parameter.
 
 *Contact distance* (default 5.0 Å) barely changed the answer over 5.0–7.0 Å in
 that same check.
 
-*Minimum patch size* (default 3) — fewer than three residues is not a patch.
+*Minimum patch size* (default 3), fewer than three residues is not a patch.
 
 **A transparent composite, not SAP or CamSol.** Those methods are parameterised
-against experimental aggregation data this app does not have. This asks a simpler
-and fully stated question, and the thresholds are yours to move. Read it as *here
+against experimental aggregation data this app does not have. This asks a
+simpler
+and fully stated question, and the thresholds are yours to move. Read it as
+*here
 is a hydrophobic area worth looking at*, never as a predicted aggregation rate.
 
 ### 4.8 Interface
 
 Only shown when you select a binding partner.
 
-A residue is at the interface if it loses solvent accessibility when the partner
-is present. **ΔSASA** — accessible alone minus accessible in the complex — is the
+A residue is at the interface if it loses solvent accessibility when the
+partner
+is present. **ΔSASA** (accessible alone minus accessible in the complex) is the
 standard operational definition, and unlike a distance cutoff it weights each
 residue by how much surface it actually commits to the contact.
 
-With one partner you also get the buried surface area per side. For reference, an
-antibody–antigen interface typically buries 600–900 Å² per side; a VHH, with one
+With one partner you also get the buried surface area per side. For reference,
+an
+antibody–antigen interface typically buries 600–900 Å² per side; a VHH, with
+one
 domain instead of two, often sits at the lower end or below it. A much smaller
-number is worth suspicion — in a crystal structure it may be a packing contact
+number is worth suspicion, in a crystal structure it may be a packing contact
 rather than the biological interface.
 
-When the model is annotated against a sequence, the buried surface is also broken
-down **by region**, which answers the question people actually have: how much of
-the binding is done by the CDRs. A framework contribution is normal for a VHH —
+When the model is annotated against a sequence, the buried surface is also
+broken
+down **by region**, which answers the question people actually have: how much
+of
+the binding is done by the CDRs. A framework contribution is normal for a VHH,
 the FR2 face that would be the VL interface in a conventional antibody is
 solvent-exposed and often takes part in binding.
 
-The same calculation run the other way round gives the **epitope**: the residues
-of the antigen that the VHH covers. That is a structural epitope from one model,
-not a functional one — it says which residues are covered, not which ones the
-binding energy depends on. Those are different sets, and telling them apart needs
+The same calculation run the other way round gives the **epitope**: the
+residues
+of the antigen that the VHH covers. That is a structural epitope from one
+model,
+not a functional one, it says which residues are covered, not which ones the
+binding energy depends on. Those are different sets, and telling them apart
+needs
 mutagenesis.
 
 ### 4.9 3D view
 
 3Dmol.js, loaded from a CDN. Colour by chain, N→C rainbow, pLDDT/B-factor or
 buried→exposed; optionally show the surface; and highlight the disulfides, the
-free thiols, the largest hydrophobic patch or the exposed liabilities as sticks.
+free thiols, the largest hydrophobic patch or the exposed liabilities as
+sticks.
 
 If the panel stays blank your browser could not reach the CDN. Every table and
-figure in this section is computed server-side with Biopython and is unaffected.
+figure in this section is computed server-side with Biopython and is
+unaffected.
 
 ### 4.10 What this section is not
 
-It measures **one static conformer of one model**. It does not predict structure,
-does not dock, does not estimate affinity, and does not model flexibility. For a
+It measures **one static conformer of one model**. It does not predict
+structure,
+does not dock, does not estimate affinity, and does not model flexibility. For
+a
 predicted model, side-chain accessibility is indicative rather than measured,
 because side chains are the part a predictor places least reliably.
 
@@ -1107,13 +1339,14 @@ because side chains are the part a predictor places least reliably.
 
 You upload the chromatograms from a screening run. For each read the app:
 
-1. quality-trims with **Mott's algorithm** — the one phred and Staden use;
+1. quality-trims with **Mott's algorithm**, the one phred and Staden use;
 2. translates the read and its reverse complement in three frames each;
 3. locates the **PelB leader** to fix the start and the reading frame;
 4. locates the **FR4 signature** to fix the end of the VHH;
 5. extracts the VHH protein and DNA, and reports what went wrong where it did.
 
-Because all six frames are searched, forward and reverse reads are handled without
+Because all six frames are searched, forward and reverse reads are handled
+without
 being told which is which.
 
 ### 5.2 Settings
@@ -1125,19 +1358,23 @@ being told which is which.
 | Min trimmed length | 150 nt | below this the read is flagged, and the raw sequence is analysed instead of the trimmed one |
 | Min mean Phred | 20 | QC threshold on the trimmed window |
 
-To add a vector, edit `sanger.VECTORS` — and take the tag layout from the actual
-plasmid map rather than from memory. A wrong layout makes the app report missing tags
+To add a vector, edit `sanger.VECTORS`, and take the tag layout from the actual
+plasmid map rather than from memory. A wrong layout makes the app report
+missing tags
 on clones that are perfectly fine.
 
 ### 5.3 Reading the results table
 
 Four counters at the top: reads, VHHs extracted, unique sequences, failures.
 
-The table carries the status, QC pass, trimmed length, mean Q, the strand and frame
-where the cassette was found, the VHH length, the tags found and missing, premature
+The table carries the status, QC pass, trimmed length, mean Q, the strand and
+frame
+where the cassette was found, the VHH length, the tags found and missing,
+premature
 stops, the copy number, and which read a duplicate duplicates.
 
-Every warning is also reprinted in full underneath the table, grouped by read, because
+Every warning is also reprinted in full underneath the table, grouped by read,
+because
 a long warning is unreadable in a table cell.
 
 **A failed read is not necessarily a failed clone.**
@@ -1146,14 +1383,17 @@ a long warning is unreadable in a table cell.
 |---|---|
 | `ok` | cassette found, VHH extracted, no frameshift or internal stop |
 | `low quality` | the VHH was extracted but the read failed the QC thresholds |
-| `no FR4` | the read stopped before the end of the VHH — sequence further, or from the other end |
+| `no FR4` | the read stopped before the end of the VHH: sequence further, or from the other end |
 | `frameshift` | PelB and FR4 sit in **different reading frames**, so an indel lies between them. The VHH cannot be reconstructed reliably and is deliberately not reported |
-| `no PelB` | the leader was not found in any frame — wrong vector, very poor read, or empty well |
+| `no PelB` | the leader was not found in any frame: wrong vector, very poor read, or empty well |
 | `unreadable` | the file could not be parsed as `.ab1` |
 
-One warning deserves a note: *only the PelB core anchor matched — read starts inside
-the leader*. The short anchor `AAQPAMA` is used when the full leader is not present.
-That is normal for a read that begins part-way through the leader, and the VHH start is
+One warning deserves a note: *only the PelB core anchor matched, read starts
+inside
+the leader*. The short anchor `AAQPAMA` is used when the full leader is not
+present.
+That is normal for a read that begins part-way through the leader, and the VHH
+start is
 derived from the anchor that actually matched.
 
 **Identical protein sequences are grouped.** The same colony picked twice shows up as
@@ -1166,10 +1406,11 @@ trimming in blue and a dashed line at Phred 20. Up to twelve reads are drawn.
 
 ### 5.5 Sending clones to the analysis
 
-Below the table, pick the clones worth keeping and press **Send selected to analysis**.
+Below the table, pick the clones worth keeping and press **Send selected to
+analysis**.
 The app switches to the analysis section with those sequences loaded.
 
-**Duplicates are deselected by default** — one entry per unique protein sequence. Tick
+**Duplicates are deselected by default**: one entry per unique protein sequence. Tick
 them back on if you want to see them separately.
 
 ### 5.6 Downloads
@@ -1184,38 +1425,46 @@ Its own section, reached from the home page or from the **DNA** tab of the
 analysis section, which hands its back-translated sequences straight over.
 
 **What you paste stays there.** Leaving the section and coming back does not clear
-the box, the same as in the analysis section — Streamlit normally discards an
-input's contents once its screen stops being drawn, and both inputs are explicitly
+the box, the same as in the analysis section, Streamlit normally discards an
+input's contents once its screen stops being drawn, and both inputs are
+explicitly
 kept alive against that.
 
 **Several sequences at once.** Paste FASTA, a bare sequence, or several separated
-by blank lines — up to 20, 6000 nt each. The overview table puts one row per
+by blank lines, up to 20, 6000 nt each. The overview table puts one row per
 sequence: frame, internal stops, GC, rare codons and their clusters, GC-rich
 stretches, homopolymers. `in_frame` and `internal_stops` are the deterministic
-columns — wrong there means wrong — while the rest is triage. Pick one sequence
+columns (wrong there means wrong) while the rest is triage. Pick one sequence
 from the list for the detailed view and the codon suggestions.
 
-The reverse of the DNA tab: paste a coding sequence that is already in a plasmid
-and ask what might be wrong with it. Written for the case you described — VHHs
+The reverse of the DNA tab: paste a coding sequence that is already in a
+plasmid
+and ask what might be wrong with it. Written for the case you described, VHHs
 that express poorly.
 
 **Read the warning at the top of the tab first.** Codon usage is rarely the first
 suspect. A VHH that expresses badly in *E. coli* is more often explained by
 periplasmic toxicity, inefficient signal-peptide cleavage, failure to form the
-intradomain disulfide, inclusion bodies, plasmid loss or induction conditions. A
-gene with flawless codon usage expresses badly for all of those reasons. This tab
-tells you whether the sequence is *part* of the problem; it cannot tell you that
+intradomain disulfide, inclusion bodies, plasmid loss or induction conditions.
+A
+gene with flawless codon usage expresses badly for all of those reasons. This
+tab
+tells you whether the sequence is *part* of the problem; it cannot tell you
+that
 it is the problem.
 
 **The deterministic checks come first**, because they are the ones that are
 definitely wrong when they are wrong: frame, start and stop codons, internal
-stops, and — if you supply the expected protein — whether the translation matches
-it. That last one is worth doing every time: a mismatch makes everything else on
+stops, and (if you supply the expected protein) whether the translation matches
+it. That last one is worth doing every time: a mismatch makes everything else
+on
 the page beside the point.
 
 **Rare codons.** The codons whose scarcity in *E. coli* is well established, the
-ones the Rosetta and CodonPlus strains supplement with extra tRNA genes: AGA, AGG,
-CGA, CGG (Arg), ATA (Ile), CTA (Leu), CCC (Pro), GGA (Gly). What the tab reports
+ones the Rosetta and CodonPlus strains supplement with extra tRNA genes: AGA,
+AGG,
+CGA, CGG (Arg), ATA (Ile), CTA (Leu), CCC (Pro), GGA (Gly). What the tab
+reports
 and ranks are **clusters**, not the total: clustered and tandem rare codons are
 the ones associated with ribosome stalling, while scattered ones are generally
 tolerated. A gene can carry twenty rare codons and be perfectly fine.
@@ -1223,14 +1472,17 @@ tolerated. A gene can carry twenty rare codons and be perfectly fine.
 **The CAI is real, and it was not always.** An earlier version of this section
 refused to report a Codon Adaptation Index, because computing one needs a codon
 usage table and inventing sixty-four values from memory would have produced a
-precise-looking number that meant nothing. That refusal has been resolved rather
-than relaxed: the app now ships the measured table — `data/ecoli_codon_usage.csv`,
+precise-looking number that meant nothing. That refusal has been resolved
+rather
+than relaxed: the app now ships the measured table,
+`data/ecoli_codon_usage.csv`,
 from the Kazusa Codon Usage Database (taxid 316407), released under CC0 and
 redistributed via the `python-codon-tables` package. Every usage figure and the
 CAI come from it.
 
 A CAI near 1 means the gene uses the host's preferred codons throughout.
-Methionine, tryptophan and stop codons are excluded, having no synonym to choose
+Methionine, tryptophan and stop codons are excluded, having no synonym to
+choose
 between. It describes codon choice; it does not predict expression level.
 
 The same table also rebuilt the codon preference order the **DNA** tab uses for
@@ -1239,14 +1491,16 @@ right for 18 of the 20 most-used codons, but wrong in the minor ranks of
 isoleucine, leucine, arginine and serine.
 
 **GC.** Overall, and as a sliding window. Stretches that stay outside 30–70% for
-at least a window length are listed — merged into regions rather than counted as
+at least a window length are listed, merged into regions rather than counted as
 windows, since windows overlap by one nucleotide and one awkward 60 nt stretch
 would otherwise be reported as thirty separate problems. The GC of the first
 fifteen codons is called out separately: a GC-rich start can fold the ribosome
-binding region and slow initiation, and it is one of the few places where silent
+binding region and slow initiation, and it is one of the few places where
+silent
 changes reliably help.
 
-Homopolymer runs of seven or more are flagged too — they complicate both synthesis
+Homopolymer runs of seven or more are flagged too, they complicate both
+synthesis
 and Sanger reading.
 
 **Suggested codon changes.** A GC-rich stretch is one of the few sequence problems
@@ -1257,113 +1511,138 @@ Every suggestion is checked against four constraints before it is offered.
 
 The substitute is not one of the documented rare codons. On its own that is not
 enough, so there is a second brake, expressed in the only terms that mean
-anything: **the substitute must carry at least a given share of its amino acid in
+anything: **the substitute must carry at least a given share of its amino acid
+in
 real *E. coli*.** Without it the algorithm takes the lowest-GC synonym whatever
-its usage — leucine's CTG carries 50% of all *E. coli* leucines and TTA 13%, so it
+its usage, leucine's CTG carries 50% of all *E. coli* leucines and TTA 13%, so
+it
 would happily make that swap. Neither codon is rare; the swap is still a real
 drop. That is the trade you did not want.
 
 The floor is 20% by default, chosen by measurement rather than by feel. On a
-GC-rich test gene it clears every stretch at a cost of 0.044 of CAI, where a 10%
-floor costs 0.080 by allowing exactly the CTG→TTA swap above. Raise it to 40% and
-the CAI stops falling altogether — but four GC-rich stretches survive, which the
+GC-rich test gene it clears every stretch at a cost of 0.044 of CAI, where a
+10%
+floor costs 0.080 by allowing exactly the CTG→TTA swap above. Raise it to 40%
+and
+the CAI stops falling altogether, but four GC-rich stretches survive, which the
 *GC-rich stretches left* figure tells you.
 
-The suggestions table shows `usage_from` and `usage_to` for every change: measured
-frequencies, not an ordering. The **CAI** above the table is the same cost summed
+The suggestions table shows `usage_from` and `usage_to` for every change:
+measured
+frequencies, not an ordering. The **CAI** above the table is the same cost
+summed
 over the whole gene, so the trade-off reads as two numbers rather than as a
 judgement call.
 
-The remaining two constraints are unchanged: the substitute It creates none of the restriction sites you
-choose to preserve — the same list the DNA tab uses, and you can shorten it if a
-site no longer matters — and it opens no homopolymer run. The protein is then translated
+The remaining two constraints are unchanged: the substitute It creates none of
+the restriction sites you
+choose to preserve (the same list the DNA tab uses, and you can shorten it if a
+site no longer matters) and it opens no homopolymer run. The protein is then
+translated
 from the rewritten sequence and compared to the original; if they differ the
 output is refused rather than shown.
 
 *Minimal* and *Maximal* decide how far to go. Minimal applies the biggest GC
 reductions first and **stops as soon as no GC-rich stretch survives**. Maximal
-swaps every codon it can. On a deliberately GC-rich test gene, minimal cleared all
-four stretches with 26 codon changes where maximal used 56 — both left the protein
+swaps every codon it can. On a deliberately GC-rich test gene, minimal cleared
+all
+four stretches with 26 codon changes where maximal used 56, both left the
+protein
 untouched and introduced no rare codon. Minimal is the default because you are
-paying to synthesise this gene, and a construct that differs from the original in
+paying to synthesise this gene, and a construct that differs from the original
+in
 twenty places is easier to reason about than one that differs in sixty.
 
-You get a **before-and-after GC profile**: red is the sequence as you pasted it,
+You get a **before-and-after GC profile**: red is the sequence as you pasted
+it,
 blue after the swaps, the grey band is the acceptable range, and the shaded red
 area is what used to sit above it. Ticks along the bottom mark the codons that
-changed — when they cluster in one place, that is the stretch that was the
-problem. Underneath, the before-and-after GC of each stretch as numbers, the full
+changed, when they cluster in one place, that is the stretch that was the
+problem. Underneath, the before-and-after GC of each stretch as numbers, the
+full
 list of swaps with the GC each one buys, and the rewritten sequence as FASTA.
 
 **What this does not promise.** Lowering local GC removes one plausible obstacle to
-expression. It does not make the gene express — every cause listed at the top of
+expression. It does not make the gene express, every cause listed at the top of
 this tab is still in play.
 
 ---
 
 ## 7. Sequence library
 
-The sequences you come back to, kept as a file in the repository so they are one
+The sequences you come back to, kept as a file in the repository so they are
+one
 click away instead of being pasted again every time.
 
 **Read-only from the app, on purpose.** Streamlit Community Cloud rebuilds the
 container from the repository on every reboot, redeploy and wake-from-sleep, so
-anything the app wrote to disk would be erased — usually on the day you had
-forgotten it was fragile. Keeping the library in the repository instead makes it
+anything the app wrote to disk would be erased, usually on the day you had
+forgotten it was fragile. Keeping the library in the repository instead makes
+it
 durable, versioned, and restorable from git history. The cost is that editing
 happens on your own machine rather than in the browser, which is the trade this
 app makes deliberately.
 
 **And it is public.** The file lives in a public repository, so it is readable by
-anyone whether or not they ever open the app. Nothing unpublished, nothing under
+anyone whether or not they ever open the app. Nothing unpublished, nothing
+under
 an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
 ### 7.1 What is in it
 
-Twenty-two published sequences, every one taken from the source named in its note —
-a PDB entry or KEGG — rather than written from memory. They are chosen
+Twenty-two published sequences, every one taken from the source named in its
+note (a PDB entry or KEGG) rather than written from memory. They are chosen
 to span the range the app has to cope with:
 
 | | |
 |---|---|
 | **caplacizumab** (7EOW) | the first nanobody-based medicine approved |
 | **cAbLys3** (1MEL) | the structure that first showed a VHH paratope; extra CDR1–CDR3 disulfide, 26-residue CDR3 |
-| **Nb80** (3P0G) | stabilises the active state of the β2 adrenergic receptor — the conformational-chaperone use |
+| **Nb80** (3P0G) | stabilises the active state of the β2 adrenergic receptor: the conformational-chaperone use |
 | **anti-GFP Enhancer / Minimizer** (3K1K, 3G9A) | the pair that raises and lowers GFP fluorescence; the Minimizer carries an extra disulfide |
 | **NbALFA** (6I2G) | the ALFA detection-tag nanobody |
 | **Ty1** (6ZXN) | neutralises SARS-CoV-2 |
 | **7D12** (4KRL), **2Rs15d** (5MY6) | anti-EGFR and anti-HER2, the latter an imaging tracer |
 | **Nb.b201** (5VNV) | from a synthetic library rather than an immunised animal |
 | **trastuzumab VH, VL, VH+CH1** (1N8Z) | a conventional VH, a light chain, and a two-domain chain |
-| **hen lysozyme** (1MEL) | not an antibody at all — and the antigen cAbLys3 binds |
+| **hen lysozyme** (1MEL) | not an antibody at all: and the antigen cAbLys3 binds |
 | **cAbBCII10** (3DWT) | anti-β-lactamase VHH, widely reused as a stable framework scaffold |
 | **NbSyn2** (2X6M) | against the α-synuclein C-terminus; extra CDR1–CDR3 disulfide |
 | **α-synuclein** (1XQ8) | the antigen NbSyn2 binds: 140 residues, disordered, pI 4.7 |
-| **neutrophil elastase, human and mouse** (1HNE, KEGG) | the human entry is the mature chain, the mouse one the full precursor — the notes say so, and they are not comparable until the mouse one is trimmed |
-| **serum albumin, human, bovine and mouse** (1AO6, P02769, P07724) | the half-life-extension partner, all three as mature chains so they are directly comparable: 583–585 residues, 66 kDa, 70–76% identical to each other. Human and bovine have 35 cysteines, an odd count, so the app flags the free thiol — which is Cys34 |
+| **neutrophil elastase, human and mouse** (1HNE, KEGG) | the human entry is the mature chain, the mouse one the full precursor, the notes say so, and they are not comparable until the mouse one is trimmed |
+| **serum albumin, human, bovine and mouse** (1AO6, P02769, P07724) | the half-life-extension partner, all three as mature chains so they are directly comparable: 583–585 residues, 66 kDa, 70–76% identical to each other. Human and bovine have 35 cysteines, an odd count, so the app flags the free thiol, which is Cys34 |
 
-Together they make a test set as much as a reference: hallmark scores from 0 to 4,
-CDR3 lengths from 8 to 26 residues, three with an extra disulfide, humanness from
+Together they make a test set as much as a reference: hallmark scores from 0 to
+4,
+CDR3 lengths from 8 to 26 residues, three with an extra disulfide, humanness
+from
 66% to 90%, and one entry for each branch of the classification in §3.1c.
 
-Two are worth looking at closely. **Ty1** is a real published alpaca nanobody that
-scores **1/4** on the hallmark tetrad and carries a VH-like `WVRQ` in FR2, so the
-app calls it ambiguous — it proves on a real case what the hallmark caption claims,
-that the score is indicative and not a classification. **NbALFA** scores 2/4 and is
+Two are worth looking at closely. **Ty1** is a real published alpaca nanobody
+that
+scores **1/4** on the hallmark tetrad and carries a VH-like `WVRQ` in FR2, so
+the
+app calls it ambiguous, it proves on a real case what the hallmark caption
+claims,
+that the score is indicative and not a classification. **NbALFA** scores 2/4
+and is
 a widely used reagent. A VHH is not required to be 4/4.
 
 Where a deposited construct carried a tag or expression residues, the entry is
-trimmed to the variable domain and the note says exactly what was removed. Three
-entries carry DNA, labelled in the note as **back-translated by this app, not the
+trimmed to the variable domain and the note says exactly what was removed.
+Three
+entries carry DNA, labelled in the note as **back-translated by this app, not
+the
 published gene**.
 
 ### 7.2 Using it
 
-Filter by free text over names and notes, by tag, or by whether an entry carries
+Filter by free text over names and notes, by tag, or by whether an entry
+carries
 a protein, DNA, or either. Select the entries you want and send them on: the
 proteins go to the **analysis** section, the DNA to **gene diagnosis**. The
 buttons say how many of your selection carry each kind, and entries that do not
-carry the requested one are left out rather than treated as an error — selecting
+carry the requested one are left out rather than treated as an error, selecting
 a protein-only entry and asking for DNA simply sends nothing for it.
 
 Both kinds also download as FASTA if you want them outside the app.
@@ -1371,7 +1650,7 @@ Both kinds also download as FASTA if you want them outside the app.
 ### 7.3 Editing it
 
 The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
-commit, push — the app serves the new version on its next deploy.
+commit, push, the app serves the new version on its next deploy.
 
 | Column | |
 |---|---|
@@ -1381,13 +1660,15 @@ commit, push — the app serves the new version on its next deploy.
 | `tags` | comma-separated, used by the filter |
 | `note` | free text |
 
-At least one of `protein` or `dna` is required. An entry may carry both, and when
+At least one of `protein` or `dna` is required. An entry may carry both, and
+when
 it does the app checks on load that the DNA translates to the protein and flags
-the row if it does not — the only place that check ever happens.
+the row if it does not, the only place that check ever happens.
 
 A malformed row is **shown with its problem rather than dropped**: a missing
 name, a duplicate, a non-standard residue, a stray character in the DNA. A
-library that silently loses an entry is worse than one that tells you which line
+library that silently loses an entry is worse than one that tells you which
+line
 to fix, and the message carries the line number.
 
 ---
@@ -1398,21 +1679,31 @@ One screen, three steps.
 
 ### 8.1 Recipient vector
 
-Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can also
+Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can
+also
 upload your own in SnapGene `.dna`, GenBank or FASTA.
 
-SnapGene and GenBank carry their own features, which are read as they are. A bare
-FASTA carries only sequence, so the app detects what it can from short protein motifs
-(PelB, His6, HA, Myc, FLAG, Strep, protease sites, and the VHH scaffold itself). It
-deliberately does **not** guess large elements such as gIII, AmpR or the origin: doing
-that properly needs a reference database, and a confident wrong annotation on a cloning
-tool is worse than none. The **source** column in the feature inventory always says
+SnapGene and GenBank carry their own features, which are read as they are. A
+bare
+FASTA carries only sequence, so the app detects what it can from short protein
+motifs
+(PelB, His6, HA, Myc, FLAG, Strep, protease sites, and the VHH scaffold
+itself). It
+deliberately does **not** guess large elements such as gIII, AmpR or the
+origin: doing
+that properly needs a reference database, and a confident wrong annotation on a
+cloning
+tool is worse than none. The **source** column in the feature inventory always
+says
 whether a feature came from the file or was inferred here.
 
-The **cloning window** is the span between the end of the signal peptide and the first
-tag. That is where the insert will land, and the app shows the coordinates it found.
+The **cloning window** is the span between the end of the signal peptide and
+the first
+tag. That is where the insert will land, and the app shows the coordinates it
+found.
 
-The **Expected tags** selector says which cassette layout the finished construct should
+The **Expected tags** selector says which cassette layout the finished
+construct should
 have; it is used when the construct is translated back.
 
 ### 8.2 Donor DNA
@@ -1423,30 +1714,39 @@ Two kinds of donor:
 that brackets it, and amplifies it in silico. The amplicon becomes the insert.
 
 **A VHH fragment amplified with primers.** It must already carry the restriction sites
-those primers added. A bare coding sequence cannot be cloned by restriction, and the
+those primers added. A bare coding sequence cannot be cloned by restriction,
+and the
 app says so rather than failing quietly.
 
 Paste the DNA, or load a file and the sequence is filled in for you.
 
 **Primer selection is automatic.** Each primer in the list is tried as written *and* as
-its reverse complement, because a primer is often noted as the plus-strand sequence of
-its target rather than as the oligo that primes back towards the insert. The shortest
-bracketing product wins, and the app tells you which form of which primer it used.
+its reverse complement, because a primer is often noted as the plus-strand
+sequence of
+its target rather than as the oligo that primes back towards the insert. The
+shortest
+bracketing product wins, and the app tells you which form of which primer it
+used.
 
-The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can upload your
+The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can
+upload your
 own CSV with `name,sequence` columns; nothing is stored.
 
 ### 8.3 The plan
 
-The app cuts, joins and translates **every candidate enzyme pair for real**, then
-compares the VHH the construct encodes with the VHH in the donor. A pair is only
+The app cuts, joins and translates **every candidate enzyme pair for real**,
+then
+compares the VHH the construct encodes with the VHH in the donor. A pair is
+only
 recommended when both hold:
 
 - the protein survives unchanged, and
 - nothing annotated in the vector is deleted.
 
-Among the pairs that pass, the one disturbing the vector least is recommended. On the
-bundled vectors that is usually **PstI + BstEII**, which is the classic nanobody
+Among the pairs that pass, the one disturbing the vector least is recommended.
+On the
+bundled vectors that is usually **PstI + BstEII**, which is the classic
+nanobody
 strategy.
 
 **The protein check has three outcomes.**
@@ -1457,68 +1757,85 @@ strategy.
 | **donor part preserved** | the construct carries extra N-terminal residues contributed by the recipient vector, upstream of the 5' restriction site. Everything the donor encodes is unchanged |
 | **changed** | a real difference, listed position by position |
 
-The middle case is normal for a bare amplified fragment: it starts at the 5' restriction
-site, a few codons into FR1, so the first residues necessarily come from the recipient.
+The middle case is normal for a bare amplified fragment: it starts at the 5'
+restriction
+site, a few codons into FR1, so the first residues necessarily come from the
+recipient.
 The app names the residues added rather than calling it a mismatch.
 
 **Two things worth knowing, because they bite on real vectors.**
 
 *The vectors do not all start the domain the same way.* pMECS begins the VHH with
 **QVQLQ**, pHEN25 with **EVQLQ**. Moving a VHH from pMECS into pHEN25 through PstI
-therefore changes residue 1 from Q to E — so that pair is rejected and NcoI + BstEII is
+therefore changes residue 1 from Q to E, so that pair is rejected and NcoI +
+BstEII is
 proposed instead, its site sitting upstream of the difference.
 
 *An enzyme pair that translates perfectly can still be wrong.* HindIII + BstEII gives a
-readable cassette on pMES3 while removing 120 bp that include the PelB leader. Pairs
-that delete an annotated feature are rejected even when the protein check passes, and
+readable cassette on pMES3 while removing 120 bp that include the PelB leader.
+Pairs
+that delete an annotated feature are rejected even when the protein check
+passes, and
 the table of all pairs says exactly what each rejected pair would have deleted.
 
 **There is deliberately no "insert length must be a multiple of 3" test.** An empty
-phage-display vector carries a stuffer, so its downstream tag is usually *out* of frame
-with the leader until a correctly sized VHH is cloned in. Comparing against the empty
-vector's frame would flag every correct construct. Translating the finished construct
+phage-display vector carries a stuffer, so its downstream tag is usually *out*
+of frame
+with the leader until a correctly sized VHH is cloned in. Comparing against the
+empty
+vector's frame would flag every correct construct. Translating the finished
+construct
 is the only check that means anything.
 
 ### 8.4 What you get
 
-The recommended enzyme pair, the construct size, the VHH length, how much vector is
-removed. The donor and construct VHH side by side. The translated cassette — signal
-peptide, VHH, tags — so you can read it yourself.
+The recommended enzyme pair, the construct size, the VHH length, how much
+vector is
+removed. The donor and construct VHH side by side. The translated cassette
+(signal peptide, VHH, tags) so you can read it yourself.
 
-Downloads: the construct as **GenBank**, annotated with the insert and the cassette
-parts so SnapGene or Benchling opens it ready to read; as FASTA; and the amplicon as
+Downloads: the construct as **GenBank**, annotated with the insert and the
+cassette
+parts so SnapGene or Benchling opens it ready to read; as FASTA; and the
+amplicon as
 FASTA. Plus a short protocol paragraph.
 
 ### 8.5 Folded-away detail
 
-- **All enzyme pairs considered** — every pair with its verdict and, when rejected, why.
-- **Restriction sites** — every enzyme that cuts the backbone, how often, where, and
-  whether it also cuts the insert. An enzyme that cuts the insert is not necessarily
-  wrong: BstEII is used on purpose, its site sitting in FR4 at the 3' end of the domain.
-- **Primers on this vector** — where each binds and in which orientation. Primers with
-  no site are listed as not applicable; that is usually a property of the vector rather
+- **All enzyme pairs considered** (every pair with its verdict and, when rejected, why. - **Restriction sites**) every enzyme that cuts the backbone, how often, where, and
+  whether it also cuts the insert. An enzyme that cuts the insert is not
+necessarily
+  wrong: BstEII is used on purpose, its site sitting in FR4 at the 3' end of
+the domain.
+- **Primers on this vector**: where each binds and in which orientation. Primers with
+  no site are listed as not applicable; that is usually a property of the
+vector rather
   than a mistake, since pHEN6 has no gIII for a gIII primer to sit in.
-- **Vector map** — circular or zoomed on the cloning region, with enzyme sites in red,
-  file features in blue, detected motifs in orange and a VHH scaffold in green.
-- **Vector features** — the full inventory with its sources.
+- **Vector map** (circular or zoomed on the cloning region, with enzyme sites in red, file features in blue, detected motifs in orange and a VHH scaffold in green. - **Vector features**) the full inventory with its sources.
 
 ---
 
 ## 9. How your data is handled
 
-Sequences, chromatograms and plasmids are **never written to a persistent file, logged,
+Sequences, chromatograms and plasmids are **never written to a persistent file,
+logged,
 or sent to a third party**. They are processed in the server's memory.
 
-Results are held in a short-lived cache — 10 minutes, 8 entries for analyses, with
-per-item caps elsewhere — which exists only to keep the controls responsive. It is
-cleared when it expires and when the app restarts. Nothing reaches disk; the one
-exception is the alignment step, which writes a temporary FASTA that is deleted as soon
+Results are held in a short-lived cache (10 minutes, 8 entries for analyses,
+with per-item caps elsewhere) which exists only to keep the controls
+responsive. It is
+cleared when it expires and when the app restarts. Nothing reaches disk; the
+one
+exception is the alignment step, which writes a temporary FASTA that is deleted
+as soon
 as the figure is rendered.
 
 **But the app runs on Streamlit Community Cloud, i.e. on third-party infrastructure.**
-Traffic is encrypted and nothing is stored, but the data does pass through a server
-that is not yours. For genuinely confidential or unpublished material, run the app on
-your own machine — see the next section — and nothing ever leaves your computer.
+Traffic is encrypted and nothing is stored, but the data does pass through a
+server
+that is not yours. For genuinely confidential or unpublished material, run the
+app on
+your own machine (see the next section) and nothing ever leaves your computer.
 
 Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
@@ -1535,14 +1852,16 @@ streamlit run app.py
 
 It opens on `http://localhost:8501`.
 
-ANARCI is optional. Without it the app silently uses the regex annotator and says so in
+ANARCI is optional. Without it the app silently uses the regex annotator and
+says so in
 the sidebar; the hallmark and germline features degrade accordingly. To get it:
 
 ```bash
 conda install -c conda-forge -c bioconda hmmer anarci
 ```
 
-A `Dockerfile` is included if you would rather run it in a container, or deploy it
+A `Dockerfile` is included if you would rather run it in a container, or deploy
+it
 somewhere other than Community Cloud.
 
 ---
@@ -1577,27 +1896,32 @@ somewhere other than Community Cloud.
 ## 12. Troubleshooting
 
 **"Some modules are out of date."** Every file is released together, and each one
-carries a version `app.py` checks on startup. The message names the file and both
-versions; copy the whole folder rather than individual files. If it persists after
-a correct update, Streamlit is serving a cached import — **Reboot app** from the
+carries a version `app.py` checks on startup. The message names the file and
+both
+versions; copy the whole folder rather than individual files. If it persists
+after
+a correct update, Streamlit is serving a cached import, **Reboot app** from the
 Community Cloud dashboard clears it.
 
 **No CDR annotation, or no germline table.** ANARCI is not installed in this
 deployment. The sidebar caption confirms it. The regex annotator still works.
 
 **"anchor not found: …"** on a sequence. The regex annotator could not find the
-landmark it names. Either the construct is non-canonical, or the sequence is truncated.
+landmark it names. Either the construct is non-canonical, or the sequence is
+truncated.
 Check the sequence around that landmark.
 
 **A `.ab1` read comes back as `no PelB`.** Either the wrong vector is selected, the read
 is very poor, or the well was empty. Look at the quality trace.
 
 **The cloning section says the fragment carries no sites.** A fragment amplified with
-plain primers cannot be cloned by restriction. You need primers whose 5' tails add the
+plain primers cannot be cloned by restriction. You need primers whose 5' tails
+add the
 sites the recipient also has.
 
 **The cloning section rejects every pair.** Widen the enzyme set to *All commercial
-enzymes*, check that the insert really carries the sites you expect, or try another
+enzymes*, check that the insert really carries the sites you expect, or try
+another
 recipient. The table of all pairs gives the reason for each rejection.
 
 **A result looks wrong.** Please say so, with the sequence and what you expected. That
@@ -1607,19 +1931,23 @@ is the single most useful thing you can send back.
 
 ## 13. Under the hood
 
-Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for IMGT
-numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the alignment
-figure, `dna_features_viewer` for the plasmid maps, `reportlab` for the PDF, and
+Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for
+IMGT
+numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the
+alignment
+figure, `dna_features_viewer` for the plasmid maps, `reportlab` for the PDF,
+and
 Streamlit for the interface.
 
 The synthetic-sequence generator uses a position-frequency matrix derived from
 **PLAbDab-nano** (OPIG, University of Oxford); please cite that resource if you
 publish anything built on the generated sequences.
 
-The code is in two layers. The science is in importable modules with no dependency
-on the interface — `vhh_core.py`, `structure.py`, `codons.py`, `cloning.py`,
+The code is in two layers. The science is in importable modules with no
+dependency
+on the interface (`vhh_core.py`, `structure.py`, `codons.py`, `cloning.py`,
 `sanger.py`, `repertoire.py`, `generator.py`, `constructs.py`, `triage.py`,
-`library.py` — so a Jupyter notebook can use them
+`library.py`) so a Jupyter notebook can use them
 exactly the same way:
 
 ```python
@@ -1627,23 +1955,28 @@ import vhh_core as vc
 df, annotations, errors = vc.analyze({"MyNb": "EVQLVESGGG..."})
 ```
 
-The interface is the second layer: `app.py` routes, `shell.py` holds the chrome,
-`compute.py` holds every cached call, and `sections/` holds one module per screen
-— each a `render()` function that draws and computes nothing. `app.py` was a
+The interface is the second layer: `app.py` routes, `shell.py` holds the
+chrome,
+`compute.py` holds every cached call, and `sections/` holds one module per
+screen, each a `render()` function that draws and computes nothing. `app.py`
+was a
 single 3 911-line script before those screens were pulled out of it; the README
 lists the files and the two rules that keep it from growing back.
 
-There is a test suite: `pip install -r requirements-dev.txt` then `pytest`. Almost
+There is a test suite: `pip install -r requirements-dev.txt` then `pytest`.
+Almost
 every test in it is a bug the app actually had, frozen so it cannot return.
 
 The source is at <https://github.com/TyrosinDuck/vhh-analyzer>, under the **MIT
-licence**: use it, change it, redistribute it, build on it — keep the copyright
+licence**: use it, change it, redistribute it, build on it, keep the copyright
 notice. One caveat is spelled out in `LICENSE`: that covers the app's own code
 and cannot change its dependencies' terms, and one of them, `pyfamsa` (FAMSA,
 used for the multiple alignment), is GPL-3.0-or-later.
 
 If you use the app in published work, cite it by its DOI:
-**10.5281/zenodo.23742269**. That is the *concept* DOI — it always resolves to
-the latest archived release. The home page has a **Citing this tool** panel with
-the citation and a BibTeX entry ready to copy, and each release has a version DOI
+**10.5281/zenodo.23742269**. That is the *concept* DOI, it always resolves to
+the latest archived release. The home page has a **Citing this tool** panel
+with
+the citation and a BibTeX entry ready to copy, and each release has a version
+DOI
 of its own on Zenodo for saying exactly which code produced a result.

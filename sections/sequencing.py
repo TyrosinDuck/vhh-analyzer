@@ -90,7 +90,7 @@ def render() -> None:
             with st.expander(f"Warnings in full ({len(flagged)} read(s))",
                              expanded=True):
                 for _, row in flagged.iterrows():
-                    st.markdown(f"**{row['read']}** — *{row['status']}*")
+                    st.markdown(f"**{row['read']}**, *{row['status']}*")
                     for w in str(row["warnings"]).split("; "):
                         if w:
                             st.markdown(f"- {w}")
@@ -117,7 +117,7 @@ def render() -> None:
             chosen = st.multiselect(
                 "Sequences to analyse", usable_df["read"].tolist(),
                 default=unique_first,
-                help="Duplicates are left out by default — one entry per unique "
+                help="Duplicates are left out by default, one entry per unique "
                      "protein sequence.")
             replace = st.checkbox("Replace what is already loaded there", value=True)
             if st.button("Send selected to analysis", type="primary",

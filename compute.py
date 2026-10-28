@@ -49,7 +49,7 @@ def _analyze(seqs: dict[str, str], ph: float, method: str):
 
 
 def _analyze_one(name: str, seq: str, ph: float, method: str):
-    """Analyse a single sequence — the unit the progress bar advances on.
+    """Analyse a single sequence, the unit the progress bar advances on.
 
     Caching per sequence rather than per batch means adding one sequence to a
     list of ten only costs one analysis, not eleven.
@@ -60,7 +60,7 @@ def _analyze_one(name: str, seq: str, ph: float, method: str):
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
 def classify_cached(seq: str, method: str):
-    """What kind of sequence this is — ANARCI numbering, so worth caching."""
+    """What kind of sequence this is, ANARCI numbering, so worth caching."""
     return vc.classify(seq, method=method)
 
 
@@ -102,14 +102,14 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
                           slot=None):
     """Run the analysis sequence by sequence, showing progress as it goes.
 
-    ``slot`` is a placeholder created earlier in the script — normally the one
+    ``slot`` is a placeholder created earlier in the script, normally the one
     just under the Analyze button. Without it the bar would be drawn wherever
     this happens to be called, which is below the generator panel and nowhere
     near the control the user just clicked.
 
     The bar is replaced by a one-line result rather than cleared: on a handful
     of sequences the analysis takes well under a second and a bar that vanishes
-    leaves no evidence anything happened at all — and once the cache is warm it
+    leaves no evidence anything happened at all, and once the cache is warm it
     is instantaneous, so there is nothing to see unless something is left behind.
     """
     target = slot if slot is not None else st.empty()
@@ -132,8 +132,8 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
         elapsed = time.perf_counter() - started
         plural = "s" if total != 1 else ""
         # Named precisely: this covers the characterisation and annotation loop
-        # only. Every tab body still has to render afterwards — the alignment,
-        # the logo, the identity matrices, the plasmid maps — and that is where
+        # only. Every tab body still has to render afterwards, the alignment,
+        # the logo, the identity matrices, the plasmid maps, and that is where
         # most of the wall-clock time goes and why Streamlit's own spinner keeps
         # turning after this bar is full. The final line is written at the end of
         # the script, once the page is actually finished.
@@ -144,7 +144,7 @@ def analyze_with_progress(seqs: dict[str, str], ph: float, method: str,
         target.info(
             f"{total} sequence{plural} characterised in "
             + (f"{elapsed * 1000:.0f} ms" if elapsed < 1 else f"{elapsed:.1f} s")
-            + " — drawing the figures…", icon="⏳")
+            + ", drawing the figures…", icon="⏳")
         st.session_state["_status_parts"] = (total, elapsed)
     return pd.DataFrame(rows), anns, errs
 
@@ -213,7 +213,7 @@ def png_liability_profile(liabs):
 @st.cache_data(**_FIG_CACHE)
 @st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
 def families_for(seqs, anns, cutoff, linkage_method, same_length):
-    """Clonal families — cached, because the pairwise alignments dominate."""
+    """Clonal families, cached, because the pairwise alignments dominate."""
     return vc.cluster_families(seqs, anns, cutoff=cutoff,
                                linkage_method=linkage_method,
                                require_same_length=same_length)

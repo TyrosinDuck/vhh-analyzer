@@ -1,5 +1,5 @@
 """
-cloning — plasmid handling for in-silico restriction cloning of VHHs.
+cloning, plasmid handling for in-silico restriction cloning of VHHs.
 
 Phase 1: load a plasmid (SnapGene .dna, GenBank or FASTA), inventory what is in
 it, and draw its map.
@@ -7,10 +7,10 @@ it, and draw its map.
 Two sources of truth, deliberately kept apart:
 
 * **Annotated files** (SnapGene, GenBank) already carry their features. They are
-  read as they are — nothing is guessed, and that is by far the reliable path.
+  read as they are, nothing is guessed, and that is by far the reliable path.
 * **Bare FASTA** carries only sequence, so features have to be found. This
-  module detects *short, unambiguous protein motifs* — the PelB leader, His6,
-  HA, Myc, a VHH scaffold — by translating in all six frames. It deliberately
+  module detects *short, unambiguous protein motifs*, the PelB leader, His6,
+  HA, Myc, a VHH scaffold, by translating in all six frames. It deliberately
   does **not** try to guess large elements such as gIII, AmpR or the origin:
   doing that properly needs a reference sequence database, and a confident
   wrong annotation on a cloning tool is worse than no annotation at all.
@@ -44,7 +44,7 @@ __all__ = [
 __version__ = "2026.10.21b"
 
 # --------------------------------------------------------------------------- #
-# Motif library — short protein elements only, see the module docstring
+# Motif library, short protein elements only, see the module docstring
 # --------------------------------------------------------------------------- #
 
 PROTEIN_MOTIFS = {
@@ -128,7 +128,7 @@ def load_plasmid(data, name: str = "plasmid", topology: str | None = None) -> di
         topology = "circular" if topo.startswith("circ") else (
             "circular" if fmt == "snapgene" else "unknown")
     if fmt == "fasta":
-        warning = ("FASTA carries no features — only short protein motifs can be "
+        warning = ("FASTA carries no features, only short protein motifs can be "
                    "detected, and the topology is assumed circular. Export the map "
                    "from SnapGene as .dna or GenBank for an exact inventory.")
         topology = topology if topology != "unknown" else "circular"
@@ -243,7 +243,7 @@ def feature_table(plasmid: dict) -> pd.DataFrame:
     """Inventory of a plasmid: features from the file plus detected motifs.
 
     The ``source`` column distinguishes what the file declared from what this
-    module inferred — they do not carry the same confidence.
+    module inferred, they do not carry the same confidence.
     """
     record = plasmid["record"]
     total = len(record.seq)
@@ -343,7 +343,7 @@ def plot_map(plasmid: dict, features: pd.DataFrame | None = None,
     graphic = []
     for _, row in features.head(max_features).iterrows():
         start, end = int(row["start"]) - 1, int(row["end"])
-        if end <= start:                      # wraps the origin — clip for drawing
+        if end <= start:                      # wraps the origin, clip for drawing
             end = total
         graphic.append(GraphicFeature(
             start=start, end=end, strand=-1 if row["strand"] == "-" else 1,
@@ -361,7 +361,7 @@ def plot_map(plasmid: dict, features: pd.DataFrame | None = None,
     gr = klass(sequence_length=total, features=graphic)
     fig, ax = plt.subplots(figsize=(9, 9) if circular else (13, 3.6))
     gr.plot(ax=ax, with_ruler=not circular)
-    ax.set_title(f"{plasmid['name']} — {total} bp, {plasmid['topology']}", fontsize=11)
+    ax.set_title(f"{plasmid['name']}, {total} bp, {plasmid['topology']}", fontsize=11)
     fig.tight_layout()
     return fig
 
@@ -420,7 +420,7 @@ def plot_region(plasmid: dict, features: pd.DataFrame | None = None,
                        first_index=0).crop((start, end))
     fig, ax = plt.subplots(figsize=(max(9, min(18, span / 90)), 3.4))
     gr.plot(ax=ax, with_ruler=True)
-    ax.set_title(f"{plasmid['name']} — cloning region {start + 1}–{end}", fontsize=10)
+    ax.set_title(f"{plasmid['name']}, cloning region {start + 1}–{end}", fontsize=10)
     fig.tight_layout()
     return fig
 
@@ -529,7 +529,7 @@ def insertion_region(plasmid: dict, features: pd.DataFrame | None = None
                      ) -> tuple[int, int] | None:
     """Best guess at the cloning window: between the PelB leader and the first tag.
 
-    This is a heuristic on the annotation, offered as a starting point — the user
+    This is a heuristic on the annotation, offered as a starting point, the user
     is expected to confirm or override it, because a vector with an unusual
     layout will fool it.
     """
@@ -622,10 +622,10 @@ def enzyme_pairs(candidates: pd.DataFrame, max_pairs: int = 12) -> pd.DataFrame:
             ea, eb = by_name[a["enzyme"]], by_name[b["enzyme"]]
             same_overhang = (ea.ovhgseq == eb.ovhgseq) and ea.ovhgseq != ""
             span = abs(a["position"] - b["position"])
-            note = ("compatible overhangs — the insert can ligate in either "
+            note = ("compatible overhangs, the insert can ligate in either "
                     "orientation" if same_overhang else "")
             if a["overhang"] == "blunt" or b["overhang"] == "blunt":
-                note = (note + "; " if note else "") + "blunt end — less efficient ligation"
+                note = (note + "; " if note else "") + "blunt end, less efficient ligation"
             rows.append({"enzyme_1": a["enzyme"], "enzyme_2": b["enzyme"],
                          "span_bp": span, "directional": not same_overhang,
                          "note": note or "directional, distinct overhangs"})
@@ -715,7 +715,7 @@ def simulate_pcr(record: SeqRecord, forward: str, reverse: str,
             products.append((f, r, size))
     if not products:
         result["warnings"].append(
-            "primers anneal but never in a productive orientation — check which one "
+            "primers anneal but never in a productive orientation, check which one "
             "is forward and which is reverse")
         return result
 
@@ -724,7 +724,7 @@ def simulate_pcr(record: SeqRecord, forward: str, reverse: str,
     result["n_products"] = len(products)
     if len(products) > 1:
         result["warnings"].append(
-            f"{len(products)} possible products — the shortest ({size} bp) is reported")
+            f"{len(products)} possible products, the shortest ({size} bp) is reported")
 
     core = search[f["start"]: r["end"] + 1]
     product = f["tail"] + core + r["tail_rc"]
@@ -759,7 +759,7 @@ def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
 
     The assembly is done on the top strand. Because both partners are cut with
     the same pair of enzymes, their overhangs match by construction, so the
-    top-strand join is the product you would get at the bench — but it is a
+    top-strand join is the product you would get at the bench, but it is a
     design check, not a simulation of ligation efficiency.
     """
     vector = str(backbone.seq).upper()
@@ -782,7 +782,7 @@ def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
                               ("insert", enzyme_5, i5), ("insert", enzyme_3, i3)):
         if len(cuts) != 1:
             report["warnings"].append(
-                f"{name} cuts the {label} {len(cuts)} time(s) — exactly one is needed")
+                f"{name} cuts the {label} {len(cuts)} time(s), exactly one is needed")
     if report["warnings"]:
         return report
 
@@ -790,12 +790,12 @@ def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
     q5, q3 = i5[0], i3[0]
     if p5 > p3:
         report["warnings"].append(
-            f"{enzyme_5} cuts the backbone at {p5}, downstream of {enzyme_3} at {p3} — "
+            f"{enzyme_5} cuts the backbone at {p5}, downstream of {enzyme_3} at {p3}, "
             "swap the two enzymes")
         return report
     if q5 > q3:
         report["warnings"].append(
-            f"{enzyme_5} cuts the insert at {q5}, downstream of {enzyme_3} at {q3} — "
+            f"{enzyme_5} cuts the insert at {q5}, downstream of {enzyme_3} at {q3}, "
             "the insert would go in backwards")
         return report
 
@@ -811,7 +811,7 @@ def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
     })
     # No frame arithmetic here on purpose. An empty phage-display vector carries a
     # stuffer, so its downstream tag is usually *out* of frame with the leader
-    # until a correctly sized VHH is cloned in — comparing the length change to
+    # until a correctly sized VHH is cloned in, comparing the length change to
     # the empty vector's frame would flag every correct construct. The real test
     # is translating the finished construct, which verify_construct does.
     return report
@@ -847,7 +847,7 @@ def evaluate_pairs(backbone: SeqRecord, insert_dna: str, candidates: pd.DataFram
 
     Ranking enzymes by where they cut says which pairs are *plausible*. This
     goes one step further and builds each construct, then reads its expression
-    cassette back out — so a pair that cuts in the right places but leaves the
+    cassette back out, so a pair that cuts in the right places but leaves the
     VHH out of frame with the tags is caught here rather than at the bench.
     """
     pool = (candidates[candidates["backbone_cuts"] == 1]
@@ -894,7 +894,7 @@ def construct_record(construct: str, name: str, insert_start: int, insert_end: i
     from Bio.SeqFeature import SeqFeature, SimpleLocation
 
     record = SeqRecord(Seq(construct), id=name[:16] or "construct", name=name[:16],
-                       description=f"{name} — assembled in silico",
+                       description=f"{name}, assembled in silico",
                        annotations={"molecule_type": "DNA",
                                     "topology": "circular" if circular else "linear"})
     record.features.append(SeqFeature(
@@ -911,7 +911,7 @@ def construct_record(construct: str, name: str, insert_start: int, insert_end: i
 
 
 def record_to_genbank(record: SeqRecord) -> str:
-    """GenBank text for a record — the format SnapGene and Benchling both read."""
+    """GenBank text for a record, the format SnapGene and Benchling both read."""
     handle = io.StringIO()
     SeqIO.write(record, handle, "genbank")
     return handle.getvalue()
@@ -927,7 +927,7 @@ def extract_vhh_protein(dna: str, circular: bool = False) -> dict:
     Works without a leader: the domain is recognised by its own FR1/FR2/FR4
     signatures in any of the six frames. A bare PCR product usually starts at the
     5' restriction site, a few codons into FR1, so the protein returned can be
-    slightly shorter at the N-terminus than the domain in a full plasmid — which
+    slightly shorter at the N-terminus than the domain in a full plasmid, which
     is exactly what ``compare_vhh`` accounts for.
     """
     record = SeqRecord(Seq(re.sub(r"[^ACGTacgt]", "", dna.upper())),
@@ -950,13 +950,13 @@ def compare_vhh(donor_protein: str, construct_protein: str) -> dict:
 
     Three outcomes:
 
-    * **identical** — the construct encodes exactly the donor's domain;
-    * **donor part preserved** — the construct carries extra N-terminal residues
+    * **identical**: the construct encodes exactly the donor's domain;
+    * **donor part preserved**: the construct carries extra N-terminal residues
       that the recipient vector contributes. A bare PCR product starts at the 5'
       restriction site, so the first few codons of FR1 necessarily come from the
       recipient; as long as the construct ends with the donor's sequence and
       starts on a valid FR1, nothing of the donor was altered;
-    * **changed** — a real difference, reported position by position.
+    * **changed**: a real difference, reported position by position.
     """
     d, c = donor_protein or "", construct_protein or ""
     if not d or not c:
@@ -977,7 +977,7 @@ def compare_vhh(donor_protein: str, construct_protein: str) -> dict:
                 f"({prefix}) that come from the recipient vector, upstream of the "
                 "5' restriction site; everything the donor encodes is unchanged"
                 + ("" if valid_fr1 else
-                   " — but the result does not start on a recognisable FR1, so "
+                   ", but the result does not start on a recognisable FR1, so "
                    "check for a spacer between the leader and the domain")),
         }
     diffs = [{"position": i + 1, "donor": a, "construct": b}
@@ -1070,7 +1070,7 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
         if not chosen["pair"]:
             out["stage"] = "primers"
             out["messages"].append(
-                "no primer pair brackets the VHH in this donor — "
+                "no primer pair brackets the VHH in this donor, "
                 f"{chosen['n_forward']} usable forward and {chosen['n_reverse']} "
                 "usable reverse site(s) found")
             return out
@@ -1113,12 +1113,12 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
         if cuts_insert.empty:
             out["messages"].append(
                 "the donor fragment carries none of the restriction sites "
-                "considered — a fragment amplified with plain primers cannot be "
+                "considered, a fragment amplified with plain primers cannot be "
                 "cloned this way, it needs primers whose 5' tails add the sites")
         else:
             out["messages"].append(
                 "the donor fragment and the recipient share fewer than two usable "
-                "sites (shared: " + (", ".join(sorted(shared)) or "none") + ") — "
+                "sites (shared: " + (", ".join(sorted(shared)) or "none") + "), "
                 "amplify with primers carrying tails that add sites the recipient "
                 "also has, or pick another recipient")
         return out
@@ -1144,7 +1144,7 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
                       "usable": bool(row["cassette_ok"] and comparison["ok"]
                                      and not lost)})
     # Rank by: works at all, then an exact protein match, then the pair that
-    # disturbs the recipient least — which is what a cloner would pick by hand.
+    # disturbs the recipient least, which is what a cloner would pick by hand.
     plans.sort(key=lambda p: (not p["usable"],
                               p["comparison"]["status"] != "identical",
                               p["removed_bp"]))

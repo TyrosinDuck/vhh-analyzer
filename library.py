@@ -1,5 +1,5 @@
 """
-library — the sequence library shipped with the app, read-only.
+library, the sequence library shipped with the app, read-only.
 
 A curated list of sequences kept as a file in the repository, so that the
 sequences you work with repeatedly are one click away instead of being pasted
@@ -7,7 +7,7 @@ again every time.
 
 **It is deliberately read-only from the app.** Streamlit Community Cloud rebuilds
 the container from the repository on every reboot, redeploy and wake-from-sleep,
-so anything the app wrote to disk would be erased — usually on the day you had
+so anything the app wrote to disk would be erased, usually on the day you had
 forgotten it was fragile. Keeping the library in the repository instead means it
 is durable, versioned, and restorable from git history. The cost is that editing
 happens on your own machine, not in the browser.
@@ -16,9 +16,8 @@ The workflow: edit ``data/library.csv`` locally, commit and push, and the app
 serves the new version on its next deploy.
 
 **Everything in this file is public.** It lives in a public repository, so it is
-readable by anyone, whether or not they ever open the app. Nothing confidential —
-unpublished sequences, anything under an NDA, anything from a collaborator who
-has not agreed — belongs here.
+readable by anyone, whether or not they ever open the app. Nothing confidential, unpublished sequences, anything under an NDA, anything from a collaborator who
+has not agreed, belongs here.
 
 Format: one row per molecule, columns ``name``, ``protein``, ``dna``, ``tags``,
 ``note``. At least one of ``protein`` or ``dna`` must be present; an entry may
@@ -70,7 +69,7 @@ def load_library(path: str | Path | None = None) -> tuple[pd.DataFrame, list[str
     path = Path(path) if path else LIBRARY_FILE
     problems: list[str] = []
     if not path.exists():
-        return blank_library(), [f"{path.name} not found — the library is empty."]
+        return blank_library(), [f"{path.name} not found, the library is empty."]
 
     try:
         frame = pd.read_csv(path, comment="#", dtype=str).fillna("")
@@ -149,7 +148,7 @@ def load_library(path: str | Path | None = None) -> tuple[pd.DataFrame, list[str
 def library_fasta(table: pd.DataFrame, names: list[str], kind: str) -> str:
     """FASTA of the chosen entries, taking either the protein or the DNA.
 
-    Entries that do not carry the requested kind are skipped — selecting a
+    Entries that do not carry the requested kind are skipped, selecting a
     protein-only entry and asking for DNA is a no-op, not an error.
     """
     column = "protein" if kind == "protein" else "dna"

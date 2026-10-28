@@ -31,7 +31,7 @@ def render() -> None:
     st.info(
         "**Read-only here, and public.** Streamlit rebuilds this app from the "
         "repository on every reboot and redeploy, so anything written from the "
-        "browser would be erased — the library lives in `data/library.csv` "
+        "browser would be erased, the library lives in `data/library.csv` "
         "instead, where it is durable and versioned. Edit it on your own "
         "machine, commit and push, and it appears here on the next deploy.\n\n"
         "Because it sits in a public repository it is readable by anyone, "
@@ -42,7 +42,7 @@ def render() -> None:
         st.warning(message, icon="⚠️")
 
     if not len(table):
-        st.info("The library is empty. Add rows to `data/library.csv` — the "
+        st.info("The library is empty. Add rows to `data/library.csv`, the "
                 "columns are `name`, `protein`, `dna`, `tags`, `note`, and at "
                 "least one of protein or DNA is required.")
     else:
@@ -130,7 +130,7 @@ def render() -> None:
         st.markdown(
             "The library is the file `data/library.csv` in the repository. Edit "
             "it in a spreadsheet or a text editor on your own machine, commit "
-            "it, and push — the app picks it up on its next deploy.\n\n"
+            "it, and push, the app picks it up on its next deploy.\n\n"
             "| Column | |\n|---|---|\n"
             "| `name` | what it is called here; must be unique |\n"
             "| `protein` | the amino-acid sequence, or empty |\n"

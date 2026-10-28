@@ -1,5 +1,5 @@
 """
-Regression tests — every bug this app has actually had, frozen so it cannot
+Regression tests, every bug this app has actually had, frozen so it cannot
 come back.
 
 These are not here to prove the app is correct. They are here because each one
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 # --------------------------------------------------------------------------- #
-# Fixtures — real sequences, from the shipped library, not invented ones
+# Fixtures, real sequences, from the shipped library, not invented ones
 # --------------------------------------------------------------------------- #
 
 @pytest.fixture(scope="session")
@@ -74,7 +74,7 @@ def lysozyme(by_name):
 def test_module_versions_match_app():
     """The staleness banner fires when a module is older than app.py expects.
 
-    It is a real safeguard — the modules are released together — but it is also
+    It is a real safeguard (the modules are released together) but it is also
     the single most common way to ship a broken deploy: bump a module, forget
     the dict in app.py, and the app refuses to start with a message about a file
     you did update. This test reads both and compares them, so that mismatch is
@@ -90,7 +90,7 @@ def test_module_versions_match_app():
     for name, want in required.items():
         module = importlib.import_module(name)
         assert module.__version__ == want, (
-            f"{name}.py is {module.__version__} but app.py wants {want} — "
+            f"{name}.py is {module.__version__} but app.py wants {want}, "
             f"update REQUIRED_MODULES in app.py, or the module's __version__")
 
 
@@ -145,7 +145,7 @@ def test_triage_leaves_antibody_columns_empty_for_a_non_antibody(lysozyme,
             f"{column} answered for a non-antibody: "
             f"{table.loc['lysozyme', column]!r}")
     assert pd.notna(table.loc["cAbLys3", "hallmark_score"]), \
-        "the VHH lost its hallmark score — the gate is too strict"
+        "the VHH lost its hallmark score, the gate is too strict"
 
 
 # --------------------------------------------------------------------------- #
@@ -155,7 +155,7 @@ def test_triage_leaves_antibody_columns_empty_for_a_non_antibody(lysozyme,
 def test_repairs_never_touch_a_structurally_conserved_position(cablys3):
     """Bug: the repair suggester proposed W36F and W111F.
 
-    Those are the FR2 and FR4 tryptophans — IMGT 41 and 118 — which are
+    Those are the FR2 and FR4 tryptophans (IMGT 41 and 118) which are
     conserved across every immunoglobulin domain. "Repairing" an oxidation
     liability by removing them trades a chemical risk for a protein that does
     not fold. The four conserved positions are now refused outright.
@@ -189,7 +189,7 @@ def test_apply_repairs_refuses_two_substitutions_at_one_position(cablys3):
         cablys3, [f"C{first_cys}S", f"C{first_cys}A"])
     assert problems, "a conflicting pair of substitutions was applied silently"
     assert sequence == cablys3, (
-        "one of two conflicting substitutions was applied anyway — the order "
+        "one of two conflicting substitutions was applied anyway, the order "
         "of the list must not decide a question the caller has not answered")
 
 
@@ -231,7 +231,7 @@ def test_imgt_position_map_keeps_insertion_coded_positions(cablys3):
     the bare IMGT number, and an insertion shares its base key.
     """
     mapping = vc.imgt_position_map(cablys3)
-    assert mapping, "no numbering produced — is ANARCI installed?"
+    assert mapping, "no numbering produced, is ANARCI installed?"
     assert all(isinstance(key, int) for key in mapping), \
         "the map must be keyed by bare integers, not by '111A'-style strings"
     for position in (23, 104):
@@ -276,7 +276,7 @@ def test_library_dna_translates_to_its_protein(library):
     """Where an entry carries both, they must agree.
 
     ``load_library`` already flags a mismatch, and the ``library`` fixture
-    asserts there are no problems — this states the invariant explicitly so the
+    asserts there are no problems, this states the invariant explicitly so the
     reason is obvious when it breaks.
     """
     both = library[(library["has_protein"]) & (library["has_dna"])]
@@ -317,7 +317,7 @@ def test_gc_fix_preserves_the_protein_and_respects_the_usage_floor(cablys3):
         assert weight is not None, f"{new} is not in the usage table"
         assert weight >= cdn.MIN_USAGE, (
             f"{new} ({amino}) has relative usage {weight:.2f}, below the "
-            f"{cdn.MIN_USAGE} floor — a GC fix traded for a rare codon")
+            f"{cdn.MIN_USAGE} floor, a GC fix traded for a rare codon")
         assert new not in cdn.RARE_CODONS, f"{new} is a documented rare codon"
 
 
@@ -325,7 +325,7 @@ def test_gc_regions_do_not_overlap(cablys3):
     """Bug: 98 "extreme windows" were reported on the app's own optimised gene.
 
     Overlapping 30-nt windows were each counted as a separate finding. They are
-    now merged into regions — and the merge itself had a bug that left
+    now merged into regions, and the merge itself had a bug that left
     overlapping spans, which is what this pins.
     """
     dna = vc.reverse_translate(cablys3)["dna"]

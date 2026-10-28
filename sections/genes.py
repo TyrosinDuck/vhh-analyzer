@@ -31,7 +31,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
     cai_now = cdn.cai(gene_dna).get("cai")
     if cai_now is not None:
         st.caption(
-            f"**CAI {cai_now:.3f}** — Codon Adaptation Index against the measured "
+            f"**CAI {cai_now:.3f}**, Codon Adaptation Index against the measured "
             "*E. coli* usage table (Kazusa, CC0). 1.0 would mean the preferred "
             "codon everywhere. It describes codon choice; it does not predict "
             "expression level.")
@@ -63,7 +63,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         st.markdown(
             "A GC-rich stretch is one of the few sequence problems with a clean "
             "fix: swap codons for lower-GC synonyms. Every suggestion below has "
-            "been checked — it is not a documented rare codon, it creates none "
+            "been checked, it is not a documented rare codon, it creates none "
             "of the restriction sites you select, it opens no homopolymer run, "
             "and the protein is verified unchanged.")
         fx = st.columns([1, 1, 1])
@@ -78,9 +78,9 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         with fx[0]:
             strategy = st.radio(
                 "How far to go", ["minimal", "maximal"], key=f"strat_{name}",
-                format_func=lambda x: ("Minimal — stop once the band is cleared"
+                format_func=lambda x: ("Minimal, stop once the band is cleared"
                                        if x == "minimal"
-                                       else "Maximal — swap everything possible"),
+                                       else "Maximal, swap everything possible"),
                 help="Minimal applies the biggest reductions first and stops as "
                      "soon as no GC-rich stretch survives. You are paying to "
                      "synthesise this gene, and a construct differing in twenty "
@@ -103,13 +103,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                      int((fix["remaining_regions"]["direction"] == "GC-rich").sum())
                      if len(fix["remaining_regions"]) else 0)
         fm[3].metric("CAI", f"{fix['cai_after']:.3f}"
-                     if fix["cai_after"] is not None else "—",
+                     if fix["cai_after"] is not None else ", ",
                      delta=(f"{fix['cai_after'] - fix['cai_before']:+.3f}"
                             if None not in (fix["cai_after"], fix["cai_before"])
                             else None),
                      help="Codon Adaptation Index, computed from the measured "
                           "E. coli usage table. It falls as swaps move away "
-                          "from preferred codons — this is the price of the GC "
+                          "from preferred codons, this is the price of the GC "
                           "fix, in a number.")
         fm[4].metric("Protein",
                      "unchanged" if fix["protein_unchanged"] else "CHANGED")
@@ -118,7 +118,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
             st.error("The rewritten sequence does not translate to the same "
                      "protein. Do not use it, and please report it.")
         elif not fix["n_changes"]:
-            st.info("No synonymous swap satisfies all the constraints here — "
+            st.info("No synonymous swap satisfies all the constraints here, "
                     "every lower-GC alternative is either a rare codon, creates "
                     "a site you asked to keep, or opens a homopolymer run.")
         else:
@@ -131,14 +131,14 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                     "Red is the sequence as you pasted it, blue after the "
                     "swaps; the grey band is the acceptable range and the "
                     "shaded red area is what used to sit above it. The ticks "
-                    "along the bottom mark the codons that changed — if they "
+                    "along the bottom mark the codons that changed, if they "
                     "cluster in one place, that is the stretch that was the "
                     "problem.")
             st.dataframe(fix["regions"], hide_index=True, **FIT)
             st.dataframe(fix["suggestions"], hide_index=True, **FIT)
             st.caption(
                 "`usage_from` and `usage_to` are the measured share each codon "
-                "carries of its amino acid in *E. coli* — real frequencies from "
+                "carries of its amino acid in *E. coli*, real frequencies from "
                 "the Kazusa table, not an ordering. A swap from 0.50 to 0.13 is "
                 "a genuine drop even though neither codon is rare; the CAI above "
                 "is the same cost expressed over the whole gene.")
@@ -151,7 +151,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                 key=f"dl_fix_{name}")
             st.caption("Lowering local GC removes one plausible obstacle to "
                        "expression. It does not promise the gene will then "
-                       "express — the causes at the top of this page are all "
+                       "express, the causes at the top of this page are all "
                        "still in play.")
 
     with st.expander("Every codon"):
@@ -161,7 +161,7 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                            key=f"dl_codons_{name}")
 
     with st.expander("Translation"):
-        st.code(orf["protein"] or "—", language="text")
+        st.code(orf["protein"] or ", ", language="text")
         st.caption(f"{orf['protein_length']} residues.")
 
     st.caption(
@@ -175,7 +175,7 @@ def render() -> None:
     st.title("🔧 Gene diagnosis")
     st.markdown(
         "The reverse of designing a gene: paste coding sequences that already "
-        "exist — in a plasmid, from a vendor, from a colleague — and ask what "
+        "exist (in a plasmid, from a vendor, from a colleague) and ask what "
         "might be wrong with them. Several at a time.")
     st.warning(
         "**Codon usage is rarely the first suspect.** A VHH that expresses badly "
@@ -240,15 +240,15 @@ def render() -> None:
         try:
             gene_seqs = cdn.parse_dna_input(gene_text)
         except ValueError as exc:
-            st.error(f"Input error — {exc}")
+            st.error(f"Input error, {exc}")
             gene_seqs = {}
 
         if gene_seqs:
-            st.subheader(f"Overview — {len(gene_seqs)} sequence(s)")
+            st.subheader(f"Overview, {len(gene_seqs)} sequence(s)")
             overview = gene_summary(gene_seqs, int(g_gcwin), int(g_cluster))
             st.dataframe(overview, hide_index=True, **FIT)
             st.caption(
-                "`in_frame` and `internal_stops` are the deterministic checks — "
+                "`in_frame` and `internal_stops` are the deterministic checks, "
                 "wrong there means wrong. The rest is triage: `rare_clusters` "
                 "matters more than `rare_codons`, and `gc_rich_stretches` is what "
                 "the suggestions below act on.")
@@ -264,7 +264,7 @@ def render() -> None:
                 diag = diagnose_gene(gene_dna, g_expected.strip(),
                                      int(g_cluster), int(g_gcwin))
             except ValueError as exc:
-                st.error(f"Could not read that sequence — {exc}")
+                st.error(f"Could not read that sequence, {exc}")
                 diag = None
 
             if diag:

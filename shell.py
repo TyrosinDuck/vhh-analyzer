@@ -180,7 +180,7 @@ def load_manual() -> str:
 
 
 def current_sequences() -> dict[str, str]:
-    """Sequences currently in the analysis input, parsed — or an empty dict.
+    """Sequences currently in the analysis input, parsed, or an empty dict.
 
     The cloning section needs them without depending on the analysis section
     having been rendered, so the text box is the single source of truth.
@@ -192,10 +192,10 @@ def current_sequences() -> dict[str, str]:
 
 
 def footer() -> None:
-    """Page footer — shown on every screen."""
+    """Page footer, shown on every screen."""
     st.divider()
     st.caption("Built on Biopython (ProtParam), ANARCI, FAMSA, pymsaviz and "
-               "dna_features_viewer. Theoretical predictions — validate "
+               "dna_features_viewer. Theoretical predictions, validate "
                "experimentally. Sequences are not stored; for confidential work, "
                "run the app locally.")
     st.caption(
@@ -213,16 +213,16 @@ SECTIONS = {
                   "Upload a PDB, mmCIF or AlphaFold model and replace the "
                   "sequence-based guesses with measurements: which cysteines "
                   "actually pair, which liabilities are buried and which are "
-                  "exposed, where the hydrophobic surface is, and — for a "
-                  "complex — which residues contact the antigen."),
+                  "exposed, where the hydrophobic surface is, and, for a "
+                  "complex, which residues contact the antigen."),
     "sequencing": ("🧪", "Sanger sequencing",
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "
                    "sequences from the expression cassette, spot frameshifts and "
-                   "duplicates — then send the clones you want to the analysis."),
+                   "duplicates, then send the clones you want to the analysis."),
     "genes": ("🔧", "Gene diagnosis",
               "Paste coding sequences that are already in a plasmid and ask what "
               "might be wrong with them: frame and stop checks, documented rare "
-              "codons and their clusters, GC stretches — plus synonymous swaps "
+              "codons and their clusters, GC stretches, plus synonymous swaps "
               "that lower GC without touching the protein."),
     "library": ("📚", "Sequence library",
                 "The sequences you come back to, kept in the repository and one "

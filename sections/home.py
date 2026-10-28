@@ -62,8 +62,8 @@ sequence list, so whatever you are analysing is available as an insert without
 retyping it.
 
 **Sequence analysis → Structure.** Everything the analysis section derives from
-sequence alone — which cysteines pair, whether a deamidation site matters, where
-the aggregation-prone stretches are — becomes a measurement once you upload a
+sequence alone, which cysteines pair, whether a deamidation site matters, where
+the aggregation-prone stretches are, becomes a measurement once you upload a
 model. The structure section reads the same sequence list, so it can tell you
 which of the liabilities it already flagged are buried and which are on the
 surface.
@@ -85,14 +85,14 @@ DNA insert, or straight to analysis with a FASTA file.
             "with what you measured at the bench, that is worth more than a "
             "feature request.\n\n"
             "⚠️ **The issue tracker is public.** Reproduce the problem with a "
-            "published sequence if you can — the library has 22 of them. Nothing "
+            "published sequence if you can, the library has 22 of them. Nothing "
             "unpublished or under an NDA should go into an issue. To analyse "
             "confidential sequences at all, run the app on your own machine "
             "rather than here; the manual explains how.")
         st.link_button("Report a problem on GitHub", report_url(),
                        type="primary", **FIT)
         st.caption(
-            "The link opens a new issue with the version already filled in — "
+            "The link opens a new issue with the version already filled in, "
             f"this one is **{VERSION}**. Without it there is no way to tell "
             "whether a defect still exists.")
         st.markdown(
@@ -107,7 +107,7 @@ DNA insert, or straight to analysis with a FASTA file.
             f"code. That matters more than the links: a GitHub repository and a "
             f"Streamlit URL both depend on accounts somebody has to keep alive, "
             f"and a DOI does not.\n\n"
-            f"The DOI below is the **concept DOI** — it always resolves to the "
+            f"The DOI below is the **concept DOI**, it always resolves to the "
             f"latest release. If you need to say exactly which code produced a "
             f"result, use the version DOI of the release you ran, shown on the "
             f"Zenodo record.")
@@ -128,7 +128,7 @@ DNA insert, or straight to analysis with a FASTA file.
             f"[ORCID]({AUTHOR_URL}) · {LICENCE} licence\n\n"
             f"The {LICENCE} licence covers this app's own code. One dependency, "
             f"`pyfamsa` (FAMSA, used for the multiple alignment), is "
-            f"GPL-3.0-or-later — see `LICENSE` in the repository.")
+            f"GPL-3.0-or-later, see `LICENSE` in the repository.")
 
     # No footer() here: the router draws it after render() returns, so
     # that every screen gets exactly one and a new screen cannot forget

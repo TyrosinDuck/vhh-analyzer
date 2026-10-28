@@ -97,8 +97,8 @@ def _triage(r: Run) -> None:
     with tabs["Triage"]:
         st.markdown(
             "Every flag the app can raise, one row per sequence. This is the tab for "
-            "the moment you have to **decide** — which clones to carry forward, which "
-            "ten of sixteen to order — rather than to study one candidate.")
+            "the moment you have to **decide**, which clones to carry forward, which "
+            "ten of sixteen to order, rather than to study one candidate.")
         st.info(
             "**There is no overall score, on purpose.** Weighting a deamidation site "
             "against a hydrophobic patch against three divergent framework positions "
@@ -131,7 +131,7 @@ def _triage(r: Run) -> None:
         st.dataframe(view[keep], hide_index=True, **FIT)
         st.caption(
             f"{len(view)} of {len(table)} sequence(s) shown. Empty cells are "
-            "analyses that do not apply — a sequence that is not an antibody domain "
+            "analyses that do not apply, a sequence that is not an antibody domain "
             "has no hallmark score, and its cysteines are not read against the VHH "
             "canonical pair. Click a column header to sort.")
 
@@ -214,14 +214,14 @@ def _identity(r: Run) -> None:
         st.dataframe(df[feature_cols], hide_index=True, **FIT)
         with st.expander("Feature definitions"):
             for name, entry in vc.FEATURE_REGISTRY.items():
-                st.markdown(f"- **`{name}`** — {entry['doc']}")
+                st.markdown(f"- **`{name}`**, {entry['doc']}")
 
-        with st.expander("Lysines and primary amines — for conjugation"):
+        with st.expander("Lysines and primary amines, for conjugation"):
             st.markdown(
                 "`n_Lys` counts lysine side chains; `n_primary_amines` adds the free "
                 "N-terminal α-amine, which an NHS ester labels just as readily. "
-                "Together they are the sites a random amine-coupling chemistry — "
-                "NHS-biotin, NHS-fluorophore, amine coupling onto a chip — will react "
+                "Together they are the sites a random amine-coupling chemistry, "
+                "NHS-biotin, NHS-fluorophore, amine coupling onto a chip, will react "
                 "with.")
             lys_rows = []
             for name, seq in sequences.items():
@@ -242,14 +242,14 @@ def _identity(r: Run) -> None:
                                     for _, r in in_cdr.iterrows())
                         + ". Random amine coupling will hit these along with the "
                           "rest, which is the usual explanation for a VHH that loses "
-                          "binding after labelling. Site-specific chemistry — a "
-                          "C-terminal cysteine, sortase, or an Avi tag — avoids the "
+                          "binding after labelling. Site-specific chemistry, a "
+                          "C-terminal cysteine, sortase, or an Avi tag, avoids the "
                           "problem entirely.", icon="⚠️")
                 st.download_button("Amine sites (CSV)", lys_all.to_csv(index=False),
                                    file_name="amine_sites.csv", mime="text/csv")
             st.caption(
                 "Counted from sequence, so this is how many amines **exist**, not "
-                "how many are solvent-accessible — that needs a structure. Treat it "
+                "how many are solvent-accessible, that needs a structure. Treat it "
                 "as the upper bound on labelling sites.")
 
     # --- Plots ----------------------------------------------------------------- #
@@ -328,11 +328,11 @@ def _identity(r: Run) -> None:
 
             with st.expander("How the two annotation methods work"):
                 st.markdown("""
-    **ANARCI (IMGT numbering)** — the sequence is aligned to germline HMMs and each residue
+    **ANARCI (IMGT numbering)**: the sequence is aligned to germline HMMs and each residue
     receives an IMGT position; CDRs are the fixed windows **27–38**, **56–65** and **105–117**.
     Numbering-based, so it tolerates unusual CDR lengths. Requires HMMER.
 
-    **Regex anchors** — dependency-free; locates the conserved landmarks of a VHH and cuts between them:
+    **Regex anchors**: dependency-free; locates the conserved landmarks of a VHH and cuts between them:
 
     | Anchor | Pattern | Role |
     |---|---|---|
@@ -343,7 +343,7 @@ def _identity(r: Run) -> None:
     | FR4 | `WG[A-Z]G[TAS][A-Z]{1,2}VTVSS` | ends CDR3 |
 
     Assumes a canonical scaffold. Where both methods run, a disagreement usually means a
-    non-canonical framework — which is itself worth knowing.
+    non-canonical framework, which is itself worth knowing.
     """)
 
     # --- Hallmarks & germline --------------------------------------------------- #
@@ -362,7 +362,7 @@ def _identity(r: Run) -> None:
                                    for p in hm["positions"]},
                                 "source": hm["source"]})
             except Exception as exc:
-                st.warning(f"**{name}** — hallmarks unavailable: {exc}")
+                st.warning(f"**{name}**, hallmarks unavailable: {exc}")
             for sp, g in germline_data(seq).items():
                 if g:
                     gl_rows.append({"name": name, "species": sp, "V gene": g["v_gene"],
@@ -377,14 +377,14 @@ def _identity(r: Run) -> None:
                        "genuine VHH. Engineered or humanised constructs sit between the "
                        "two profiles. **This is the one reading that is camelid-"
                        "specific**: on a conventional VH a score of 0/4 is simply what "
-                       "a VH looks like, not a defect — the row is shown so you can "
+                       "a VH looks like, not a defect, the row is shown so you can "
                        "see the contrast, and the `type` column says which is which.")
 
         if gl_rows:
             st.subheader("Closest germline")
             st.dataframe(pd.DataFrame(gl_rows), hide_index=True, **FIT)
             st.caption("Identity to the closest human germline is a first-pass humanness "
-                       "indicator, not an immunogenicity prediction — a sequence can be "
+                       "indicator, not an immunogenicity prediction, a sequence can be "
                        "germline-like and still contain a T-cell epitope.")
         elif not hm_rows:
             st.info("Germline assignment needs ANARCI, which is not available here.")
@@ -393,7 +393,7 @@ def _identity(r: Run) -> None:
         st.subheader("Humanness, position by position")
         st.markdown(
             "Percent identity to the closest human germline V gene, computed over "
-            "**framework positions only** — CDR divergence from a human germline is "
+            "**framework positions only**, CDR divergence from a human germline is "
             "expected and is not something you would ever try to fix. The divergent "
             "positions are listed because they are the candidate humanising "
             "mutations.")
@@ -412,12 +412,12 @@ def _identity(r: Run) -> None:
             try:
                 h = humanness_for(seq, fam_arg)
             except Exception as exc:
-                st.warning(f"**{name}** — humanness unavailable: {exc}")
+                st.warning(f"**{name}**, humanness unavailable: {exc}")
                 continue
             if not h["gene"]:
-                st.warning(f"**{name}** — no germline could be compared.")
+                st.warning(f"**{name}**, no germline could be compared.")
                 continue
-            with st.expander(f"**{name}** ({type_of(name)}) — "
+            with st.expander(f"**{name}** ({type_of(name)}), "
                              f"{h['identity']}% to {h['gene']} "
                              f"({h['n_divergent']} divergent framework positions, "
                              f"{h['n_hallmark']} of them hallmarks)",
@@ -431,14 +431,14 @@ def _identity(r: Run) -> None:
                 if len(h["divergences"]):
                     st.dataframe(h["divergences"], hide_index=True, **FIT)
                     st.download_button(
-                        f"Divergences — {name} (CSV)",
+                        f"Divergences, {name} (CSV)",
                         h["divergences"].to_csv(index=False),
                         file_name=f"humanness_{name}.csv", mime="text/csv",
                         key=f"dl_human_{name}")
                 if not kinds[name]["is_vhh"]:
                     st.caption(
                         "This is a conventional VH, so a high framework identity is "
-                        "expected rather than informative — and the `hallmark` rows "
+                        "expected rather than informative, and the `hallmark` rows "
                         "below are not a humanisation decision here, since a VH "
                         "already carries the VH residues.")
                 st.caption(
@@ -451,7 +451,7 @@ def _identity(r: Run) -> None:
         st.info(
             "This is a first-pass humanness indicator and nothing more. "
             "Immunogenicity depends on T-cell epitopes, dose, route and formulation, "
-            "none of which is in the sequence — a germline-like sequence can still "
+            "none of which is in the sequence, a germline-like sequence can still "
             "carry an epitope, and a divergent one can be silent.", icon="⚠️")
 
 
@@ -514,7 +514,7 @@ def _risk(r: Run) -> None:
             "10, NS/NT/NN and DS/DT/DD 5, free cysteine 8, Met 4, Trp 3; Low below 2, "
             "Medium below 6, High at or above 6. In its original form each motif is also "
             "weighted by its solvent exposure and the model confidence taken from a 3D "
-            "structure. **This section is sequence-only, so neither factor is applied** — "
+            "structure. **This section is sequence-only, so neither factor is applied**, "
             "an NG scores 10 whether it is buried or fully exposed. The practical "
             "consequence is that the categories compress towards the top, and comparing "
             "sequences with each other tells you more than the category of any single "
@@ -525,7 +525,7 @@ def _risk(r: Run) -> None:
             liab = liab_by_seq[name]
             summary = next(s for s in summaries if s["name"] == name)
             with st.container(border=True):
-                st.markdown(f"**{name}** — score {summary['total_score']:.0f}, "
+                st.markdown(f"**{name}**, score {summary['total_score']:.0f}, "
                             f"{summary['n_liabilities']} motif(s), "
                             f"{summary['n_high']} high, {summary['n_in_CDR']} in a CDR")
                 if liab.empty:
@@ -544,13 +544,13 @@ def _risk(r: Run) -> None:
         with st.expander("Predicted protease cleavage sites"):
             st.markdown(
                 "Every protein has tryptic sites, so the count on its own means little. "
-                "What is worth looking at is a high-scoring recognition site — Factor Xa "
-                "or enterokinase — or a cluster of sites inside a CDR.")
+                "What is worth looking at is a high-scoring recognition site, Factor Xa "
+                "or enterokinase, or a cluster of sites inside a CDR.")
             for name in sequences:
                 prot = prot_by_seq[name]
-                st.markdown(f"**{name}** — {len(prot)} site(s), "
+                st.markdown(f"**{name}**, {len(prot)} site(s), "
                             f"score {prot['score'].sum():.2f}" if not prot.empty
-                            else f"**{name}** — none")
+                            else f"**{name}**, none")
                 if not prot.empty:
                     in_cdr = prot[prot["in_CDR"]]
                     st.caption(f"{len(in_cdr)} inside a CDR")
@@ -581,10 +581,10 @@ def _risk(r: Run) -> None:
             try:
                 ds = disulfides_for(seq, annotations.get(name))
             except Exception as exc:
-                st.warning(f"**{name}** — cysteine analysis unavailable: {exc}")
+                st.warning(f"**{name}**, cysteine analysis unavailable: {exc}")
                 continue
             icon = "✅" if ds["n_orphan"] == 0 else "⚠️"
-            with st.expander(f"{icon} **{name}** — {ds['n_cys']} cysteine(s): "
+            with st.expander(f"{icon} **{name}**, {ds['n_cys']} cysteine(s): "
                              f"{ds['verdict']}", expanded=len(sequences) == 1):
                 if len(ds["cysteines"]):
                     st.dataframe(ds["cysteines"], hide_index=True, **FIT)
@@ -599,7 +599,7 @@ def _risk(r: Run) -> None:
                 elif ds["has_extra_pair"]:
                     st.success(
                         "Read the extra cysteines as a stabilising pair rather than a "
-                        "liability — but remember this is inferred from position "
+                        "liability, but remember this is inferred from position "
                         "alone. Only a structure or a non-reducing gel confirms a bond.")
                 elif ds["n_orphan"]:
                     st.warning(
@@ -613,7 +613,7 @@ def _risk(r: Run) -> None:
         st.markdown(
             "One conservative substitution per liability, so the table above becomes "
             "actionable. Substitutions inside a CDR are flagged separately because "
-            "they risk affinity — a liability you keep is often the right call.")
+            "they risk affinity, a liability you keep is often the right call.")
         rep_cols = st.columns([1, 1, 2])
         with rep_cols[0]:
             rep_include_cdr = st.checkbox("Include CDR positions", value=True)
@@ -629,7 +629,7 @@ def _risk(r: Run) -> None:
         refused = repairs[~repairs["applicable"]] if len(repairs) else repairs
 
         if not len(repairs):
-            st.success("Nothing to repair — no liability with a known substitution.")
+            st.success("Nothing to repair, no liability with a known substitution.")
         else:
             st.dataframe(doable, hide_index=True, **FIT,
                          column_config={"rationale": st.column_config.TextColumn(
@@ -644,8 +644,8 @@ def _risk(r: Run) -> None:
 
             # Several liabilities offer alternatives at the SAME position (a free
             # cysteine can go to S or to A). Selecting both by default would make
-            # every one of them collide, so the default keeps the first — the
-            # preferred — option per position.
+            # every one of them collide, so the default keeps the first, the
+            # preferred, option per position.
             _seen_pos, _default = set(), []
             for _, r in doable.iterrows():
                 if r["in_CDR"] or r["position"] in _seen_pos:
@@ -655,7 +655,7 @@ def _risk(r: Run) -> None:
             picked = st.multiselect(
                 "Apply substitutions", list(doable["substitution"]),
                 default=_default,
-                help="Defaults to one substitution per position, frameworks only — "
+                help="Defaults to one substitution per position, frameworks only, "
                      "the safe subset. Alternatives at the same position are listed "
                      "but not pre-selected, and picking two of them is refused "
                      "rather than silently resolved.")
@@ -692,13 +692,13 @@ def _risk(r: Run) -> None:
         st.markdown(
             "Where along the sequence the aggregation-prone stretches are. A "
             "stretch becomes aggregation-prone when it is hydrophobic, β-prone and "
-            "carries no charged residue to interrupt it — the three quantities this "
+            "carries no charged residue to interrupt it, the three quantities this "
             "profile combines, plus a gatekeeper term for P/D/E/K/R.")
         st.warning(
             "**This is not CamSol, AGGRESCAN or TANGO.** Those fit their "
             "coefficients to experimental data; the weights here are a transparent "
             "judgement call, listed in `SOLUBILITY_WEIGHTS`. So read **where** the "
-            "weak spots are and compare candidates against each other — do not read "
+            "weak spots are and compare candidates against each other, do not read "
             "the absolute value as a predicted solubility. For a validated number, "
             "run the sequence through one of those servers.", icon="⚠️")
 
@@ -738,19 +738,19 @@ def _risk(r: Run) -> None:
                              "Fraction", format="%.2f")})
         st.caption("`Mean` higher is better. `Worst` is the single lowest-scoring "
                    "window, which is usually what decides whether a candidate "
-                   "behaves — one bad patch is enough.")
+                   "behaves, one bad patch is enough.")
 
         for name, seq in sequences.items():
             profile, regions, summary, weakest = aggregation_for(
                 seq, annotations.get(name), int(agg_window), float(agg_threshold))
-            with st.expander(f"**{name}** — worst window {summary['min_score']:+.2f} "
+            with st.expander(f"**{name}**, worst window {summary['min_score']:+.2f} "
                              f"at residue {summary['worst_position']}, "
                              f"{summary['n_regions']} region(s) below threshold",
                              expanded=agg_show_all and len(sequences) <= 4):
                 if agg_show_all:
                     st.image(png_aggregation(seq, annotations.get(name),
                                              int(agg_window), float(agg_threshold),
-                                             f"{name} — aggregation-prone regions"),
+                                             f"{name}, aggregation-prone regions"),
                              **FIT)
                 st.markdown("**Weakest windows**")
                 st.dataframe(weakest, hide_index=True, **FIT)
@@ -791,7 +791,7 @@ def _compare(r: Run) -> None:
     # --- Alignment ------------------------------------------------------------- #
     with tabs["Alignment"]:
         # Aligning a 1200-residue protein against 120-residue VHHs produces a mostly
-        # empty figure, so the default is the VHH subset — unless there are no VHHs,
+        # empty figure, so the default is the VHH subset, unless there are no VHHs,
         # in which case aligning the others is the only thing that makes sense.
         if other_names and heavy_names:
             align_all = st.checkbox(
@@ -843,7 +843,7 @@ def _compare(r: Run) -> None:
                     with cols_id[1]:
                         st.image(img_id3, **FIT)
             st.caption("Two clones from the same panning can share 90%+ full-length "
-                       "identity while having unrelated CDR3s — the second matrix is the "
+                       "identity while having unrelated CDR3s, the second matrix is the "
                        "one that tells you whether they are really the same binder.")
 
         if len(aln_seqs) >= 2:
@@ -891,7 +891,7 @@ def _compare(r: Run) -> None:
         st.markdown(
             "Which positions differ from a sequence you choose as the reference. "
             "Humanisation variants against the parent, a Sanger clone against the "
-            "construct it should be, a panel against its ancestor — the same "
+            "construct it should be, a panel against its ancestor, the same "
             "question each time.")
         if not heavy_only_notice("Reference comparison"):
             pass
@@ -904,12 +904,12 @@ def _compare(r: Run) -> None:
             ref_cols = st.columns([2, 1])
             with ref_cols[0]:
                 ref_choice = st.selectbox(
-                    "Reference", list(heavy_sequences) + ["— paste one —"],
+                    "Reference", list(heavy_sequences) + [",  paste one , "],
                     help="Everything else is compared against this sequence.")
             with ref_cols[1]:
                 show_cdr_only = st.checkbox("CDR positions only", value=False)
 
-            if ref_choice == "— paste one —":
+            if ref_choice == ",  paste one , ":
                 pasted = st.text_area("Reference sequence", key="ref_paste", height=90,
                                       placeholder="Paste the parent sequence here")
                 ref_seq, ref_name = pasted.strip(), "pasted reference"
@@ -921,7 +921,7 @@ def _compare(r: Run) -> None:
             if not ref_seq:
                 st.info("Paste a reference sequence to compare against.")
             elif not others:
-                st.info("Nothing to compare — submit another sequence.")
+                st.info("Nothing to compare, submit another sequence.")
             else:
                 try:
                     comp = comparison_for(ref_seq, others, ref_name)
@@ -931,7 +931,7 @@ def _compare(r: Run) -> None:
 
                 if comp:
                     for name, msg in comp["errors"].items():
-                        st.warning(f"**{name}** — could not be numbered: {msg}")
+                        st.warning(f"**{name}**, could not be numbered: {msg}")
 
                     st.dataframe(comp["summary"], hide_index=True, **FIT)
                     st.caption(
@@ -940,7 +940,7 @@ def _compare(r: Run) -> None:
                         "reported as one deletion rather than as every downstream "
                         "position having changed. Note that IMGT places insertions "
                         "at the centre of a loop, so adding a residue to CDR3 can "
-                        "also shift a few neighbours — those show up as "
+                        "also shift a few neighbours, those show up as "
                         "substitutions alongside the insertion.")
 
                     diffs = comp["differences"]
@@ -964,7 +964,7 @@ def _compare(r: Run) -> None:
     with tabs["Clonal families"]:
         st.markdown(
             "After a panning, the first question is not how good each clone is but "
-            "**how many different clones you actually have** — a plate of picked "
+            "**how many different clones you actually have**, a plate of picked "
             "colonies is routinely the same few lineages over and over. Grouping on "
             "CDR3 answers that, because CDR3 is what differs between independent "
             "lineages while the frameworks stay nearly constant.")
@@ -989,7 +989,7 @@ def _compare(r: Run) -> None:
                     "Linkage", ["complete", "average"],
                     index=0 if vc.FAMILY_DEFAULTS["linkage"] == "complete" else 1,
                     help="complete: every pair inside a family meets the threshold. "
-                         "average: merges on the mean distance, more permissive — a "
+                         "average: merges on the mean distance, more permissive, a "
                          "family may then contain pairs below the threshold.")
             with fam_cols[2]:
                 same_length = st.checkbox(
@@ -1010,7 +1010,7 @@ def _compare(r: Run) -> None:
             head[0].metric("Sequences grouped", n_seqs)
             head[1].metric("Families", n_fam)
             head[2].metric("Singletons", singletons)
-            head[3].metric("Redundancy", f"{n_seqs / n_fam:.2f}" if n_fam else "—",
+            head[3].metric("Redundancy", f"{n_seqs / n_fam:.2f}" if n_fam else ", ",
                            help="Sequences per family. Above ~2 you are re-picking "
                                 "the same lineages and could screen more colonies.")
 
@@ -1024,7 +1024,7 @@ def _compare(r: Run) -> None:
                 "`min_identity` is the **worst** pair inside the family: with "
                 "*complete* linkage it can never fall below your threshold, so a "
                 "value under it means *average* linkage merged across it. "
-                "`representative` is the family's most frequent CDR3 — a reasonable "
+                "`representative` is the family's most frequent CDR3, a reasonable "
                 "default pick for the clone to carry forward.")
 
             img_dendro = png_family_dendrogram(heavy_sequences, heavy_annotations,
@@ -1035,7 +1035,7 @@ def _compare(r: Run) -> None:
                 st.image(img_dendro, **FIT)
                 st.caption("The dashed line is your threshold; branches joining to "
                            "its right are separate families. Move the slider and "
-                           "watch which groups merge — that is the honest way to see "
+                           "watch which groups merge, that is the honest way to see "
                            "how robust a family is.")
 
             st.subheader("Per-sequence assignment")
@@ -1062,7 +1062,7 @@ def _compare(r: Run) -> None:
                         for r in fam["families"]["representative"]
                         if r in heavy_sequences}
                 fasta = "".join(f">{k}\n{v}\n" for k, v in reps.items())
-                st.code(fasta or "—", language="text")
+                st.code(fasta or ", ", language="text")
                 st.download_button("Download representatives (FASTA)", fasta,
                                    file_name="family_representatives.fasta",
                                    mime="text/plain")
@@ -1082,7 +1082,7 @@ def _repertoire(r: Run) -> None:
     # --- Repertoire ------------------------------------------------------------- #
     with tabs["Repertoire"]:
         st.markdown(
-            "Your sequences against the natural VHH repertoire — the same "
+            "Your sequences against the natural VHH repertoire, the same "
             "position-frequency matrix the synthetic generator samples from, used "
             "here the other way round.")
         if not heavy_only_notice("Repertoire comparison"):
@@ -1092,7 +1092,7 @@ def _repertoire(r: Run) -> None:
                 st.warning(
                     "The reference is a **VHH** repertoire. A conventional VH "
                     "compared against it will legitimately show its FR2 hallmark "
-                    "positions as rare — that is the difference between a VH and a "
+                    "positions as rare, that is the difference between a VH and a "
                     "VHH, not a defect in the sequence.", icon="🧬")
 
             rar, nat = st.tabs(["Unusual framework residues",
@@ -1136,7 +1136,7 @@ def _repertoire(r: Run) -> None:
                                        file_name="unusual_framework_residues.csv",
                                        mime="text/csv")
                 else:
-                    st.success("No framework residue falls below the threshold — "
+                    st.success("No framework residue falls below the threshold, "
                                "every position matches the natural repertoire.")
 
                 if rare_plot:
@@ -1145,12 +1145,12 @@ def _repertoire(r: Run) -> None:
                             st.image(png_rarity(seq, name, float(rare_thr),
                                                 int(min_sup)), **FIT)
                         except Exception as exc:
-                            st.warning(f"**{name}** — {exc}")
+                            st.warning(f"**{name}**, {exc}")
 
             with nat:
                 st.markdown(
                     "Where your set sits against the reference distribution. After "
-                    "a panning this is what says whether the selection was biased — "
+                    "a panning this is what says whether the selection was biased, "
                     "towards long CDR3s, towards charged loops, and so on.")
                 if not heavy_annotations:
                     st.info("Nothing annotated to compare.")
@@ -1190,7 +1190,7 @@ def _repertoire(r: Run) -> None:
                         st.caption(
                             "`Percentile` is the fraction of natural VHHs with a "
                             "shorter CDR of that region. The verdict calls a length "
-                            "unusual below the 5th or above the 95th percentile — "
+                            "unusual below the 5th or above the 95th percentile, "
                             "unusual is not wrong, and a long CDR3 is often exactly "
                             "what you selected for.")
                     st.dataframe(per_seq, hide_index=True, **FIT)
@@ -1255,12 +1255,12 @@ def _outputs(r: Run) -> None:
                                "\n".join(res["dna"][i:i + 60]
                                          for i in range(0, len(res["dna"]), 60)))
             with st.container(border=True):
-                st.markdown(f"**{name}** — {res['length_nt']} nt, "
+                st.markdown(f"**{name}**, {res['length_nt']} nt, "
                             f"GC {res['gc_percent']} %, "
                             f"{len(res['repairs'])} codon(s) swapped for sites, "
                             f"{res['gc_swaps']} for GC balance")
                 if not ok:
-                    st.error("Round-trip check failed — do not order this sequence.")
+                    st.error("Round-trip check failed, do not order this sequence.")
                 if res["remaining_issues"]:
                     st.warning("Could not remove: " + ", ".join(res["remaining_issues"]))
                 st.code(res["dna"], language="text")
@@ -1274,7 +1274,7 @@ def _outputs(r: Run) -> None:
         st.caption(
             "Every output is verified by translating it back and comparing to the input. "
             "This optimiser maximises codon frequency, balances GC and removes "
-            "cloning-unfriendly motifs — it does not model mRNA secondary structure near "
+            "cloning-unfriendly motifs, it does not model mRNA secondary structure near "
             "the ribosome binding site, codon-pair bias or tRNA availability. Run the "
             "sequence through your synthesis vendor's checker before ordering.")
         dna_out = st.columns(2)
@@ -1293,15 +1293,15 @@ def _outputs(r: Run) -> None:
     # --- Constructs ------------------------------------------------------------- #
     with tabs["Constructs"]:
         st.markdown(
-            "Assemble a VHH into the construct you will actually order — monovalent, "
-            "bivalent or biparatopic, with a linker and tags — and get the mass, pI "
+            "Assemble a VHH into the construct you will actually order, monovalent, "
+            "bivalent or biparatopic, with a linker and tags, and get the mass, pI "
             "and DNA of the finished protein rather than of the bare domain.")
         st.warning(ctm.VERIFY_NOTICE, icon="⚠️")
 
         fmt_cols = st.columns([1, 1, 1])
         with fmt_cols[0]:
             fmt = st.selectbox("Format", list(ctm.FORMATS),
-                               help="\n\n".join(f"**{k}** — {v['note']}"
+                               help="\n\n".join(f"**{k}**, {v['note']}"
                                                  for k, v in ctm.FORMATS.items()))
         n_needed = ctm.FORMATS[fmt]["n_vhh"]
         with fmt_cols[1]:
@@ -1345,13 +1345,13 @@ def _outputs(r: Run) -> None:
                 [k for k, v in ctm.TAGS.items() if v["ends"] in ("C", "both")],
                 default=["His6"])
 
-        with st.expander("Custom pieces — SpyTag2/3, a camelid hinge, anything else"):
+        with st.expander("Custom pieces, SpyTag2/3, a camelid hinge, anything else"):
             st.markdown(
                 "Two things are deliberately missing from the tag list above: "
                 "**SpyTag2 and SpyTag3**, and the **camelid hinges**. Only the "
                 "original SpyTag is included. Writing the others from memory would "
                 "risk handing you a sequence that is one residue wrong, which you "
-                "would discover only after the gene arrived — so paste the exact "
+                "would discover only after the gene arrived, so paste the exact "
                 "sequence from your own construct here instead.")
             cu = st.columns(2)
             custom_n = cu[0].text_input("Custom N-terminal peptide", value="")
@@ -1382,7 +1382,7 @@ def _outputs(r: Run) -> None:
             for w in built["warnings"][1:]:        # [0] is the verify notice, shown above
                 st.warning(w, icon="⚠️")
 
-            st.image(png_construct(built, f"{first} — {fmt}"), **FIT)
+            st.image(png_construct(built, f"{first}, {fmt}"), **FIT)
 
             props = built["properties"].iloc[0]
             base = built["per_vhh"].iloc[0]
@@ -1394,7 +1394,7 @@ def _outputs(r: Run) -> None:
             pm[2].metric("pI", f"{props['pI']:.2f}",
                          delta=f"{props['pI'] - base['pI']:+.2f}")
             pm[3].metric("A280 (1 mg/mL)", f"{props['A280_0.1pct']:.3f}",
-                         help="Divide a measured A280 by this to get mg/mL — the "
+                         help="Divide a measured A280 by this to get mg/mL, the "
                               "number changes with the tags, which is exactly why "
                               "you want it for the construct and not the bare VHH.")
 
@@ -1419,7 +1419,7 @@ def _outputs(r: Run) -> None:
                     st.success("Round trip verified: translating this DNA gives back "
                                "the construct exactly.")
                 else:
-                    st.error("The DNA does not translate back to the construct — do "
+                    st.error("The DNA does not translate back to the construct, do "
                              "not order this. Please report it.")
                 st.code(dna_ct["dna"], language="text")
                 st.download_button(
@@ -1465,7 +1465,7 @@ def _outputs(r: Run) -> None:
 
         if st.button("Build PDF report", type="secondary"):
             # The displayed plots are cached as PNG bytes, so the report rebuilds real
-            # figure objects — only when the button is pressed.
+            # figure objects, only when the button is pressed.
             figures = {
                 "Secondary structure composition": vc.plot_secondary_structure(df),
                 "Charge": vc.plot_charge(df, sequences, ph=ph),
@@ -1474,7 +1474,7 @@ def _outputs(r: Run) -> None:
             }
             if include_cf:
                 for cf_name, cf_seq in sequences.items():
-                    figures[f"Predicted secondary structure — {cf_name}"] = \
+                    figures[f"Predicted secondary structure, {cf_name}"] = \
                         vc.plot_chou_fasman(cf_seq, cf_name, window=cf_window,
                                             annotation=annotations.get(cf_name))
             if len(sequences) >= 2:
@@ -1519,7 +1519,7 @@ def render(ph: float, window: int, method: str) -> None:
     st.title("🔬 Sequence analysis")
     st.markdown(
         "Physico-chemical characterization, CDR/framework annotation and alignment. "
-        "Built around VHHs, but **any protein is accepted** — each sequence is "
+        "Built around VHHs, but **any protein is accepted**, each sequence is "
         "classified, and the VHH-specific analyses only run on the ones that are "
         "VHHs. Paste one or more sequences, in FASTA or raw form.")
 
@@ -1553,7 +1553,7 @@ def render(ph: float, window: int, method: str) -> None:
         text = st.text_area("Sequences", height=220, key="seq_text",
                             placeholder=">MyNanobody\nEVQLVESGGGLVQ...")
         # Clicking the button moves focus out of the text area, which is what commits
-        # what was just typed — the same thing ⌘/Ctrl + Enter does, without the
+        # what was just typed, the same thing ⌘/Ctrl + Enter does, without the
         # keyboard shortcut nobody discovers on their own.
         st.button("Analyze", type="primary", **FIT)
         st.caption("Click Analyze, or press ⌘ + Enter (Ctrl + Enter on Windows/Linux).")
@@ -1571,11 +1571,11 @@ def render(ph: float, window: int, method: str) -> None:
             "position-frequency matrix, so they look like natural frameworks. CDRs are "
             "drawn at random, with lengths taken from the same reference set.")
         st.caption(
-            f"Reference: **{report['source']}** — {report['n_sequences']} unique VHH "
+            f"Reference: **{report['source']}**, {report['n_sequences']} unique VHH "
             f"sequences, {report['n_positions']} IMGT positions, median support "
             f"{report['median_support']} sequences per position.")
         st.caption(
-            f"*{gmeta.get('source_title', '')}* — "
+            f"*{gmeta.get('source_title', '')}*, "
             f"[doi:{gmeta.get('source_doi', '')}]"
             f"(https://doi.org/{gmeta.get('source_doi', '')}) · "
             f"[database]({gmeta.get('source_url', '')}). "
@@ -1611,7 +1611,7 @@ def render(ph: float, window: int, method: str) -> None:
                     lengths[region] = st.number_input(f"{region} length", 2, 30,
                                                       default, 1)
         else:
-            st.caption("CDR lengths are drawn from the reference distribution — "
+            st.caption("CDR lengths are drawn from the reference distribution, "
                        "CDR1 and CDR2 around 8 residues, CDR3 a mean of 17 with a "
                        "range of 2 to 30.")
 
@@ -1639,7 +1639,7 @@ def render(ph: float, window: int, method: str) -> None:
 
         st.caption(
             "Two limitations worth knowing. **Positions are sampled independently**, so "
-            "a combination that never co-occurs in nature can come out — the hallmark "
+            "a combination that never co-occurs in nature can come out, the hallmark "
             "tetrad is the usual casualty, which is why it is enforced by default. And "
             "**a frequency is only as good as its support**: a position seen in 30 "
             "reference sequences carries far less information than one seen in 1900. "
@@ -1656,7 +1656,7 @@ def render(ph: float, window: int, method: str) -> None:
     try:
         sequences = vc.parse_input(text)
     except ValueError as exc:
-        st.error(f"Input error — {exc}")
+        st.error(f"Input error, {exc}")
         footer()
         st.stop()
 
@@ -1666,7 +1666,7 @@ def render(ph: float, window: int, method: str) -> None:
     # What is each sequence? The app accepts any protein, so every VHH-specific
     # analysis has to know which sequences it legitimately applies to.
     kinds = {name: classify_cached(seq, method) for name, seq in sequences.items()}
-    # Heavy-chain V domains — VHH *and* conventional VH — get the full analysis.
+    # Heavy-chain V domains (VHH *and* conventional VH) get the full analysis.
     # Almost none of it is camelid-specific: IMGT numbering, the CDR windows,
     # germline assignment, humanness and CDR3 grouping are the same operation on a
     # VH. The two camelid readings (the hallmark tetrad, the extra CDR1-CDR3
@@ -1683,21 +1683,21 @@ def render(ph: float, window: int, method: str) -> None:
     if _vh_only:
         st.info(
             f"**{len(_vh_only)} sequence(s) are conventional VH, not VHH.** They go "
-            "through the full heavy-chain analysis all the same — CDR/framework, "
-            "germline, humanness, clonal families — and are labelled as VH "
+            "through the full heavy-chain analysis all the same, CDR/framework, "
+            "germline, humanness, clonal families, and are labelled as VH "
             "throughout. Only two readings are camelid-specific and are flagged "
             "where they appear: the FR2 hallmark tetrad, and the additional "
             "CDR1–CDR3 disulfide.\n\n"
-            + "\n".join(f"- **{n}** — {kinds[n]['note']}" for n in _vh_only),
+            + "\n".join(f"- **{n}**, {kinds[n]['note']}" for n in _vh_only),
             icon="🧬")
 
     if other_names:
         st.info(
             f"**{len(other_names)} of {len(sequences)} sequence(s) are not "
             "heavy-chain variable domains.** They are characterised like any "
-            "protein — mass, pI, extinction, charge, aggregation, liabilities, DNA — "
+            "protein (mass, pI, extinction, charge, aggregation, liabilities, DNA) "
             "but the antibody-specific tabs skip them.\n\n"
-            + "\n".join(f"- **{n}** — {kinds[n]['kind']}: {kinds[n]['note']}"
+            + "\n".join(f"- **{n}**, {kinds[n]['kind']}: {kinds[n]['note']}"
                          for n in other_names), icon="ℹ️")
 
     # An annotation failure on something that is not an antibody domain is the
@@ -1705,17 +1705,17 @@ def render(ph: float, window: int, method: str) -> None:
     real_errors = {n: m for n, m in errors.items() if kinds[n]["full_analysis"]}
     if real_errors:
         for name, msg in real_errors.items():
-            st.warning(f"**{name}** — annotation failed: {msg}. "
+            st.warning(f"**{name}**, annotation failed: {msg}. "
                        "Physico-chemical values are still reported below.")
 
 
     def heavy_only_notice(what: str) -> bool:
         """Guard for a panel that needs a heavy-chain V domain (VHH or VH)."""
         if not heavy_names:
-            st.info(f"{what} applies to heavy-chain variable domains — VHH or "
-                    "conventional VH — and none of the submitted sequences is one. "
-                    "The generic tabs — Properties, Plots, Liabilities, Aggregation, "
-                    "DNA, Constructs — cover them all.")
+            st.info(f"{what} applies to heavy-chain variable domains, VHH or "
+                    "conventional VH, and none of the submitted sequences is one. "
+                    "The generic tabs, Properties, Plots, Liabilities, Aggregation, "
+                    "DNA, Constructs, cover them all.")
             return False
         if other_names:
             st.caption(f"Showing the {len(heavy_names)} heavy-chain domain(s); "
@@ -1729,14 +1729,14 @@ def render(ph: float, window: int, method: str) -> None:
 
     # Named rather than indexed: inserting a tab in the middle of an indexed list
     # silently reassigns every panel after it.
-    # Fourteen tabs are not fourteen subjects — they are four questions plus the
+    # Fourteen tabs are not fourteen subjects, they are four questions plus the
     # decision view. Grouping them does two things at once: a newcomer reads five
     # labels instead of scanning fourteen, and Streamlit only executes the family
     # that is open. Nested tabs would have fixed the first problem and not the
     # second, because every tab body runs whether or not its tab is selected.
     FAMILIES = {
         "🎯 Triage": ("triage", [],
-                      "Every flag in one table — the view for deciding which "
+                      "Every flag in one table, the view for deciding which "
                       "sequences to carry forward."),
         "🔍 Identity": ("identity",
                         ["Properties", "Plots", "CDR / Framework",

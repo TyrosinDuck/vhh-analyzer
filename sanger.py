@@ -1,5 +1,5 @@
 """
-sanger — extraction of VHH sequences from Sanger .ab1 chromatograms.
+sanger, extraction of VHH sequences from Sanger .ab1 chromatograms.
 
 Reads .ab1 files, trims them on quality, then locates the expression cassette
 (PelB leader → VHH → tags → stop) in any strand and any reading frame, and
@@ -77,7 +77,7 @@ DEFAULTS = {
 # --------------------------------------------------------------------------- #
 
 def mott_trim(quals, cutoff: float = 0.05) -> tuple[int, int]:
-    """Mott's modified trimming algorithm — the one used by phred and Staden.
+    """Mott's modified trimming algorithm, the one used by phred and Staden.
 
     Each base scores ``cutoff - P(error)``; the highest-scoring contiguous run
     is the good window. Returns ``(start, end)``, end exclusive.
@@ -152,7 +152,7 @@ def _find_pelb(protein: str) -> tuple[int, int, str | None]:
     from a back-computed PelB start. When a read begins part-way through the
     leader, only the short core anchor matches, and back-computing the full
     leader start would run off the beginning of the read and shift the VHH start
-    by a few residues — silently truncating the N-terminus.
+    by a few residues, silently truncating the N-terminus.
     """
     i = protein.find(PELB_AA)
     if i >= 0:
@@ -169,7 +169,7 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
     The read and its reverse complement are translated in three frames each.
     The PelB anchor fixes the start and the reading frame; the FR4 signature
     fixes the end of the VHH. If PelB and FR4 land in different frames, an indel
-    sits between them and the VHH cannot be trusted — the read is flagged as a
+    sits between them and the VHH cannot be trusted, the read is flagged as a
     frameshift rather than silently returning a wrong sequence.
     """
     res = {
@@ -201,7 +201,7 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
     res.update(strand=key[0], frame=key[1], pelb_found=True, pelb_mode=pelb_mode)
     if pelb_mode == "core":
         res["warnings"].append(
-            "only the PelB core anchor matched — read starts inside the leader")
+            "only the PelB core anchor matched, read starts inside the leader")
 
     match = FR4_RE.search(protein, pelb_i)
     if match is None:
@@ -211,13 +211,13 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
             if FR4_RE.search(prot2):
                 res["frameshift"] = True
                 res["frameshift_hint"] = (
-                    f"PelB in frame {key[1]}, FR4 in frame {other[1]} — "
+                    f"PelB in frame {key[1]}, FR4 in frame {other[1]}, "
                     f"net {(other[1] - key[1]) % 3} nt indel between them")
                 res["warnings"].append("frameshift (indel) suspected")
                 break
         if not res["frameshift"]:
             res["warnings"].append(
-                "FR4 signature (WGxGTxVTVSS) not found — truncated read or heavy mutation")
+                "FR4 signature (WGxGTxVTVSS) not found, truncated read or heavy mutation")
         return res
 
     res["fr4_found"] = True
@@ -383,7 +383,7 @@ def plot_quality(reads: list[dict], max_reads: int = 12):
         ax.axhline(20, color="#c44e52", lw=0.8, ls="--")
         ax.set_ylim(0, 62)
         ax.set_ylabel("Phred", fontsize=7)
-        ax.set_title(f"{read['read']} — {read['trimmed_len']} nt kept, "
+        ax.set_title(f"{read['read']}, {read['trimmed_len']} nt kept, "
                      f"mean Q {read['mean_phred_trim']:.0f}", fontsize=8, loc="left")
     axes[-1, 0].set_xlabel("Base position")
     fig.tight_layout()

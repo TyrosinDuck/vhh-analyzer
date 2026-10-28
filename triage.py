@@ -1,5 +1,5 @@
 """
-triage — one row per sequence, every flag the app can raise, side by side.
+triage, one row per sequence, every flag the app can raise, side by side.
 
 The app computes a great deal about each sequence, spread over a dozen tabs.
 That is the right shape for studying one candidate and the wrong shape for the
@@ -9,7 +9,7 @@ sort by whichever column matters today.
 
 **There is no composite score, deliberately.** Weighting a deamidation site
 against a hydrophobic patch against three divergent framework positions means
-choosing what matters, and that depends on what the VHH is for — a reagent for
+choosing what matters, and that depends on what the VHH is for, a reagent for
 your own ELISA and a candidate you intend to humanise have nothing in common.
 A single number would hide that choice behind a decimal point. The columns sit
 next to each other; you sort.
@@ -62,8 +62,8 @@ def triage_table(seqs: dict[str, str], annotations: dict,
     """Every per-sequence metric the app computes, one row each.
 
     ``kinds`` is the classification map; without it the ``type`` column reads
-    "unknown". Anything that cannot be computed for a given sequence — a
-    non-antibody has no hallmark score — comes back as ``None`` rather than
+    "unknown". Anything that cannot be computed for a given sequence, a
+    non-antibody has no hallmark score, comes back as ``None`` rather than
     raising, so one awkward sequence never empties the table.
     """
     rows = []
@@ -119,9 +119,9 @@ def triage_table(seqs: dict[str, str], annotations: dict,
         row.update({"n_unusual": n_unusual, "rarest": rarest})
 
         # The disulfide, hallmark and humanness analyses all assume a variable
-        # domain. Run on anything else they produce confident nonsense — the
+        # domain. Run on anything else they produce confident nonsense, the
         # canonical-pair logic reports lysozyme's eight perfectly ordinary
-        # cysteines as eight orphan thiols — so they are left empty rather than
+        # cysteines as eight orphan thiols, so they are left empty rather than
         # answered wrongly.
         ds = _safe(lambda: vc.disulfides(seq, ann)) if is_domain else None
         row.update({

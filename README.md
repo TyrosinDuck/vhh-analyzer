@@ -1,12 +1,14 @@
 # VHH tool box
 
-A web front-end for sequence-level characterization of VHH / single-domain antibodies:
-physico-chemical descriptors, CDR/framework annotation (ANARCI or regex anchors),
+A web front-end for sequence-level characterization of VHH / single-domain
+antibodies:
+physico-chemical descriptors, CDR/framework annotation (ANARCI or regex
+anchors),
 plots and multiple sequence alignment.
 
 ```
 vhh_webapp/
-├── vhh_core.py        all analysis logic — no Streamlit, no notebook dependency
+├── vhh_core.py        all analysis logic, no Streamlit, no notebook dependency
 ├── app.py             Streamlit front-end
 ├── requirements.txt   pip dependencies
 ├── packages.txt       apt dependencies (HMMER, the ANARCI backend)
@@ -15,28 +17,36 @@ vhh_webapp/
     └── config.toml
 ```
 
-`vhh_core.py` is the single source of truth. The notebook and the web app both import
+`vhh_core.py` is the single source of truth. The notebook and the web app both
+import
 it, so a fix to a descriptor propagates to both instead of drifting apart.
 
 ## Documentation
 
-A full user manual lives in `MANUAL.md` and is rendered inside the app, reachable from
-the home page and from the sidebar. It documents every screen, what each number means,
-and how far to trust it. Edit the Markdown file and the app picks it up — there is one
+A full user manual lives in `MANUAL.md` and is rendered inside the app,
+reachable from
+the home page and from the sidebar. It documents every screen, what each number
+means,
+and how far to trust it. Edit the Markdown file and the app picks it up, there
+is one
 source of truth.
 
 ### Bundled data
 
-`data/library.csv` — the sequence library. Edit it locally, commit and push; the app serves it read-only. It is public, so nothing confidential goes in it.
+`data/library.csv`, the sequence library. Edit it locally, commit and push; the
+app serves it read-only. It is public, so nothing confidential goes in it.
 
-`data/ecoli_codon_usage.csv` — *E. coli* codon usage (Kazusa Codon Usage Database, taxid 316407), redistributed from the `python-codon-tables` package under **CC0-1.0**, a public-domain dedication. Used for the CAI, the usage floor on codon substitutions, and the back-translation preference order.
+`data/ecoli_codon_usage.csv`, *E. coli* codon usage (Kazusa Codon Usage
+Database, taxid 316407), redistributed from the `python-codon-tables` package
+under **CC0-1.0**, a public-domain dedication. Used for the CAI, the usage
+floor on codon substitutions, and the back-translation preference order.
 
 ## Files
 
 | File | Lines | What it is |
 |---|---|---|
 | `app.py` | 459 | the router: version check, sidebar, and one call per screen |
-| `shell.py` | 170 | the chrome — identity, navigation, `footer()`, caching policy |
+| `shell.py` | 170 | the chrome: identity, navigation, `footer()`, caching policy |
 | `compute.py` | 508 | every cached computation, and nothing that draws |
 | `sections/analysis.py` | 1804 | the Sequence analysis screen, six families |
 | `sections/structure.py` | 619 | the Structure screen |
@@ -50,49 +60,60 @@ Plus the science, which the screens only arrange: `vhh_core.py` (2821),
 `cloning.py` (1157), `structure.py` (1041), `codons.py` (775), `repertoire.py`,
 `sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`.
 
-`app.py` was a single 3 911-line script until the screens were pulled out of it.
+`app.py` was a single 3 911-line script until the screens were pulled out of
+it.
 Two rules keep it from growing back:
 
 - **A screen module draws; it does not compute.** Anything cached belongs in
-  `compute.py`, where the whole caching policy can be read in one file instead of
+  `compute.py`, where the whole caching policy can be read in one file instead
+of
   found in fifty-seven decorators spread through three thousand lines of UI.
 - **Nothing reads a global from another screen.** Every screen is a `render()`
-  function, which is not tidiness: in the old module-scope version the Structure
+  function, which is not tidiness: in the old module-scope version the
+Structure
   screen's `kinds` assignment silently overwrote the analysis screen's variable
   of the same name, and the analysis family selector was shadowed by a
-  same-named germline selectbox. Neither ever broke anything, because two screens
-  never render in the same run — a function scope removes the class of accident
+  same-named germline selectbox. Neither ever broke anything, because two
+screens
+  never render in the same run, a function scope removes the class of accident
   rather than its instances.
 
-Each module carries a `__version__`, and `REQUIRED_MODULES` in `app.py` lists the
-version it expects. A mismatch stops the app with a message naming the file, and
+Each module carries a `__version__`, and `REQUIRED_MODULES` in `app.py` lists
+the
+version it expects. A mismatch stops the app with a message naming the file,
+and
 `test_module_versions_match_app` catches it before a deploy does.
 
 ## Layout
 
-The app opens on a home page with six sections, also reachable from the sidebar,
+The app opens on a home page with six sections, also reachable from the
+sidebar,
 which carries a **Home** button on every screen:
 
 | Section | What it does |
 |---|---|
-| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH — CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
+| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
 | **Structure** | upload a PDB, mmCIF or AlphaFold model: measured SG–SG disulfides, relative solvent accessibility, which flagged liabilities are actually exposed, hydrophobic surface patches, the ΔSASA interface and epitope of a complex, and a 3Dmol.js viewer |
 | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
-| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table — plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
+| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
 | **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
 | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
 
 They share one sequence list: what you load in the analysis section is what the
 cloning section offers as an insert, the sequencing section writes into it, the
-analysis section's DNA tab hands its back-translations to gene diagnosis, and the
+analysis section's DNA tab hands its back-translations to gene diagnosis, and
+the
 library feeds both. Each section still works on its own.
 
-Inside the analysis section the views are grouped into six **families** chosen with
-a selector — Triage, Identity, Developability, Comparison, Repertoire, Outputs.
-Only the selected family executes, which is why it is a selector and not another
+Inside the analysis section the views are grouped into six **families** chosen
+with
+a selector, Triage, Identity, Developability, Comparison, Repertoire, Outputs.
+Only the selected family executes, which is why it is a selector and not
+another
 row of tabs: Streamlit runs the body of every tab, nested or not. First display
 after **Analyze** is 1.7 s on seven sequences, against roughly 12 s when all
-fifteen views were tabs; the expensive family (Comparison, 9 s — alignment, logo,
+fifteen views were tabs; the expensive family (Comparison, 9 s, alignment,
+logo,
 identity matrices) is now paid for only when asked for.
 
 ## Run locally
@@ -102,7 +123,8 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Opens on <http://localhost:8501>. ANARCI is optional: without it the app silently uses
+Opens on <http://localhost:8501>. ANARCI is optional: without it the app
+silently uses
 the regex annotator and says so in the sidebar. To get ANARCI:
 
 ```bash
@@ -117,32 +139,38 @@ docker run -p 8501:8501 vhh-toolbox
 ```
 
 The image is built on micromamba specifically so HMMER and ANARCI can come from
-bioconda — a pip-only image cannot install HMMER, and the app would be limited to the
+bioconda, a pip-only image cannot install HMMER, and the app would be limited
+to the
 regex annotator.
 
 ## Deploy on Streamlit Community Cloud
 
 1. Push this folder to a **public GitHub repository on your personal account** (not an
-   institutional one — the app should outlive any particular affiliation).
+   institutional one, the app should outlive any particular affiliation).
 2. Go to <https://share.streamlit.io>, sign in with GitHub, click **New app**.
 3. Point it at the repository, branch `main`, main file `app.py`.
 4. In **Advanced settings**, select a Python version of 3.11 or later.
 5. Deploy. The first build takes a few minutes: `packages.txt` installs HMMER through
    apt, then `requirements.txt` installs the Python packages including ANARCI.
 
-Choose the subdomain under **Settings → General** (6–63 characters), which gives you
-`https://<your-subdomain>.streamlit.app`. Community Cloud does not support pointing
-your own domain name at the app, so if you want a stable URL of your own, register a
-domain and have it redirect to the Streamlit URL. The day you move to a container host,
+Choose the subdomain under **Settings → General** (6–63 characters), which
+gives you
+`https://<your-subdomain>.streamlit.app`. Community Cloud does not support
+pointing
+your own domain name at the app, so if you want a stable URL of your own,
+register a
+domain and have it redirect to the Streamlit URL. The day you move to a
+container host,
 you repoint the redirect and no published link breaks.
 
 Apps sleep after a period without traffic and wake on the next visit.
 
 ### If the build fails on ANARCI
 
-Delete `packages.txt` and the `anarci` line from `requirements.txt`. The app then runs
-with the regex annotator only, which handles canonical VHH scaffolds perfectly well —
-the sidebar says which method is active.
+Delete `packages.txt` and the `anarci` line from `requirements.txt`. The app
+then runs
+with the regex annotator only, which handles canonical VHH scaffolds perfectly
+well, the sidebar says which method is active.
 
 ## Other hosts
 
@@ -152,7 +180,8 @@ the sidebar says which method is active.
 | **Render, Scaleway** | ✅ | accept the Dockerfile directly |
 | **Hugging Face Spaces** | ✅ | Docker SDK, but a Docker or Gradio Space now requires a PRO account for personal accounts |
 
-Behind a reverse proxy (nginx, Apache), forward websockets — Streamlit will not work
+Behind a reverse proxy (nginx, Apache), forward websockets, Streamlit will not
+work
 without them:
 
 ```nginx
@@ -168,33 +197,42 @@ location / {
 
 ## Data handling
 
-Submitted sequences are **not stored in any persistent file, not logged, and not sent
+Submitted sequences are **not stored in any persistent file, not logged, and
+not sent
 to a third party**. They are parsed into memory and analysed there. Precisely:
 
-- **Result cache** — `@st.cache_data` keeps results in the server process memory, keyed
-  on the input. It is shared by the whole process rather than per session, so it is
-  capped at 8 entries and 10 minutes (`CACHE_TTL` / `CACHE_MAX_ENTRIES` in `app.py`).
-  Set `CACHE_TTL = 0` to disable caching entirely; the analysis takes well under a
+- **Result cache**: `@st.cache_data` keeps results in the server process memory, keyed
+  on the input. It is shared by the whole process rather than per session, so
+it is
+  capped at 8 entries and 10 minutes (`CACHE_TTL` / `CACHE_MAX_ENTRIES` in
+`app.py`).
+  Set `CACHE_TTL = 0` to disable caching entirely; the analysis takes well
+under a
   second, so the only cost is slightly less snappy sidebar controls.
-- **Alignment** — `pymsaviz` reads from a path, so the aligned FASTA is written to a
-  `TemporaryDirectory` that is deleted as soon as the figure is rendered.
-- **Uploads** — handled in memory by Streamlit, never written to disk by this app.
-- **Hosting** — on Community Cloud the app runs on third-party infrastructure. Traffic
-  is encrypted and nothing is stored, but the data does transit a server you do not own.
-  The sidebar says so explicitly, and points users at running the app locally for
+- **Alignment** (`pymsaviz` reads from a path, so the aligned FASTA is written to a `TemporaryDirectory` that is deleted as soon as the figure is rendered. - **Uploads**) handled in memory by Streamlit, never written to disk by this app.
+- **Hosting**: on Community Cloud the app runs on third-party infrastructure. Traffic
+  is encrypted and nothing is stored, but the data does transit a server you do
+not own.
+  The sidebar says so explicitly, and points users at running the app locally
+for
   confidential sequences.
 
-This is deliberate. People will paste unpublished VHH sequences into this form, and
-persisting them would mean holding other labs' intellectual property on your server.
-If you ever add persistence, replace the cache with a real database (SQLite at minimum —
-a CSV cannot survive two concurrent writers) and say so explicitly in the interface.
+This is deliberate. People will paste unpublished VHH sequences into this form,
+and
+persisting them would mean holding other labs' intellectual property on your
+server.
+If you ever add persistence, replace the cache with a real database (SQLite at
+minimum, a CSV cannot survive two concurrent writers) and say so explicitly in
+the interface.
 
-The upload size is capped at 2 MB and the app refuses more than 50 sequences or any
+The upload size is capped at 2 MB and the app refuses more than 50 sequences or
+any
 sequence longer than 400 aa per run (`vhh_core.DEFAULTS`).
 
 ## Adding a descriptor
 
-Register it once in `vhh_core.py`; it becomes a column of the results table, of the
+Register it once in `vhh_core.py`; it becomes a column of the results table, of
+the
 CSV export and of the "Custom features" panel automatically:
 
 ```python
@@ -208,51 +246,69 @@ A feature that raises returns `NaN` rather than breaking the run.
 
 ## In-silico cloning
 
-One screen, three steps: pick the recipient vector, paste the donor DNA, read the
+One screen, three steps: pick the recipient vector, paste the donor DNA, read
+the
 plan.
 
 Five vectors ship with the app (pMECS, pMES3, pMES4, pHEN6, pHEN25) in
-`data/plasmids/`; you can upload your own in SnapGene, GenBank or FASTA. The donor is
-either a whole plasmid carrying the VHH — the app then finds the domain, picks the
-primer pair that brackets it and amplifies it in silico — or a fragment already
-amplified with primers, which must carry the restriction sites those primers added. A
-bare coding sequence cannot be cloned by restriction, and the app says so rather than
+`data/plasmids/`; you can upload your own in SnapGene, GenBank or FASTA. The
+donor is
+either a whole plasmid carrying the VHH (the app then finds the domain, picks
+the primer pair that brackets it and amplifies it in silico) or a fragment
+already
+amplified with primers, which must carry the restriction sites those primers
+added. A
+bare coding sequence cannot be cloned by restriction, and the app says so
+rather than
 failing quietly.
 
-The insert always lands between the end of the signal peptide and the first tag.
-Every candidate enzyme pair is actually cut, joined and translated, then the VHH the
-construct encodes is compared with the VHH in the donor. A pair is only recommended
-when the protein survives unchanged *and* nothing annotated in the vector is deleted —
-HindIII + BstEII translates perfectly on pMES3 while removing 120 bp that include the
+The insert always lands between the end of the signal peptide and the first
+tag.
+Every candidate enzyme pair is actually cut, joined and translated, then the
+VHH the
+construct encodes is compared with the VHH in the donor. A pair is only
+recommended
+when the protein survives unchanged *and* nothing annotated in the vector is
+deleted, HindIII + BstEII translates perfectly on pMES3 while removing 120 bp
+that include the
 PelB leader, so it is rejected.
 
-Among the pairs that pass, the one disturbing the vector least is recommended, which
+Among the pairs that pass, the one disturbing the vector least is recommended,
+which
 on these vectors is PstI + BstEII.
 
 Three things worth knowing about the protein check:
 
 - A fragment amplified with primers starts at the 5' restriction site, a few codons
   into FR1, so the first residues of the cloned VHH necessarily come from the
-  recipient. The app reports this as *donor part preserved* and names the residues
+  recipient. The app reports this as *donor part preserved* and names the
+residues
   added, rather than calling it a mismatch.
 - The vectors do not all start the domain the same way: **pMECS begins QVQLQ and
-  pHEN25 begins EVQLQ**. Moving a VHH from pMECS into pHEN25 through PstI therefore
-  changes residue 1, and that pair is rejected — NcoI + BstEII is proposed instead,
+  pHEN25 begins EVQLQ**. Moving a VHH from pMECS into pHEN25 through PstI
+therefore
+  changes residue 1, and that pair is rejected, NcoI + BstEII is proposed
+instead,
   because its site sits upstream of the difference.
 - There is deliberately no "insert length must be a multiple of 3" test. An empty
-  phage-display vector carries a stuffer, so its downstream tag is usually out of
-  frame with the leader until a correctly sized VHH is cloned in. Translating the
+  phage-display vector carries a stuffer, so its downstream tag is usually out
+of
+  frame with the leader until a correctly sized VHH is cloned in. Translating
+the
   finished construct is the only check that means anything.
 
 The verified construct downloads as GenBank, annotated with the insert and the
-cassette parts, plus a protocol summary. Primers live in `data/primers.csv` (or upload
+cassette parts, plus a protocol summary. Primers live in `data/primers.csv` (or
+upload
 your own CSV with `name,sequence`); each is tried as written and as its reverse
-complement, because a primer is often noted as the plus-strand sequence of its target
+complement, because a primer is often noted as the plus-strand sequence of its
+target
 rather than as the oligo that primes back towards the insert.
 
 ## Sanger (.ab1) workflow
 
-The panel under the input area takes the chromatograms from a screening run and turns
+The panel under the input area takes the chromatograms from a screening run and
+turns
 them into sequences you can analyse:
 
 1. each read is quality-trimmed with Mott's algorithm (the one phred and Staden use);
@@ -264,19 +320,26 @@ them into sequences you can analyse:
    one sequence with a copy count;
 5. you pick the ones you want and send them straight to the analysis above.
 
-Supported vectors are pMES3 and pMECS — they differ only in which tags are expected
-after the VHH. Add one in `sanger.VECTORS`, taking the layout from the actual plasmid
-map: a wrong tag layout makes the app report missing tags on clones that are fine.
+Supported vectors are pMES3 and pMECS, they differ only in which tags are
+expected
+after the VHH. Add one in `sanger.VECTORS`, taking the layout from the actual
+plasmid
+map: a wrong tag layout makes the app report missing tags on clones that are
+fine.
 
-Everything is downloadable: the full per-read table as CSV, and the extracted VHHs as
+Everything is downloadable: the full per-read table as CSV, and the extracted
+VHHs as
 protein or DNA FASTA.
 
 ## Synthetic sequence generator
 
 `generator.py` builds VHH sequences whose frameworks are sampled from an IMGT
-position-frequency matrix derived from real data, with random CDRs whose lengths come
-from the same reference set. The bundled matrix is built from **PLAbDab-nano** (OPIG,
-University of Oxford), 1958 unique VHH sequences — `data/vhh_position_freq.csv` and
+position-frequency matrix derived from real data, with random CDRs whose
+lengths come
+from the same reference set. The bundled matrix is built from **PLAbDab-nano**
+(OPIG,
+University of Oxford), 1958 unique VHH sequences, `data/vhh_position_freq.csv`
+and
 `data/vhh_position_meta.json`.
 
 > *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
@@ -284,27 +347,30 @@ University of Oxford), 1958 unique VHH sequences — `data/vhh_position_freq.csv
 > Its data-availability statement reads: "PLAbDab-nano is freely available to
 > download and query at https://opig.stats.ox.ac.uk/webapps/plabdab-nano/."
 
-Please cite it if you publish work based on the generated sequences. What is bundled
+Please cite it if you publish work based on the generated sequences. What is
+bundled
 here is an **aggregate frequency matrix**, not the sequences themselves.
 
-Supply your own matrix to mimic your own library instead: same CSV shape, one row per
-IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid columns.
+Supply your own matrix to mimic your own library instead: same CSV shape, one
+row per
+IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid
+columns.
 
 ## What the app reports
 
 | Family | Tab | Contents |
 |---|---|---|
-| — | Sequence type | each input classified from its sequence — VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
-| 🎯 Triage | Triage | every flag the app raises, one row per sequence, sortable — no composite score, deliberately |
+| (| Sequence type | each input classified from its sequence) VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
+| 🎯 Triage | Triage | every flag the app raises, one row per sequence, sortable, no composite score, deliberately |
 | 🔍 Identity | Properties | physico-chemical descriptors, developability flags, lysines and primary amines for conjugation planning, custom features |
 | 🔍 Identity | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
 | 🔍 Identity | CDR / Framework | region table, coloured sequences, both annotation methods explained |
 | 🔍 Identity | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
 | 🔍 Identity | Humanness | framework-only identity to the closest human germline V gene, computed position by position in IMGT numbering, with every divergent position listed and the hallmarks flagged |
-| ⚠️ Developability | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches — each with its position and region |
+| ⚠️ Developability | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches, each with its position and region |
 | ⚠️ Developability | Disulfides | the canonical IMGT 23/104 pair, plausible additional CDR1–CDR3 or FR2–CDR3 pairs, and orphan thiols told apart |
 | ⚠️ Developability | Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
-| ⚠️ Developability | Aggregation | per-residue aggregation-propensity profile and the weakest windows — a transparent composite, **not** CamSol or AGGRESCAN |
+| ⚠️ Developability | Aggregation | per-residue aggregation-propensity profile and the weakest windows, a transparent composite, **not** CamSol or AGGRESCAN |
 | 🔗 Comparison | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
 | 🔗 Comparison | Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
 | 🔗 Comparison | vs Reference | positions differing from a chosen reference, matched by IMGT number so an indel reports as one change rather than shifting everything downstream |
@@ -315,16 +381,23 @@ IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid col
 | 🧪 Outputs | Download | CSV, figures as PNG, and a complete PDF report |
 
 Three of these deserve a word of caution. The **Chou–Fasman plot** is a
-composition-based heuristic, roughly 50–60% accurate: it shows where the sequence
-tends towards each conformation, it does not predict the fold. The **DNA optimiser**
-maximises codon frequency, balances GC and removes cloning-unfriendly motifs, but it
-does not model mRNA secondary structure near the ribosome binding site, codon-pair
-bias or tRNA availability — run its output through your synthesis vendor's checker
+composition-based heuristic, roughly 50–60% accurate: it shows where the
+sequence
+tends towards each conformation, it does not predict the fold. The **DNA
+optimiser**
+maximises codon frequency, balances GC and removes cloning-unfriendly motifs,
+but it
+does not model mRNA secondary structure near the ribosome binding site,
+codon-pair
+bias or tRNA availability, run its output through your synthesis vendor's
+checker
 before ordering. Every back-translation is verified by translating it back and
 comparing to the input. The **hallmark score** is indicative: IMGT 49
-is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs sit
-between the two profiles. **Germline identity** measures similarity to the closest
-germline gene — it is a first-pass humanness indicator, not an immunogenicity
+is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs
+sit
+between the two profiles. **Germline identity** measures similarity to the
+closest
+germline gene, it is a first-pass humanness indicator, not an immunogenicity
 prediction.
 
 ## Tests
@@ -336,7 +409,7 @@ pytest
 
 47 tests, about 32 seconds (`pytest -m "not smoke"` runs the fast ones in under
 ten). `requirements-dev.txt` is **not** installed on
-Streamlit Community Cloud — the app itself needs `requirements.txt` alone — so
+Streamlit Community Cloud (the app itself needs `requirements.txt` alone) so
 adding a test dependency can never break the deployment.
 
 These are regression tests, not a correctness proof. Almost every one of them
@@ -346,7 +419,7 @@ you what the wrong behaviour looked like rather than just which assertion blew
 up. Among them:
 
 - hen lysozyme's eight ordinary cysteines being reported as eight free thiols,
-  twice — once in `find_liabilities`, once again in the triage table
+  twice, once in `find_liabilities`, once again in the triage table
 - repairs proposing to substitute the conserved FR2 and FR4 tryptophans
 - a clean sequence producing a liabilities table with no columns, which killed
   the repair panel with `KeyError: 'score'`
@@ -354,13 +427,15 @@ up. Among them:
 - the structure mapping keyed by sequential index while every consumer read it
   as residue numbers
 
-Two more were found by writing the tests themselves: `apply_repairs` applied the
+Two more were found by writing the tests themselves: `apply_repairs` applied
+the
 first of two conflicting substitutions instead of refusing the pair as its own
 docstring promised, and `annotate_liabilities` accepted the full-length
 construct where the chain's own sequence belongs, silently shifting every
 position after a gap. Both are fixed and both now have a test.
 
-One test earns its place for a different reason. `test_module_versions_match_app`
+One test earns its place for a different reason.
+`test_module_versions_match_app`
 compares every module's `__version__` against `REQUIRED_MODULES` in `app.py`.
 That dict drives the staleness banner, and forgetting to update it is the
 easiest way to ship a deploy that refuses to start while complaining about a
@@ -368,12 +443,13 @@ file you did update. It is caught here instead of in the browser.
 
 `tests/test_metadata.py` guards something different: the author's name, his
 ORCID, the Zenodo concept DOI and the licence. None of it changes what the app
-does, which is exactly why it needs a test — the DOI is added to `CITATION.cff`
+does, which is exactly why it needs a test, the DOI is added to `CITATION.cff`
 in the browser after a release is published, so the next copy of the repository
 overwrites it, and nothing visible breaks when it does. GitHub simply offers a
-citation with no DOI in it, and you find out from someone else's reference list.
+citation with no DOI in it, and you find out from someone else's reference
+list.
 
-The structure tests build their own PDB files in-process — CA atoms on a line,
+The structure tests build their own PDB files in-process, CA atoms on a line,
 with a deliberate numbering offset and a deliberate gap. The geometry is
 meaningless and nothing asks anything of it; what is being tested is the
 bookkeeping, and for that a synthetic chain beats a real one because the right
@@ -386,22 +462,23 @@ question, what is out of scope and why, and the two conventions the interface
 code follows.
 
 One point from it is worth repeating here. **GitHub issues are public and so is
-`data/library.csv`** — do not paste unpublished or confidential sequences into
+`data/library.csv`**, do not paste unpublished or confidential sequences into
 either. A defect can nearly always be reproduced with one of the 22 published
 sequences in the library. To analyse confidential sequences at all, run the app
 locally rather than using the public deployment.
 
 ## Licence
 
-MIT — see `LICENSE`. Use it, change it, redistribute it, build on it; keep the
+MIT, see `LICENSE`. Use it, change it, redistribute it, build on it; keep the
 copyright notice.
 
 One caveat, stated in `LICENSE` too: the MIT licence covers this repository's
-code and cannot change the terms of its dependencies. All of them are permissive
+code and cannot change the terms of its dependencies. All of them are
+permissive
 except **pyfamsa** (a wrapper around FAMSA, used for the multiple alignment),
 which is **GPL-3.0-or-later**. Anyone redistributing the whole application with
 the alignment in place has to honour GPL-3.0 for that component. It is imported
-in exactly one function — `vhh_core.build_alignment` — so a derivative that does
+in exactly one function (`vhh_core.build_alignment`) so a derivative that does
 not need FAMSA can drop the dependency and is then free of it.
 
 ## Maintaining this app
@@ -412,13 +489,16 @@ Written for whoever picks this up, including its author in two years.
 `main` branch, main file `app.py`. The custom domain redirects to the Streamlit
 URL; Community Cloud cannot host a domain itself.
 
-**To redeploy**, push to `main` — Community Cloud rebuilds automatically. The
-container is rebuilt from the repository every time, so nothing the app writes to
-disk survives a restart. That is by design and is why the sequence library lives
+**To redeploy**, push to `main`, Community Cloud rebuilds automatically. The
+container is rebuilt from the repository every time, so nothing the app writes
+to
+disk survives a restart. That is by design and is why the sequence library
+lives
 in `data/library.csv` in the repository rather than in a database.
 
 **If a change does not appear**, or the app reports modules that are out of date
-after you have updated them, Streamlit is serving cached imports. **Reboot app**
+after you have updated them, Streamlit is serving cached imports. **Reboot
+app**
 in the Community Cloud dashboard clears it. This is the single most common
 confusing failure.
 
@@ -435,28 +515,26 @@ pytest
 
 **Two rules for the interface**, so `app.py` does not grow back into the
 3 911-line script it was: a screen draws and does not compute (cached work goes
-in `compute.py`), and no screen reads another screen's globals (every screen is a
+in `compute.py`), and no screen reads another screen's globals (every screen is
+a
 `render()` function).
 
 **The domain** renews annually and is the one piece that is neither in git nor
-redeployable. If it lapses, every published link breaks — including any in a
+redeployable. If it lapses, every published link breaks, including any in a
 paper. Keep auto-renew on, and make sure the card behind it is one that will
 still exist next year.
 
 ## Releases
 
 Versions follow `MAJOR.MINOR.PATCH`. The major number is not hypothetical here:
-the analysis modules are importable from a notebook, so changing the signature of
+the analysis modules are importable from a notebook, so changing the signature
+of
 a `vhh_core` function breaks somebody's notebook even when the app looks
 identical.
 
 To cut a release:
 
-1. Update `CHANGELOG.md` with an entry for the new version — Added / Changed /
-   Fixed, written for someone who uses the app.
-2. Bump `RELEASE` (and `BUILD`) in `shell.py`, and `version` / `date-released`
-   in `CITATION.cff`.
-3. `pytest` — three tests check that the footer, `CITATION.cff` and the changelog
+1. Update `CHANGELOG.md` with an entry for the new version (Added / Changed / Fixed, written for someone who uses the app. 2. Bump `RELEASE` (and `BUILD`) in `shell.py`, and `version` / `date-released` in `CITATION.cff`. 3. `pytest`) three tests check that the footer, `CITATION.cff` and the changelog
    all name the same version. They exist because a footer reading
    `version 20261028.2600` matched no git tag and no Zenodo record, so a bug
    report or a citation referred to something nobody could find.
@@ -464,8 +542,8 @@ To cut a release:
    `vX.Y.Z` and the changelog entry as the notes.
 5. Zenodo archives it automatically and mints a version DOI.
 
-Cut one when something meaningful has changed — a new section, a batch of fixes
-— not on every push. Three empty releases in a week read worse than one real one
+Cut one when something meaningful has changed (a new section, a batch of fixes)
+not on every push. Three empty releases in a week read worse than one real one
 a quarter.
 
 **Before citing the tool in a paper, cut a release and cite that release's
@@ -482,7 +560,7 @@ For the DOI:
 
 1. Sign in to [Zenodo](https://zenodo.org) **with GitHub** and authorise it.
 2. Zenodo → **GitHub** settings, find this repository, flip its toggle to **On**.
-   This installs a webhook. **Do this before releasing** — Zenodo only archives
+   This installs a webhook. **Do this before releasing**, Zenodo only archives
    releases created after the toggle is on, and a release made first is simply
    not seen.
 3. On GitHub: **Releases → Draft a new release**, tag `v1.0.0`, publish. That
@@ -499,18 +577,22 @@ The snapshot is of the repository as it stands at the tag, so `LICENSE` and
 have them.
 
 That archive is the real answer to "what happens to this when I move on": a
-GitHub URL and a Streamlit URL both depend on accounts someone has to keep alive,
+GitHub URL and a Streamlit URL both depend on accounts someone has to keep
+alive,
 and a DOI does not.
 
 ## Caveats
 
 - Every value is **theoretical**, derived from the sequence alone. Confirm pI by IEF or
-  cIEF and the extinction coefficient against a measured A280 before relying on them.
+  cIEF and the extinction coefficient against a measured A280 before relying on
+them.
 - Secondary-structure fractions are composition-based propensities, **not** a structure
-  prediction. Use DSSP on a model (AlphaFold3, ESMFold) for real secondary structure.
+  prediction. Use DSSP on a model (AlphaFold3, ESMFold) for real secondary
+structure.
 - The regex annotator assumes a canonical VHH scaffold. Where both methods run, a
-  disagreement between ANARCI and the regex anchors usually means a non-canonical
-  framework — worth investigating rather than ignoring.
+  disagreement between ANARCI and the regex anchors usually means a
+non-canonical
+  framework, worth investigating rather than ignoring.
 - The developability flags are triage thresholds, not a verdict. Tune them to your own
   experimental data in `vhh_core.stability_flags`.
 

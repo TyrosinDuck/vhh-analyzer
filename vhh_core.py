@@ -1,5 +1,5 @@
 """
-vhh_core — sequence-level characterization of VHH / single-domain antibodies.
+vhh_core, sequence-level characterization of VHH / single-domain antibodies.
 
 This module holds all the analysis logic, with no dependency on Streamlit or on a
 notebook. It is the single source of truth shared by the Jupyter notebook and the
@@ -105,7 +105,7 @@ def clean_sequence(seq: str) -> str:
     bad = sorted(set(s) - AA20)
     if bad:
         raise ValueError(
-            f"Non-standard residue(s) {', '.join(bad)} — remove or substitute them first"
+            f"Non-standard residue(s) {', '.join(bad)}, remove or substitute them first"
         )
     return s
 
@@ -180,7 +180,7 @@ def parse_input(text: str, max_sequences: int | None = None,
         # one long sequence is cheap, fifty of them is not, and the Streamlit
         # instance is shared with whoever else is using the app right now
         raise ValueError(
-            f"{total} residues submitted in total, limit is {ceiling} per run — "
+            f"{total} residues submitted in total, limit is {ceiling} per run, "
             "split the submission or shorten the longest sequences")
     return cleaned
 
@@ -217,8 +217,8 @@ VHH_KINDS = {KIND_VHH, KIND_AMBIGUOUS}
 # "VHH analysis" is not camelid-specific at all: IMGT numbering, the CDR windows,
 # germline assignment, humanness and CDR3 grouping apply to any heavy-chain
 # variable domain, VHH or conventional VH alike. Only two things are genuinely
-# camelid — how the FR2 hallmark tetrad is *read*, and the additional CDR1-CDR3
-# disulfide — and those are labelled where they appear rather than used to
+# camelid, how the FR2 hallmark tetrad is *read*, and the additional CDR1-CDR3
+# disulfide, and those are labelled where they appear rather than used to
 # withhold everything else.
 HEAVY_KINDS = {KIND_VHH, KIND_AMBIGUOUS, KIND_VH}
 
@@ -263,7 +263,7 @@ def classify(seq: str, method: str | None = None) -> dict:
 
     if numbered[0] is None:
         out.update({"kind": KIND_OTHER, "is_vhh": False, "full_analysis": False,
-                    "note": "ANARCI finds no immunoglobulin variable domain — "
+                    "note": "ANARCI finds no immunoglobulin variable domain, "
                             "generic analyses only"})
         return out
 
@@ -278,7 +278,7 @@ def classify(seq: str, method: str | None = None) -> dict:
         out.update({
             "kind": KIND_FUSION, "is_vhh": False, "full_analysis": False,
             "note": f"a {chain}-chain V domain spans residues {start + 1}-{end + 1} "
-                    f"({coverage:.0%} of the sequence) — this looks like a fusion "
+                    f"({coverage:.0%} of the sequence), this looks like a fusion "
                     f"or a multi-domain protein, so the VHH analyses are skipped",
         })
         return out
@@ -298,12 +298,12 @@ def classify(seq: str, method: str | None = None) -> dict:
     elif score == 1:
         out.update({"kind": KIND_AMBIGUOUS, "is_vhh": True,
                     "note": "heavy-chain V domain with only 1/4 camelid "
-                            "hallmarks — humanised VHH or VH-like construct; "
+                            "hallmarks, humanised VHH or VH-like construct; "
                             "VHH analyses are still run, read them with that in "
                             "mind"})
     else:
         out.update({"kind": KIND_VH, "is_vhh": False,
-                    "note": "heavy-chain V domain with a VH-like FR2 tetrad — "
+                    "note": "heavy-chain V domain with a VH-like FR2 tetrad, "
                             "a conventional VH, not a VHH. The heavy-chain "
                             "analyses still apply and are run"})
     out["full_analysis"] = out["kind"] in HEAVY_KINDS
@@ -367,7 +367,7 @@ def characterize(name: str, seq: str, ph: float | None = None) -> dict:
         "n_Cys": counts["C"],
         # Lysines plus the free N-terminal alpha-amine: the primary amines an
         # NHS-ester label will react with. Counted from sequence, so this is how
-        # many exist, not how many are solvent-accessible — that needs a
+        # many exist, not how many are solvent-accessible, that needs a
         # structure. Treat it as the upper bound on labelling sites.
         "n_Lys": counts["K"],
         "n_primary_amines": counts["K"] + 1,
@@ -388,7 +388,7 @@ def lysine_sites(seq: str, annotation: dict | None = None) -> pd.DataFrame:
     For conjugation planning. An NHS ester reacts with the lysine side-chain
     amines and the N-terminal alpha-amine indiscriminately, so a VHH with a
     lysine in a CDR is one where random labelling risks the paratope. Which ones
-    are *accessible* is a structural question this cannot answer — what it gives
+    are *accessible* is a structural question this cannot answer, what it gives
     you is where they are.
     """
     seq = clean_sequence(seq)
@@ -405,28 +405,27 @@ def lysine_sites(seq: str, annotation: dict | None = None) -> pd.DataFrame:
         rows.append({
             "site": f"K{i}", "position": i, "residue": "K", "region": region,
             "in_CDR": region.startswith("CDR"),
-            "note": "in a CDR — random labelling here risks the paratope"
+            "note": "in a CDR, random labelling here risks the paratope"
                     if region.startswith("CDR") else "",
         })
     return pd.DataFrame(rows)
 
 def stability_flags(row: dict | pd.Series, ph: float | None = None) -> list[str]:
-    """Rule-based developability warnings. Thresholds are deliberately simple —
-    treat them as triage, not as a verdict."""
+    """Rule-based developability warnings. Thresholds are deliberately simple, treat them as triage, not as a verdict."""
     ph = DEFAULTS["ph"] if ph is None else ph
     flags = []
     if row["instability_index"] >= 40:
-        flags.append("Instability index ≥ 40 — predicted unstable in vitro")
+        flags.append("Instability index ≥ 40, predicted unstable in vitro")
     if row["gravy"] > -0.2:
-        flags.append("GRAVY > −0.2 — relatively hydrophobic, aggregation-prone")
+        flags.append("GRAVY > −0.2, relatively hydrophobic, aggregation-prone")
     if abs(row["net_charge"]) < 2:
-        flags.append(f"|net charge| < 2 at pH {ph} — low colloidal stability")
+        flags.append(f"|net charge| < 2 at pH {ph}, low colloidal stability")
     if abs(row["pI"] - ph) < 1:
-        flags.append("Theoretical pI close to the working pH — risk of precipitation")
+        flags.append("Theoretical pI close to the working pH, risk of precipitation")
     if row["n_Cys"] > 2:
-        flags.append(f"{row['n_Cys']} cysteines — possible unpaired or extra disulfide")
+        flags.append(f"{row['n_Cys']} cysteines, possible unpaired or extra disulfide")
     if row["n_Met"] >= 3:
-        flags.append(f"{row['n_Met']} methionines — oxidation liability")
+        flags.append(f"{row['n_Met']} methionines, oxidation liability")
     return flags
 
 
@@ -535,7 +534,7 @@ def annotate_anarci(seq: str, scheme: str = "imgt") -> dict:
 HALLMARK_POSITIONS = [
     # IMGT, Kabat, camelid-preferred, VH3 consensus, note
     (42, 37, set("FYLH"), "V", "VH–VL interface; F/Y is the classic VHH signature"),
-    (49, 44, set("EQDG"), "G", "least discriminating — G also occurs in VH3"),
+    (49, 44, set("EQDG"), "G", "least discriminating, G also occurs in VH3"),
     (50, 45, set("RCLP"), "L", "R is the classic VHH signature"),
     (52, 47, set("GLFWS"), "W", "W indicates a VH-like interface"),
 ]
@@ -547,7 +546,7 @@ def imgt_position_map(seq: str) -> dict[int, str]:
     Derived from the cached numbering rather than from its own ANARCI call.
     """
     # Insertion-coded positions are kept and overwrite their base number, which
-    # is what the previous implementation did — 111A lands on key 111. It only
+    # is what the previous implementation did, 111A lands on key 111. It only
     # matters inside a long CDR3, never at the hallmark positions this feeds.
     return {num: aa for num, _ins, aa, _idx in _anarci_numbering(clean_sequence(seq))}
 
@@ -594,7 +593,7 @@ def germline(seq: str, species: tuple[str, ...] = ("alpaca", "human")) -> dict:
     """Closest germline V and J gene per species, with percent identity.
 
     Running the assignment once per species gives both the camelid germline the
-    sequence derives from and its identity to the closest human germline — the
+    sequence derives from and its identity to the closest human germline, the
     latter being the usual first-pass humanness indicator.
     """
     from anarci import anarci
@@ -639,21 +638,21 @@ RISK_THRESHOLDS = (2, 6)          # < 2 Low, < 6 Medium, >= 6 High
 LIABILITY_RULES = [
     # (label, regex, base score, source, note)
     ("N-glycosylation", r"N[^P][ST]", 15, "notebook",
-     "N-x-S/T sequon — glycosylation and heterogeneity in eukaryotic expression"),
+     "N-x-S/T sequon, glycosylation and heterogeneity in eukaryotic expression"),
     ("Deamidation (high)", r"N[G]", 10, "notebook",
-     "NG — fast asparagine deamidation"),
+     "NG, fast asparagine deamidation"),
     ("Deamidation (moderate)", r"N[STN]", 5, "notebook",
-     "NS/NT/NN — slower deamidation context"),
+     "NS/NT/NN, slower deamidation context"),
     ("Isomerisation (high)", r"D[G]", 10, "notebook",
-     "DG — fast aspartate isomerisation"),
+     "DG, fast aspartate isomerisation"),
     ("Isomerisation (moderate)", r"D[STD]", 5, "notebook",
-     "DS/DT/DD — slower isomerisation context"),
-    ("Oxidation (Met)", r"M", 4, "notebook", "methionine — oxidation under stress"),
+     "DS/DT/DD, slower isomerisation context"),
+    ("Oxidation (Met)", r"M", 4, "notebook", "methionine, oxidation under stress"),
     ("Oxidation (Trp)", r"W", 3, "notebook",
-     "tryptophan — oxidation, especially in CDRs"),
-    ("Fragmentation", r"DP", 3, "added", "DP — acid-labile peptide bond"),
+     "tryptophan, oxidation, especially in CDRs"),
+    ("Fragmentation", r"DP", 3, "added", "DP, acid-labile peptide bond"),
     ("Integrin binding", r"RGD", 2, "added",
-     "RGD motif — potential integrin binding"),
+     "RGD motif, potential integrin binding"),
     ("Hydrophobic patch", r"[FILVWY]{4,}", 2, "added",
      "four or more consecutive hydrophobic residues"),
 ]
@@ -729,7 +728,7 @@ def find_liabilities(seq: str, annotation: dict | None = None,
 
     # Cysteines. The canonical-pair logic below is specific to a VHH: it assumes
     # exactly one intradomain disulfide, between FR1 and FR3. Applied to any other
-    # protein it is simply wrong — lysozyme's eight cysteines form four ordinary
+    # protein it is simply wrong, lysozyme's eight cysteines form four ordinary
     # disulfides and are not eight free thiols. So without an annotation (which is
     # what "not a VHH" looks like here) fall back to the only thing that holds for
     # any protein: an odd number of cysteines guarantees one unpaired thiol, an
@@ -742,7 +741,7 @@ def find_liabilities(seq: str, annotation: dict | None = None,
                 "position": cys[-1], "range": str(cys[-1]), "region": "-",
                 "in_CDR": False, "score": 8.0, "risk": risk_category(8),
                 "source": "added",
-                "note": f"{len(cys)} cysteines — an odd count means at least one "
+                "note": f"{len(cys)} cysteines, an odd count means at least one "
                         "free thiol",
             })
     elif len(cys) > 2:
@@ -754,7 +753,7 @@ def find_liabilities(seq: str, annotation: dict | None = None,
                     "range": str(pos), "region": region,
                     "in_CDR": region.startswith("CDR"), "score": 8.0,
                     "risk": risk_category(8), "source": "notebook",
-                    "note": "outside the canonical FR1/FR3 pair — possible free "
+                    "note": "outside the canonical FR1/FR3 pair, possible free "
                             "thiol or additional disulfide",
                 })
     elif len(cys) < 2:
@@ -762,7 +761,7 @@ def find_liabilities(seq: str, annotation: dict | None = None,
             "liability": "Missing cysteine", "motif": "-", "position": 0,
             "range": "-", "region": "-", "in_CDR": False, "score": 8.0,
             "risk": risk_category(8), "source": "added",
-            "note": f"only {len(cys)} Cys — the canonical intradomain disulfide is "
+            "note": f"only {len(cys)} Cys, the canonical intradomain disulfide is "
                     "incomplete",
         })
 
@@ -1039,12 +1038,12 @@ def compute_features(seq: str, ctx: dict | None = None) -> dict:
     return out
 
 
-@register_feature("charge_pH5", "Net charge at pH 5 — relevant for cation-exchange capture")
+@register_feature("charge_pH5", "Net charge at pH 5, relevant for cation-exchange capture")
 def _charge_ph5(seq, ctx):
     return round(ProteinAnalysis(seq).charge_at_pH(5.0), 2)
 
 
-@register_feature("frac_KR", "Fraction of Lys + Arg — proxy for positive surface patches")
+@register_feature("frac_KR", "Fraction of Lys + Arg, proxy for positive surface patches")
 def _frac_kr(seq, ctx):
     return round((seq.count("K") + seq.count("R")) / len(seq), 3)
 
@@ -1055,7 +1054,7 @@ def _cdr3_len(seq, ctx):
     return len(ann["CDR3"]["seq"]) if ann else np.nan
 
 
-@register_feature("cdr3_gravy", "GRAVY restricted to CDR3 — hydrophobic loops drive non-specific binding")
+@register_feature("cdr3_gravy", "GRAVY restricted to CDR3, hydrophobic loops drive non-specific binding")
 def _cdr3_gravy(seq, ctx):
     ann = ctx.get("annotation")
     if not ann or not ann["CDR3"]["seq"]:
@@ -1063,12 +1062,12 @@ def _cdr3_gravy(seq, ctx):
     return round(ProteinAnalysis(ann["CDR3"]["seq"]).gravy(), 3)
 
 
-@register_feature("n_motif_NG", "NG motifs — deamidation hotspots")
+@register_feature("n_motif_NG", "NG motifs, deamidation hotspots")
 def _ng(seq, ctx):
     return len(re.findall(r"NG", seq))
 
 
-@register_feature("n_motif_DP_DG", "DP / DG motifs — isomerisation and fragmentation hotspots")
+@register_feature("n_motif_DP_DG", "DP / DG motifs, isomerisation and fragmentation hotspots")
 def _dp(seq, ctx):
     return len(re.findall(r"D[PG]", seq))
 
@@ -1400,7 +1399,7 @@ _BLOSUM62 = None
 
 
 def _family_aligner():
-    """Global BLOSUM62 aligner, built once — constructing it is not free."""
+    """Global BLOSUM62 aligner, built once, constructing it is not free."""
     global _FAMILY_ALIGNER, _BLOSUM62
     if _FAMILY_ALIGNER is None:
         from Bio import Align
@@ -1470,7 +1469,7 @@ def cluster_families(seqs: dict[str, str], annotations: dict,
 
     ``cutoff`` is a percent identity: two sequences at or above it belong to the
     same family. ``linkage_method`` decides what that means for a family of more
-    than two members — ``"complete"`` guarantees every pair inside a family
+    than two members, ``"complete"`` guarantees every pair inside a family
     meets the cutoff, ``"average"`` merges on the mean distance and is more
     permissive, so a family can then contain pairs below the cutoff. The returned
     diagnostic reports each family's worst internal pair, which is how you see
@@ -1482,7 +1481,7 @@ def cluster_families(seqs: dict[str, str], annotations: dict,
 
     Returns a dict with ``assignment`` (one row per sequence), ``families`` (one
     row per family), ``identity`` and ``similarity`` matrices, the scipy
-    ``linkage`` matrix for the dendrogram, and ``skipped`` — sequences left out
+    ``linkage`` matrix for the dendrogram, and ``skipped``, sequences left out
     because the region could not be annotated.
     """
     import numpy as np
@@ -1605,7 +1604,7 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
     ax.set_xticks(ticks)
     ax.set_xticklabels([f"{100 - t * 100:.0f}" for t in ticks])
     ax.set_xlabel(f"{result['region']} identity (%)")
-    ax.set_title(title or f"Clonal families — {result['region']}, "
+    ax.set_title(title or f"Clonal families, {result['region']}, "
                           f"{result['linkage_method']} linkage", fontsize=10)
     ax.tick_params(axis="y", labelsize=8)
     for side in ("top", "right"):
@@ -1621,7 +1620,7 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
 
 @lru_cache(maxsize=512)
 def _anarci_numbering(seq: str) -> tuple[tuple[int, str, str, int], ...]:
-    """ANARCI numbering for one sequence — the single place that calls ANARCI.
+    """ANARCI numbering for one sequence, the single place that calls ANARCI.
 
     Cached because a full page build asks for the same sequence's numbering from
     seven different directions (annotation, hallmarks, humanness, disulfides,
@@ -1676,7 +1675,7 @@ def imgt_region(num: int) -> str:
 #
 # So read the profile for WHERE along the sequence the aggregation-prone stretches
 # are, and compare sequences against each other. Do not read the absolute value
-# as a predicted solubility — for a validated number, run the sequence through
+# as a predicted solubility, for a validated number, run the sequence through
 # the CamSol or AGGRESCAN server.
 #
 # The four components, per residue:
@@ -2199,7 +2198,7 @@ def apply_repairs(seq: str, substitutions: list[str]) -> tuple[str, list[str]]:
 # Comparison against a reference sequence
 # ---------------------------------------------------------------------------
 # Humanisation variants, a Sanger clone against the construct it should be, a
-# panel against its parent: all the same question — which positions differ, and
+# panel against its parent: all the same question, which positions differ, and
 # where. Done in IMGT numbering rather than by raw alignment, so an insertion in
 # CDR3 does not shift every downstream position and turn one mutation into
 # twenty.
@@ -2214,7 +2213,7 @@ def compare_to_reference(reference: str, seqs: dict[str, str],
     whether the substitution is conservative by BLOSUM62.
 
     A position present in one sequence and absent from the other is reported as
-    an insertion or a deletion rather than silently dropped — in a CDR3 that is
+    an insertion or a deletion rather than silently dropped, in a CDR3 that is
     usually the most interesting difference there is.
     """
     ref_map = {f"{n}{i}" if i else str(n): (aa, idx)
@@ -2314,7 +2313,7 @@ def plot_differences(result: dict, region_colors: dict | None = None):
     ax.set_ylim(-0.6, len(names) - 0.4)
     ax.set_xlim(0, 130)
     ax.set_xlabel("IMGT position")
-    ax.set_title(f"Differences from {result['reference_name']} — "
+    ax.set_title(f"Differences from {result['reference_name']}, "
                  "red non-conservative, blue conservative, grey indel",
                  fontsize=10)
     for side in ("top", "right", "left"):
@@ -2459,7 +2458,7 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
             try:
                 hm = hallmarks(seq, ann)
                 story.append(Paragraph(
-                    f"VHH hallmarks — tetrad {hm['tetrad']}, "
+                    f"VHH hallmarks, tetrad {hm['tetrad']}, "
                     f"{hm['camelid_score']}/4 camelid ({hm['source']})", h3))
                 hrows = [["IMGT", "Kabat", "Residue", "VH3", "Camelid", "Verdict"]]
                 hrows += [[str(p["IMGT"]), str(p["Kabat"]), p["residue"], p["VH3"],
@@ -2618,7 +2617,7 @@ def plot_chou_fasman(seq: str, name: str = "", window: int = 5,
     ax.axhline(100, color="#555555", lw=0.8, ls="--")
     ax.set_ylabel("Propensity")
     title = "Predicted secondary structure (Chou–Fasman heuristic)"
-    ax.set_title(f"{title} — {name}" if name else title, fontsize=11)
+    ax.set_title(f"{title}, {name}" if name else title, fontsize=11)
 
     for i, s in enumerate(prof["state"]):
         ax_track.axvspan(i + 0.5, i + 1.5, color=STATE_COLORS[s], lw=0)
@@ -2815,7 +2814,7 @@ def reverse_translate(protein: str, avoid_sites: dict[str, str] | None = None,
 
 
 def translate_dna(dna: str) -> str:
-    """Translate DNA back to protein — used to verify a back-translation."""
+    """Translate DNA back to protein, used to verify a back-translation."""
     from Bio.Seq import Seq
 
     return str(Seq(dna).translate(to_stop=True))

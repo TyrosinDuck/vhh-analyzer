@@ -16,14 +16,16 @@ either is readable by anyone, for good.
 
 Do not paste unpublished sequences, anything under an NDA, or anything from a
 collaborator who has not agreed. A bug can almost always be reproduced with a
-published VHH — there are 22 of them in the library, and `cAbLys3` or
-`caplacizumab` will usually do. If a defect genuinely only appears on a sequence
+published VHH, there are 22 of them in the library, and `cAbLys3` or
+`caplacizumab` will usually do. If a defect genuinely only appears on a
+sequence
 you cannot share, say so in the issue and describe the shape of it: its length,
 whether the CDR3 is unusual, whether it has extra cysteines. That is often
 enough to find the problem.
 
-If you need to analyse confidential sequences at all, run the app locally rather
-than using the public deployment — the README explains how. Nothing is stored
+If you need to analyse confidential sequences at all, run the app locally
+rather
+than using the public deployment, the README explains how. Nothing is stored
 server-side either way, but local is local.
 
 ---
@@ -32,7 +34,7 @@ server-side either way, but local is local.
 
 Open an issue. What makes one easy to fix:
 
-- **The version**, from the footer at the bottom of any page — for example
+- **The version**, from the footer at the bottom of any page, for example
   `v1.0.0 (build 20261028)`. Without it there is no way to know whether the
   defect still exists.
 - **Which screen and which panel**, since the same number can be reached from
@@ -51,7 +53,7 @@ sending; it is the ones nobody mentions that stay broken.
 Most of this app computes things that look plausible whether or not they are
 right, which is precisely what makes a quiet error dangerous. If a value
 disagrees with ANARCI, with a published figure, with a gel, or with what you
-measured at the bench — that report is worth more than a feature request, and it
+measured at the bench, that report is worth more than a feature request, and it
 will be treated that way.
 
 Please include what you compared against. "The pI disagrees with my IEF" is the
@@ -63,13 +65,14 @@ allowed to differ, and knowing by how much is the point.
 Open an issue and label it as a question. There is no mailing list and no chat.
 
 Read [`MANUAL.md`](MANUAL.md) first if you have not: it documents every screen,
-what each number means, and — more usefully — how far to trust it. Most questions
+what each number means, and (more usefully) how far to trust it. Most questions
 about what a value means are answered there, including the ones about what the
 app deliberately does not claim.
 
 ## Suggesting a change
 
-Open an issue before writing code, so that effort is not spent on something that
+Open an issue before writing code, so that effort is not spent on something
+that
 will be declined. Some things are out of scope on purpose:
 
 - **Predictions parameterised against data this project does not have.** The
@@ -108,8 +111,9 @@ When you change a module, bump its `__version__` and its entry in
 As valuable here, and often more so:
 
 - **A correction to a threshold or a constant**, with a reference. Several
-  numbers in this app are stated as thresholds rather than validated parameters
-  — the surface-patch exposure cut-off was set from a single structure, and says
+  numbers in this app are stated as thresholds rather than validated
+parameters, the surface-patch exposure cut-off was set from a single structure,
+and says
   so in `structure.py`. A better-founded value, with the evidence, is welcome.
 - **A reference that should be cited** where the code currently cites nothing.
 - **A published sequence for the library**, with its PDB entry or accession and

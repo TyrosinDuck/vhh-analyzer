@@ -1,5 +1,5 @@
 """
-Metadata tests — the three lines nobody ever looks at.
+Metadata tests, the three lines nobody ever looks at.
 
 `CITATION.cff` and `LICENSE` carry the author's name, his ORCID, the concept
 DOI and the copyright holder. None of it affects a single thing the app does, so
@@ -38,7 +38,7 @@ CONCEPT_DOI = "10.5281/zenodo.23742269"
 @pytest.fixture(scope="module")
 def citation():
     path = ROOT / "CITATION.cff"
-    assert path.exists(), "CITATION.cff is missing — the repository is not citable"
+    assert path.exists(), "CITATION.cff is missing, the repository is not citable"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
@@ -60,7 +60,7 @@ def test_the_concept_doi_is_present_and_well_formed(citation):
     doi = citation.get("doi")
     assert doi, (
         "CITATION.cff has no doi. If a copy of the repository overwrote it, the "
-        f"concept DOI is {CONCEPT_DOI} — it resolves to the latest release.")
+        f"concept DOI is {CONCEPT_DOI}, it resolves to the latest release.")
     assert not doi.startswith("http"), \
         f"doi must be the bare identifier, not a URL: got {doi!r}"
     assert re.fullmatch(r"10\.5281/zenodo\.\d+", doi), \
@@ -81,7 +81,7 @@ def test_the_author_is_attributed_correctly(citation):
     """
     authors = citation["authors"]
     assert len(authors) == 1, \
-        f"expected one author, found {len(authors)} — has a contributor been added?"
+        f"expected one author, found {len(authors)}, has a contributor been added?"
     author = authors[0]
     assert author.get("family-names") == AUTHOR_FAMILY_NAME, \
         f"family name is {author.get('family-names')!r}, expected {AUTHOR_FAMILY_NAME!r}"
@@ -92,7 +92,7 @@ def test_the_author_is_attributed_correctly(citation):
 def test_the_licence_exists_and_names_the_right_holder():
     """MIT with the wrong name in the copyright line grants nothing cleanly."""
     path = ROOT / "LICENSE"
-    assert path.exists(), "LICENSE is missing — without it the default is all rights reserved"
+    assert path.exists(), "LICENSE is missing, without it the default is all rights reserved"
     text = path.read_text(encoding="utf-8")
     assert "MIT License" in text
     assert AUTHOR_FAMILY_NAME in text, \
@@ -176,7 +176,7 @@ def test_the_app_and_the_citation_file_agree(citation):
     assert shell.LICENCE == citation["license"]
     assert shell.RELEASE == citation.get("version"), (
         f"the app reports release {shell.RELEASE!r} but CITATION.cff says "
-        f"{citation.get('version')!r} — the footer, the git tag and the Zenodo "
+        f"{citation.get('version')!r}, the footer, the git tag and the Zenodo "
         f"record are supposed to name the same thing")
 
 
@@ -204,5 +204,5 @@ def test_the_changelog_documents_the_current_release():
     assert path.exists(), "CHANGELOG.md is missing"
     text = path.read_text(encoding="utf-8")
     assert f"[{shell.RELEASE}]" in text, (
-        f"CHANGELOG.md has no entry for {shell.RELEASE} — bump the changelog "
+        f"CHANGELOG.md has no entry for {shell.RELEASE}, bump the changelog "
         f"when you bump the release")

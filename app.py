@@ -1,13 +1,13 @@
 """
-VHH tool box — Streamlit front-end.
+VHH tool box, Streamlit front-end.
 
 The app is organised in three sections, reachable from the home page and from
 the sidebar:
 
-* **Sequence analysis** — characterization, CDR annotation, alignment, DNA
-* **Sanger sequencing** — extract VHHs from .ab1 chromatograms, then send the
+* **Sequence analysis**: characterization, CDR annotation, alignment, DNA
+* **Sanger sequencing**: extract VHHs from .ab1 chromatograms, then send the
   ones you pick to the analysis section
-* **In-silico cloning** — pick a backbone, an insert and get the enzymes and
+* **In-silico cloning**: pick a backbone, an insert and get the enzymes and
   primers that fit
 
 Data handling: submitted sequences are never written to a persistent file,
@@ -79,15 +79,15 @@ from compute import (_analyze, _analyze_one, aggregation_for, analyze_one,
 
 # Three published sequences rather than invented ones, each verifiable: see
 # data/library.csv for their PDB entries. The first of these used to be labelled
-# "NbExample1" and presented as a generic VHH — it is in fact caplacizumab, which
+# "NbExample1" and presented as a generic VHH, it is in fact caplacizumab, which
 # is a poor thing to leave mislabelled in a public app.
 
 # Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
-# users would notice — it is what someone will quote back to you in a bug report.
+# users would notice, it is what someone will quote back to you in a bug report.
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
-# actually waits for — not just the analysis loop.
+# actually waits for, not just the analysis loop.
 _RUN_STARTED = time.perf_counter()
 
 # The app name and its icon live here so the page title, the sidebar, the home
@@ -123,7 +123,7 @@ _stale = [f"`{name}.py` (has {getattr(_mod, '__version__', 'no version')}, "
           for _mod in (importlib.import_module(name),)
           if getattr(_mod, "__version__", None) != want]
 if _stale:
-    st.error("Some modules are out of date — update " + ", ".join(_stale) +
+    st.error("Some modules are out of date, update " + ", ".join(_stale) +
              " alongside `app.py`, they are released together.")
     st.stop()
 
@@ -163,7 +163,7 @@ if _stale:
 
 
 
-# Streamlit re-runs the whole script — and every tab body — on each interaction,
+# Streamlit re-runs the whole script (and every tab body) on each interaction,
 # so without caching, moving one slider re-renders every figure. These return
 # PNG bytes rather than figure objects because bytes cache cleanly and a static
 # image is all these plots need; the PDF builder rebuilds real figures on demand.
@@ -316,7 +316,7 @@ with st.sidebar:
             help="'auto' uses ANARCI when available and falls back to the regex "
                  "anchors otherwise.")
         st.caption(f"ANARCI: "
-                   f"{'available' if has_anarci else 'not installed — regex only'}")
+                   f"{'available' if has_anarci else 'not installed, regex only'}")
         st.divider()
     else:
         ph = vc.DEFAULTS["ph"]
@@ -331,7 +331,7 @@ the results are kept in a short-lived cache ({CACHE_TTL // 60} min,
 {CACHE_MAX_ENTRIES} entries max) that only exists to keep the controls responsive.
 
 This app runs on Streamlit Community Cloud, i.e. on third-party infrastructure.
-Traffic is encrypted, nothing is stored — but the data does pass through a server
+Traffic is encrypted, nothing is stored, but the data does pass through a server
 that is not yours.
 
 **For confidential or unpublished material**, run the app on your own machine

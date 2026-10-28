@@ -37,8 +37,8 @@ def render(method: str) -> None:
     st.markdown(
         "Every other section of this app reasons from sequence alone, because a "
         "sequence is what you always have. Several of the questions it answers are "
-        "really structural questions being approximated — **which cysteines pair, "
-        "whether a liability sits on the surface, where the hydrophobic area is** — "
+        "really structural questions being approximated, **which cysteines pair, "
+        "whether a liability sits on the surface, where the hydrophobic area is**, "
         "and once a model exists the approximation can be replaced by a "
         "measurement. Upload a crystal structure or a predicted model.")
 
@@ -61,11 +61,11 @@ def render(method: str) -> None:
         st.info("No structure loaded yet.")
         with st.expander("Where to get one"):
             st.markdown("""
-- **RCSB PDB** — `https://www.rcsb.org/`, *Download Files → PDB Format*. For a
+- **RCSB PDB**: `https://www.rcsb.org/`, *Download Files → PDB Format*. For a
   VHH–antigen complex, download the whole entry rather than one chain, otherwise
   there is no interface left to compute.
-- **AlphaFold DB** — `https://alphafold.ebi.ac.uk/`, search a UniProt accession.
-- **Your own predictions** — AlphaFold2, AlphaFold3 and ColabFold outputs are
+- **AlphaFold DB**: `https://alphafold.ebi.ac.uk/`, search a UniProt accession.
+- **Your own predictions**: AlphaFold2, AlphaFold3 and ColabFold outputs are
   read directly, pLDDT included. For AlphaFold3, use the `.cif` it writes.
 
 This app does not fetch structures for you, deliberately: downloading on your
@@ -87,7 +87,7 @@ behalf would mean this server making requests that look like they came from you.
 
     head = st.columns([3, 1])
     with head[0]:
-        st.success(f"**{fname}** — {len(chains)} chain(s), "
+        st.success(f"**{fname}**, {len(chains)} chain(s), "
                    f"{int(chains['length'].sum())} residues.")
     with head[1]:
         if st.button("Clear structure", key="struct_clear", **FIT):
@@ -97,7 +97,7 @@ behalf would mean this server making requests that look like they came from you.
 
     if n_models > 1:
         st.info(f"The file holds {n_models} models (an NMR ensemble, or several "
-                f"predictions). Only the first is used — everything below "
+                f"predictions). Only the first is used, everything below "
                 f"describes model 1.")
 
     st.dataframe(chains, hide_index=True, **FIT,
@@ -105,7 +105,7 @@ behalf would mean this server making requests that look like they came from you.
                      "chain": "Chain", "length": "Residues",
                      "first": "First", "last": "Last",
                      "numbering_gaps": st.column_config.NumberColumn(
-                         "Gaps", help="Breaks in the residue numbering — "
+                         "Gaps", help="Breaks in the residue numbering, "
                                       "unmodelled loops, usually."),
                      "mean_b": st.column_config.NumberColumn(
                          "Mean B / pLDDT",
@@ -140,7 +140,7 @@ behalf would mean this server making requests that look like they came from you.
                  "the sequences loaded in the analysis section maps the model "
                  "onto the full-length construct, so positions match.")
 
-    # Keyed by residue number throughout — see structure.resnum_map for why.
+    # Keyed by residue number throughout, see structure.resnum_map for why.
     if link_choice == link_options[0]:
         target_seq, target_name = chain_seq, f"{fname}:{chain}"
         offset_map = st_identity_map(raw, fname, chain)
@@ -154,7 +154,7 @@ behalf would mean this server making requests that look like they came from you.
                    f"**{target_name}** ({len(target_seq)} residues): "
                    f"{covered} residues aligned at {map_identity:.1%} identity.")
         if map_identity < 0.90:
-            st.warning(message + " That is low — check this is the same molecule. "
+            st.warning(message + " That is low, check this is the same molecule. "
                                  "Positions below may be wrong.")
         else:
             st.caption(message)
@@ -181,13 +181,13 @@ behalf would mean this server making requests that look like they came from you.
         st.subheader("What the B-factor column holds")
         st.markdown(
             "A predicted model stores **pLDDT** in the column a crystal structure "
-            "uses for the **B-factor**. The two mean opposite things — high pLDDT "
-            "is good, high B is bad — and no field in the file states which it is, "
+            "uses for the **B-factor**. The two mean opposite things, high pLDDT "
+            "is good, high B is bad, and no field in the file states which it is, "
             "so this is a guess you can override.")
         guess_label = {"pLDDT": "pLDDT (predicted model)",
                        "B-factor": "B-factor (experimental structure)",
                        "unknown": "could not tell"}[kind_guess]
-        st.caption(f"Guess: **{guess_label}** — {kind_reason}")
+        st.caption(f"Guess: **{guess_label}**, {kind_reason}")
         kind = st.radio("Read the column as",
                         ["pLDDT", "B-factor"],
                         index=0 if kind_guess == "pLDDT" else 1,
@@ -216,7 +216,7 @@ behalf would mean this server making requests that look like they came from you.
 
         if any(int(g) for g in chains["numbering_gaps"]):
             st.warning(
-                "There are breaks in the residue numbering — unmodelled loops. "
+                "There are breaks in the residue numbering, unmodelled loops. "
                 "Residues that are not in the model have no accessibility and no "
                 "exposure call; they are reported as *not modelled* rather than "
                 "as buried.")
@@ -277,7 +277,7 @@ behalf would mean this server making requests that look like they came from you.
                 else:
                     st.warning(
                         "The counts disagree. The measurement is the one to "
-                        "believe — but check first that the model covers every "
+                        "believe, but check first that the model covers every "
                         "cysteine in the sequence: a cysteine in an unmodelled "
                         "loop cannot be seen to pair.")
 
@@ -300,7 +300,7 @@ behalf would mean this server making requests that look like they came from you.
 
         st.pyplot(stx.plot_exposure(
             exposure, annotation, offset_map,
-            title=f"Relative solvent accessibility — chain {chain}"), **FIT)
+            title=f"Relative solvent accessibility, chain {chain}"), **FIT)
 
         if partners:
             st.caption(
@@ -410,7 +410,7 @@ behalf would mean this server making requests that look like they came from you.
             contact = st.slider("Contact distance (Å)", 3.5, 8.0,
                                 stx.PATCH_CONTACT, 0.5, key="struct_patch_d",
                                 help="Between closest side-chain heavy atoms, "
-                                     "not between centroids — Trp and Arg carry "
+                                     "not between centroids, Trp and Arg carry "
                                      "their bulk far from the backbone.")
         with ctrl[2]:
             min_size = st.slider("Minimum patch size", 2, 8,
@@ -437,8 +437,8 @@ behalf would mean this server making requests that look like they came from you.
         st.warning(
             "**A transparent composite, not SAP or CamSol.** Those methods are "
             "parameterised against experimental aggregation data this app does "
-            "not have. This asks a simpler and fully stated question — which "
-            "strongly hydrophobic residues are both exposed and adjacent — and "
+            "not have. This asks a simpler and fully stated question, which "
+            "strongly hydrophobic residues are both exposed and adjacent, and "
             "the three thresholds above are yours to move. Read it as *here is a "
             "hydrophobic area worth looking at*, never as a predicted "
             "aggregation rate.")
@@ -448,13 +448,13 @@ behalf would mean this server making requests that look like they came from you.
         st.subheader(f"Chain {chain} against {', '.join(partners)}")
         st.markdown(
             "A residue is at the interface if it loses solvent accessibility when "
-            "the partner is present. ΔSASA — accessible alone minus accessible in "
-            "the complex — is the standard operational definition, and unlike a "
+            "the partner is present. ΔSASA, accessible alone minus accessible in "
+            "the complex, is the standard operational definition, and unlike a "
             "distance cutoff it weights each residue by how much surface it "
             "actually commits to the contact.")
         iface = st_interface(raw, fname, chain, tuple(partners))
         if not len(iface):
-            st.info("No residue of this chain loses accessibility — the chains "
+            st.info("No residue of this chain loses accessibility, the chains "
                     "are not in contact in this model.")
         else:
             if len(partners) == 1:
@@ -462,7 +462,7 @@ behalf would mean this server making requests that look like they came from you.
                 cols = st.columns(4)
                 cols[0].metric("Buried per side",
                                f"{summary['bsa_per_side']:.0f} Å²",
-                               help="Half the total buried surface — the number "
+                               help="Half the total buried surface, the number "
                                     "usually quoted for an interface.")
                 cols[1].metric("Total buried", f"{summary['bsa_total']:.0f} Å²")
                 cols[2].metric(f"Residues on {chain}", summary["n_residues_a"])
@@ -483,7 +483,7 @@ behalf would mean this server making requests that look like they came from you.
                                                      offset_map)
                 by_region = (show.groupby("region")["delta_sasa"].sum()
                              .sort_values(ascending=False))
-                st.markdown("**Buried surface by region** — which parts of the "
+                st.markdown("**Buried surface by region**, which parts of the "
                             "domain actually do the binding:")
                 st.dataframe(
                     by_region.rename("ΔSASA (Å²)").reset_index(),
@@ -493,7 +493,7 @@ behalf would mean this server making requests that look like they came from you.
                 total = float(by_region.sum()) or 1.0
                 st.caption(
                     f"The CDRs account for {cdr_share / total:.0%} of the buried "
-                    f"surface. A framework contribution is normal for a VHH — the "
+                    f"surface. A framework contribution is normal for a VHH, the "
                     f"FR2 face that would be the VL interface in a conventional "
                     f"antibody is solvent-exposed and often takes part in binding.")
 
@@ -518,7 +518,7 @@ behalf would mean this server making requests that look like they came from you.
 
             if len(partners) == 1:
                 st.divider()
-                st.subheader(f"Epitope — the {partners[0]} side")
+                st.subheader(f"Epitope, the {partners[0]} side")
                 epitope = st_interface(raw, fname, partners[0], (chain,))
                 st.markdown(
                     f"The same calculation run the other way round: residues of "
@@ -608,7 +608,7 @@ behalf would mean this server making requests that look like they came from you.
             st.caption("Dark grey buried, pale blue intermediate, orange exposed.")
         st.caption(
             "Rendered by 3Dmol.js, loaded from a CDN. If the panel stays blank, "
-            "your browser could not reach it — every table and figure in this "
+            "your browser could not reach it, every table and figure in this "
             "section is computed server-side with Biopython and is unaffected.")
 
     st.divider()

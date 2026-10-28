@@ -27,7 +27,7 @@ def render() -> None:
     st.title("🧬 In-silico cloning")
     st.markdown(
         "Pick the recipient vector, paste the donor DNA, and the app works out which "
-        "restriction enzymes put the VHH between the signal peptide and the tags — "
+        "restriction enzymes put the VHH between the signal peptide and the tags, "
         "then checks that the cloned VHH encodes exactly the protein you started "
         "from.")
 
@@ -41,7 +41,7 @@ def render() -> None:
     with rcol[1]:
         layout = st.selectbox(
             "Expected tags", list(sg.VECTORS), index=0,
-            help="Which tags the finished construct should carry — used when the "
+            help="Which tags the finished construct should carry, used when the "
                  "cassette is translated back.")
 
     payload, display_name = None, backbone_name
@@ -62,7 +62,7 @@ def render() -> None:
     try:
         plasmid, features = load_plasmid_cached(payload, display_name)
     except Exception as exc:
-        st.error(f"Could not read this vector — {exc}")
+        st.error(f"Could not read this vector, {exc}")
         footer()
         st.stop()
 
@@ -75,7 +75,7 @@ def render() -> None:
     mcols[1].metric("GC", f"{stats['gc_percent']} %")
     mcols[2].metric("Features", len(features))
     mcols[3].metric("Cloning window",
-                    f"{auto_region[0]}–{auto_region[1]}" if auto_region else "—")
+                    f"{auto_region[0]}–{auto_region[1]}" if auto_region else ", ")
     if auto_region:
         st.caption(f"The insert goes between the end of the signal peptide and the "
                    f"first tag, positions {auto_region[0]}–{auto_region[1]}.")
@@ -96,7 +96,7 @@ def render() -> None:
                    "and uses the amplicon as the insert.")
     else:
         st.caption("The fragment must already carry the restriction sites its primers "
-                   "added — a bare coding sequence cannot be cloned by restriction.")
+                   "added, a bare coding sequence cannot be cloned by restriction.")
 
     dfile = st.file_uploader(
         "Optional: load a file instead of pasting (SnapGene .dna, GenBank, FASTA)",
@@ -109,7 +109,7 @@ def render() -> None:
             st.session_state["pending_donor_dna"] = str(loaded["record"].seq)
             st.rerun()
         except Exception as exc:
-            st.error(f"Could not read that file — {exc}")
+            st.error(f"Could not read that file, {exc}")
 
     if "pending_donor_dna" in st.session_state:
         st.session_state["donor_dna_box"] = st.session_state.pop("pending_donor_dna")
@@ -148,7 +148,7 @@ def render() -> None:
         footer()
         st.stop()
 
-    st.success(f"VHH found in the donor — {len(plan['donor_vhh'])} aa.")
+    st.success(f"VHH found in the donor, {len(plan['donor_vhh'])} aa.")
     with st.expander("Donor VHH sequence"):
         st.code("\n".join(plan["donor_vhh"][i:i + 60]
                           for i in range(0, len(plan["donor_vhh"]), 60)),
@@ -158,7 +158,7 @@ def render() -> None:
         f = plan["primer_pair"]["forward"]
         r = plan["primer_pair"]["reverse"]
         st.markdown(
-            f"**Primers chosen automatically** — `{f['name']}` as the forward primer "
+            f"**Primers chosen automatically**, `{f['name']}` as the forward primer "
             f"({f['form']}, position {f['start']}) and `{r['name']}` as the reverse "
             f"({r['form']}, position {r['start']}), giving a "
             f"**{len(plan['amplicon'])} bp** amplicon.")
@@ -166,7 +166,7 @@ def render() -> None:
             st.caption(
                 f"`{r['name']}` is listed as the plus-strand sequence of its target, "
                 "so the oligo that primes back towards the VHH is its reverse "
-                "complement — that is the form used here.")
+                "complement, that is the form used here.")
 
     for msg in plan["messages"]:
         st.warning(msg)
@@ -190,10 +190,10 @@ def render() -> None:
 
         comparison = best["comparison"]
         if comparison["status"] == "identical":
-            st.success("**Protein check passed** — the VHH encoded by the construct "
+            st.success("**Protein check passed**, the VHH encoded by the construct "
                        "is exactly the one in the donor.")
         else:
-            st.info(f"**Protein check** — {comparison['message']}")
+            st.info(f"**Protein check**, {comparison['message']}")
 
         pcols = st.columns(2)
         with pcols[0]:
@@ -208,7 +208,7 @@ def render() -> None:
                     language="text")
 
         check = cl.verify_construct(best["construct"], layout)
-        st.markdown(f"**Cassette** — signal peptide, then the VHH, then "
+        st.markdown(f"**Cassette**, signal peptide, then the VHH, then "
                     f"{check['tags_found'] or 'no tag'}; "
                     f"{check['premature_stops']} premature stop(s).")
         st.code("\n".join(check["cassette_aa"][i:i + 60]
@@ -245,10 +245,10 @@ def render() -> None:
                     file_name="amplicon.fasta", mime="text/plain", **FIT)
 
         st.markdown(f"""
-**Protocol** — digest the {len(plan['amplicon'])} bp insert and
+**Protocol**: digest the {len(plan['amplicon'])} bp insert and
 **{plasmid['name']}** with **{best['enzyme_5']}** and **{best['enzyme_3']}**, then
 ligate. The vector loses {best['removed_bp']} bp between the two sites and gains
-{best['inserted_bp']} bp from the insert. Screen the colonies by sequencing — the
+{best['inserted_bp']} bp from the insert. Screen the colonies by sequencing, the
 sequencing section of this app reads the .ab1 files back and confirms the cassette.
 """)
 
@@ -258,7 +258,7 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
                  "usable": p["usable"], "construct bp": p["construct_bp"],
                  "vector removed": p["removed_bp"],
                  "protein": p["comparison"]["status"],
-                 "deletes": ", ".join(p["deletes"]) or "—",
+                 "deletes": ", ".join(p["deletes"]) or ", ",
                  "why not": ("" if p["usable"] else
                              (", ".join(p["deletes"]) + " would be deleted"
                               if p["deletes"] else p["comparison"]["message"]))}
@@ -297,7 +297,7 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
         if absent:
             st.caption(f"No binding site in {plasmid['name']}: {', '.join(absent)}. "
                        "That is usually a property of the vector rather than a "
-                       "mistake — pHEN6 has no gIII for a gIII primer to sit in.")
+                       "mistake, pHEN6 has no gIII for a gIII primer to sit in.")
 
     with st.expander("Vector map"):
         view = st.radio("View", ["Cloning region", "Whole plasmid"], horizontal=True,

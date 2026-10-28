@@ -1,5 +1,5 @@
 """
-constructs — assemble a VHH into a fusion construct and characterise it.
+constructs, assemble a VHH into a fusion construct and characterise it.
 
 Monovalent, bivalent or biparatopic, with a chosen linker and N- and
 C-terminal tags, then the properties and the codon-optimised DNA of the
@@ -16,7 +16,7 @@ Two things are deliberately absent, because writing them from memory would be
 worse than leaving them out:
 
 * **SpyTag2 / SpyTag3.** Only the original SpyTag is listed. Paste the variant
-  you work with as a custom piece — you have the exact sequence, this module
+  you work with as a custom piece, you have the exact sequence, this module
   does not.
 * **Camelid hinges** (the llama upper long hinge and friends). Same reason: take
   it from the construct or paper you are reproducing.
@@ -60,7 +60,7 @@ TAGS: dict[str, dict] = {
     "Strep-II": {"seq": "WSHPQFEK", "ends": "both",
                  "note": "Strep-Tactin purification, mild elution"},
     "Avi": {"seq": "GLNDIFEAQKIEWHE", "ends": "both",
-            "note": "BirA biotinylation site — useful for streptavidin capture "
+            "note": "BirA biotinylation site, useful for streptavidin capture "
                     "in BLI, which avoids anti-tag capture entirely"},
     "SpyTag (original)": {"seq": "AHIVMVDAYKPTK", "ends": "both",
                           "note": "the original SpyTag. For SpyTag2 or SpyTag3, "
@@ -80,14 +80,14 @@ LINKERS: dict[str, dict] = {
     "GGGGS": {"seq": "GGGGS", "note": "one GS unit, short and flexible"},
     "(GGGGS)2": {"seq": "GGGGSGGGGS", "note": "10 residues"},
     "(GGGGS)3": {"seq": "GGGGSGGGGSGGGGS",
-                 "note": "15 residues — the usual default for a bivalent VHH, "
+                 "note": "15 residues, the usual default for a bivalent VHH, "
                          "long enough for both domains to bind independently"},
     "(GGGGS)4": {"seq": "GGGGSGGGGSGGGGSGGGGS",
                  "note": "20 residues, for distant epitopes"},
     "GGSGGS": {"seq": "GGSGGS", "note": "shorter flexible variant"},
     "EAAAK": {"seq": "EAAAK", "note": "rigid α-helical unit, keeps the domains apart"},
     "(EAAAK)3": {"seq": "EAAAKEAAAKEAAAK",
-                 "note": "rigid helix — use when you want a fixed spacing rather "
+                 "note": "rigid helix, use when you want a fixed spacing rather "
                          "than a floppy tether"},
 }
 
@@ -95,7 +95,7 @@ FORMATS = {
     "monovalent": {"n_vhh": 1,
                    "note": "a single VHH, with whatever tags you add"},
     "bivalent": {"n_vhh": 2,
-                 "note": "the same VHH twice — raises apparent affinity through "
+                 "note": "the same VHH twice, raises apparent affinity through "
                          "avidity, not affinity"},
     "biparatopic": {"n_vhh": 2,
                     "note": "two different VHHs against the same target; needs "
@@ -124,7 +124,7 @@ def build_construct(vhhs: list[tuple[str, str]],
                     ph: float | None = None) -> dict:
     """Assemble a construct and characterise the finished protein.
 
-    ``vhhs`` is a list of ``(name, sequence)`` — one for a monovalent construct,
+    ``vhhs`` is a list of ``(name, sequence)``, one for a monovalent construct,
     two for a bivalent or biparatopic one. ``n_tags`` and ``c_tags`` are lists of
     ``(label, sequence)`` applied in the order given, reading N to C.
     ``tag_linker`` is inserted between the VHH body and each tag; ``linker``
@@ -175,7 +175,7 @@ def build_construct(vhhs: list[tuple[str, str]],
     sortase = [l for l, k, _s in pieces if l.startswith("Sortase")]
     if sortase and pieces and pieces[-1][0] != sortase[-1]:
         warnings.append(
-            "The sortase motif is not the last element — LPETG is cleaved "
+            "The sortase motif is not the last element, LPETG is cleaved "
             "between T and G, so anything after it is lost.")
     if len(sequence) > vc.DEFAULTS["max_length"]:
         warnings.append(
@@ -234,7 +234,7 @@ def plot_construct(construct: dict, title: str = "Construct"):
     ax.set_ylim(-0.6, 0.9)
     ax.set_yticks([])
     ax.set_xlabel("Residue")
-    ax.set_title(f"{title} — {construct['length']} residues", fontsize=10)
+    ax.set_title(f"{title}, {construct['length']} residues", fontsize=10)
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
     fig.tight_layout()

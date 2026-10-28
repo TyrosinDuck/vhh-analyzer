@@ -1,7 +1,7 @@
 # Escherichia coli codon usage, relative frequency within each amino acid.
 # Source: Kazusa Codon Usage Database (kazusa.or.jp), taxid 316407,
 # redistributed from the python-codon-tables package by Zulko.
-# Licence: CC0-1.0 (public domain dedication) — free to redistribute.
+# Licence: CC0-1.0 (public domain dedication), free to redistribute.
 amino_acid,codon,relative_frequency
 *,TAA,0.64
 *,TAG,0.07

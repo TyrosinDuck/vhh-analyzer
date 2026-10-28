@@ -1,5 +1,5 @@
 """
-codons — diagnose an existing coding sequence that expresses poorly.
+codons, diagnose an existing coding sequence that expresses poorly.
 
 The reverse of the DNA tab: instead of designing a gene, you paste one that is
 already in a plasmid and ask what might be wrong with it.
@@ -10,7 +10,7 @@ first: periplasmic toxicity, inefficient signal-peptide cleavage, failure to for
 the intradomain disulfide in the periplasm, inclusion bodies, plasmid loss,
 induction conditions. A gene with perfect codon usage expresses badly for all of
 those reasons. This module tells you whether the *sequence* is part of the
-problem — it cannot tell you that it is the problem.
+problem, it cannot tell you that it is the problem.
 
 **The CAI is real.** An earlier version of this module refused to report one,
 because computing it needs a codon usage table and inventing sixty-four values
@@ -21,7 +21,7 @@ usage figure here come from data rather than recollection.
 
 Alongside it, the module reports the codons whose scarcity is well established
 and routinely supplemented by the Rosetta and CodonPlus strains, where they sit,
-and whether they cluster — tandem rare codons being the documented problem rather
+and whether they cluster, tandem rare codons being the documented problem rather
 than isolated ones.
 """
 
@@ -45,14 +45,14 @@ __all__ = [
 
 __version__ = "2026.10.27e"
 
-# Codons whose scarcity in E. coli is well established — these are the ones the
+# Codons whose scarcity in E. coli is well established, these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
 # name is given only where it is unambiguous.
 # Cross-checked against the measured table: AGG 2%, AGA 4%, CTA 4%, CGA 6% and
 # ATA 7% are genuinely scarce, while CGG 10%, GGA 11% and CCC 12% are not rare by
 # frequency at all. They are kept because the Rosetta and CodonPlus strains
 # supplement their tRNAs, and tRNA abundance is not the same thing as codon
-# frequency — but the real figure is reported alongside so you can judge.
+# frequency, but the real figure is reported alongside so you can judge.
 RARE_CODONS: dict[str, dict] = {
     "AGA": {"aa": "R", "trna": "argU", "note": "rare arginine, the classic one"},
     "AGG": {"aa": "R", "trna": "argU/argW", "note": "rare arginine"},
@@ -127,7 +127,7 @@ def relative_adaptiveness() -> dict[str, float]:
 def cai(dna: str) -> dict:
     """Codon Adaptation Index (Sharp & Li): geometric mean of the ``w`` values.
 
-    Methionine, tryptophan and stop codons are excluded — they have no synonym,
+    Methionine, tryptophan and stop codons are excluded, they have no synonym,
     so they carry no information about adaptation and would only inflate the
     score. A CAI near 1 means the gene uses the host's preferred codons
     throughout; a low one means it does not. It is a *description of codon
@@ -160,7 +160,7 @@ def _clean_dna(dna: str) -> str:
     dna = re.sub(r"[^A-Za-z]", "", dna or "").upper().replace("U", "T")
     bad = set(dna) - set("ACGTN")
     if bad:
-        raise ValueError(f"not a DNA sequence — unexpected characters: "
+        raise ValueError(f"not a DNA sequence, unexpected characters: "
                          f"{', '.join(sorted(bad))}")
     if not dna:
         raise ValueError("empty sequence")
@@ -168,7 +168,7 @@ def _clean_dna(dna: str) -> str:
 
 
 def orf_report(dna: str) -> dict:
-    """Frame, start, stop and internal stop codons — the deterministic checks.
+    """Frame, start, stop and internal stop codons, the deterministic checks.
 
     These come first because they are the ones that are definitely wrong when
     they are wrong, as opposed to the heuristics below.
@@ -336,7 +336,7 @@ def diagnose(dna: str, expected_protein: str | None = None,
     findings = []
     if not orf["in_frame"]:
         findings.append(
-            ("error", f"The sequence is not a whole number of codons — "
+            ("error", f"The sequence is not a whole number of codons, "
                       f"{orf['trailing_nt']} nucleotide(s) left over. Everything "
                       "below assumes the first base starts a codon, so check the "
                       "boundaries before reading anything else."))
@@ -350,11 +350,11 @@ def diagnose(dna: str, expected_protein: str | None = None,
         findings.append(("warning", "The sequence contains N. Those positions "
                                     "are translated as X and are not analysed."))
     if not orf["starts_with_ATG"]:
-        findings.append(("info", "No ATG at the first codon — expected if you "
+        findings.append(("info", "No ATG at the first codon, expected if you "
                                  "pasted a fragment or a sequence starting inside "
                                  "a signal peptide."))
     if not orf["ends_with_stop"]:
-        findings.append(("info", "No stop codon at the end — again expected for a "
+        findings.append(("info", "No stop codon at the end, again expected for a "
                                  "fragment."))
 
     n_rare = int(table["rare"].sum())
@@ -389,7 +389,7 @@ def diagnose(dna: str, expected_protein: str | None = None,
         findings.append(
             ("info", f"The first {HEAD_CODONS} codons are {head_gc:.0%} GC. A "
                      "GC-rich start can fold the ribosome binding region and "
-                     "slow initiation — this is one of the few places where "
+                     "slow initiation, this is one of the few places where "
                      "silent changes reliably help."))
     if homopolymers:
         findings.append(
@@ -406,7 +406,7 @@ def diagnose(dna: str, expected_protein: str | None = None,
             ("ok" if protein_match else "error",
              "The translation matches the expected protein."
              if protein_match else
-             "The translation does **not** match the expected protein — compare "
+             "The translation does **not** match the expected protein, compare "
              "them before looking at anything else here."))
 
     return {"orf": orf, "codons": table, "clusters": clusters, "gc": gc,
@@ -423,8 +423,7 @@ def diagnose(dna: str, expected_protein: str | None = None,
 # Lowering GC without touching the protein
 # ---------------------------------------------------------------------------
 # A GC-rich stretch is one of the few sequence problems with a clean fix: swap
-# codons for lower-GC synonyms. The constraints are what make it non-trivial —
-# the substitute must not be a rare codon, must not create a restriction site
+# codons for lower-GC synonyms. The constraints are what make it non-trivial, # the substitute must not be a rare codon, must not create a restriction site
 # you are using, and must not open a homopolymer run. Every suggestion below has
 # been checked against all three, and the protein is verified unchanged.
 #
@@ -461,7 +460,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                    min_usage: float = MIN_USAGE) -> dict:
     """Synonymous swaps that lower GC inside the flagged stretches.
 
-    Only codons inside a GC-rich region are considered — there is no reason to
+    Only codons inside a GC-rich region are considered, there is no reason to
     disturb the rest of the gene. For each, the lowest-GC synonym is taken that
     is not a documented rare codon, does not create one of ``avoid_sites``, and
     does not produce a homopolymer run longer than ``max_homopolymer``.
@@ -469,7 +468,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
     ``max_preference_rank`` is the safeguard against trading a GC problem for a
     codon-usage one. Excluding the documented rare codons is not enough on its
     own: leucine's CTG carries about half of all E. coli leucines, and swapping
-    it for TTA — not rare, but roughly a seventh as common — lowers GC by
+    it for TTA (not rare, but roughly a seventh as common) lowers GC by
     replacing the dominant codon with a minor one. Only synonyms within this
     rank of the host's preference order are considered, and the lowest-GC one
     among *those* is taken. 1 allows only the most-used codon, which usually
@@ -478,7 +477,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
 
     One honest limit: rank is **ordinal, not proportional**. For leucine, CTG
     carries roughly half of all E. coli leucines and the rank-2 codon perhaps a
-    seventh — a rank-2 swap is still a real drop in usage, and this module
+    seventh, a rank-2 swap is still a real drop in usage, and this module
     cannot say by how much, because quantifying it needs a codon usage table it
     does not ship and will not invent. Use the rank cap as a brake, not as a
     guarantee, and check the `rank_from`/`rank_to` columns on anything you are
@@ -486,7 +485,7 @@ def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
 
     ``strategy`` is ``"minimal"`` (default) or ``"maximal"``. Minimal applies the
     biggest GC reductions first and **stops as soon as the region is back inside
-    the band** — you are paying to synthesise a gene, and a construct that
+    the band**, you are paying to synthesise a gene, and a construct that
     differs from the original in twenty places is easier to reason about than one
     that differs in sixty. Maximal swaps every codon it can, which lowers GC
     further and is worth having when minimal is not enough.
@@ -612,7 +611,7 @@ def plot_gc_comparison(before: str, after: str, suggestions=None,
     """The GC profile before and after the swaps, on one axis.
 
     The point of the figure is to show that the stretches that crossed the band
-    no longer do, and at what cost — the changed codons are marked underneath so
+    no longer do, and at what cost, the changed codons are marked underneath so
     you can see where the edits landed.
     """
     import matplotlib.pyplot as plt
@@ -709,7 +708,7 @@ def parse_dna_input(text: str, max_sequences: int = 20,
 
 def summarise(seqs: dict[str, str], gc_window: int = GC_WINDOW,
               cluster_window: int = CLUSTER_WINDOW) -> pd.DataFrame:
-    """One row per sequence — the overview for a batch."""
+    """One row per sequence, the overview for a batch."""
     rows = []
     for name, dna in seqs.items():
         try:

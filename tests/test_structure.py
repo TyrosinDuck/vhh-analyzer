@@ -1,10 +1,10 @@
 """
-Structure tests — the residue-number/sequential-index distinction, mostly.
+Structure tests, the residue-number/sequential-index distinction, mostly.
 
 The structure section has one source of subtle error that is worth more than all
 the others put together: a model's **residue numbers** and a residue's
 **position in the chain** are different things, and they differ the moment a
-chain does not start at 1 or has an unmodelled loop — which is most of the time.
+chain does not start at 1 or has an unmodelled loop, which is most of the time.
 Confusing the two does not raise; it quietly puts the CDR bands, the region
 column and the 3D highlighting in the wrong place.
 
@@ -71,8 +71,8 @@ def test_resnum_map_handles_an_offset_and_a_gap(cablys3):
     """Bug: the mapping was keyed by sequential index, consumed as residue
     numbers.
 
-    Every consumer — the CDR bands, the region column, the viewer's residue
-    selection — speaks residue numbers. The mapping spoke positions. On a chain
+    Every consumer, the CDR bands, the region column, the viewer's residue
+    selection, speaks residue numbers. The mapping spoke positions. On a chain
     starting at residue 7, every annotation was off by six; with a gap, every
     annotation after the gap was off by more.
 
@@ -96,7 +96,7 @@ def test_resnum_map_handles_an_offset_and_a_gap(cablys3):
     for resnum, index in mapping.items():
         assert index == resnum - first, (
             f"residue {resnum} mapped to index {index}, expected "
-            f"{resnum - first} — the offset is being lost")
+            f"{resnum - first}, the offset is being lost")
         assert cablys3[index] == chain_seq[
             [r.id[1] for r in residues].index(resnum)], \
             f"residue {resnum} maps to the wrong amino acid"
@@ -120,7 +120,7 @@ def test_regions_land_on_the_right_residue_numbers(cablys3):
     """The consequence of the bug, stated in terms a user would notice.
 
     The CDR3 of the sequence must be labelled CDR3 on the model residues that
-    actually carry it — not on the residues six positions earlier.
+    actually carry it, not on the residues six positions earlier.
     """
     first = 7
     model = stx.load_structure(synthetic_pdb(cablys3, first_resnum=first),
@@ -140,7 +140,7 @@ def test_regions_land_on_the_right_residue_numbers(cablys3):
             f"residue {resnum} carries CDR3 position {position} but is "
             f"labelled {labelled[resnum]!r}")
     assert labelled[start - 2 + first] != "CDR3", \
-        "the residue before CDR3 is labelled CDR3 — the bands are shifted"
+        "the residue before CDR3 is labelled CDR3, the bands are shifted"
 
 
 def test_residue_regions_is_empty_without_an_annotation():
@@ -229,7 +229,7 @@ def test_confidence_kind_is_a_guess_and_says_so(cablys3):
     """pLDDT and B-factor live in the same column and mean opposite things.
 
     Nothing in either file format states which it is, so the only honest
-    behaviour is a labelled guess with a reason attached — never a silent
+    behaviour is a labelled guess with a reason attached, never a silent
     assumption.
     """
     model = stx.load_structure(synthetic_pdb(cablys3), "synthetic.pdb")
@@ -252,5 +252,5 @@ def test_patch_threshold_is_a_named_constant():
     nobody later reads 0.15 as a validated parameter.
     """
     assert 0.0 < stx.PATCH_MIN_REL < stx.EXPOSED_MIN, (
-        "the patch threshold must sit below the 'exposed' cut-off — a residue "
+        "the patch threshold must sit below the 'exposed' cut-off, a residue "
         "inside a patch is half-covered by the patch itself")
