@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.28d"
+__version__ = "2026.10.28e"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -65,7 +65,36 @@ RELEASE = "1.0.0"
 # apart in a bug report.
 BUILD = "20261028"
 
-VERSION = f"{RELEASE} (build {BUILD})"
+def _source_fingerprint(root: Path | None = None) -> str:
+    """Seven hex characters that change whenever any source file changes.
+
+    The build date alone cannot answer the question it is there for. Two pushes
+    on the same day carry the same date, so a user looking at the footer after a
+    deploy has no way to tell whether the new code is actually live or whether
+    Streamlit is still serving the old container. A hash of the sources changes
+    exactly when the sources change, needs no bookkeeping, and is the same in
+    every environment: locally, in Docker, and on Community Cloud.
+
+    Only the Python files are hashed. They are what determines behaviour, and
+    they are small enough that this costs a few milliseconds once per process.
+    """
+    import hashlib
+
+    root = root or Path(__file__).parent
+    digest = hashlib.sha256()
+    try:
+        files = sorted(root.glob("*.py")) + sorted((root / "sections").glob("*.py"))
+        for path in files:
+            digest.update(path.name.encode())
+            digest.update(path.read_bytes())
+    except Exception:
+        return "unknown"
+    return digest.hexdigest()[:7] if files else "unknown"
+
+
+CODE = _source_fingerprint()
+
+VERSION = f"{RELEASE} (build {BUILD}.{CODE})"
 
 
 # The author as the work should be attributed, not as a platform handle: the

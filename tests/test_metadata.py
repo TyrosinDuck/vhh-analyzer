@@ -193,7 +193,35 @@ def test_the_release_number_is_semantic_versioning():
         f"RELEASE is {shell.RELEASE!r}, expected MAJOR.MINOR.PATCH"
     assert re.fullmatch(r"\d{8}", shell.BUILD), \
         f"BUILD is {shell.BUILD!r}, expected YYYYMMDD"
-    assert shell.RELEASE in shell.VERSION and shell.BUILD in shell.VERSION
+    assert re.fullmatch(r"[0-9a-f]{7}", shell.CODE), \
+        f"CODE is {shell.CODE!r}, expected seven hex characters"
+    for part in (shell.RELEASE, shell.BUILD, shell.CODE):
+        assert part in shell.VERSION, f"{part!r} is missing from the version string"
+
+
+def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
+    """The point of it: telling a finished deploy from a stale container.
+
+    The build date cannot do this. Two pushes on the same day carry the same
+    date, so a footer that reads `build 20261028` after a deploy says nothing
+    about whether the new code is live.
+    """
+    import shell
+
+    (tmp_path / "sections").mkdir()
+    (tmp_path / "a.py").write_text("x = 1\n")
+    (tmp_path / "sections" / "b.py").write_text("y = 2\n")
+    first = shell._source_fingerprint(tmp_path)
+
+    assert re.fullmatch(r"[0-9a-f]{7}", first)
+    assert shell._source_fingerprint(tmp_path) == first, \
+        "the same sources must give the same fingerprint"
+
+    (tmp_path / "sections" / "b.py").write_text("y = 3\n")
+    assert shell._source_fingerprint(tmp_path) != first, \
+        "a changed source file left the fingerprint unchanged"
+
+    assert shell._source_fingerprint(tmp_path / "nothing-here") == "unknown"
 
 
 def test_the_changelog_documents_the_current_release():

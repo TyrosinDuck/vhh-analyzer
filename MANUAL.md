@@ -1895,6 +1895,13 @@ somewhere other than Community Cloud.
 
 ## 12. Troubleshooting
 
+**Did my change actually deploy?** The footer carries a seven-character
+fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
+It changes whenever any `.py` file changes, so if it still reads the same after
+a push, Streamlit is serving the old container, not your new code. **Reboot app**
+in the Community Cloud dashboard. A build date alone cannot tell you this: two
+pushes on the same day carry the same date.
+
 **"Some modules are out of date."** Every file is released together, and each one
 carries a version `app.py` checks on startup. The message names the file and
 both

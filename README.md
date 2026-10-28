@@ -505,6 +505,11 @@ disk survives a restart. That is by design and is why the sequence library
 lives
 in `data/library.csv` in the repository rather than in a database.
 
+**To check a deploy landed**, read the fingerprint in the footer:
+`v1.0.0 (build 20261028.1aed6b5)`. The last part is a hash of every `.py` file,
+so it changes when the code changes and the build date cannot be mistaken for
+it. Same fingerprint after a push means the old container is still being served.
+
 **If a change does not appear**, or the app reports modules that are out of date
 after you have updated them, Streamlit is serving cached imports. **Reboot
 app**
