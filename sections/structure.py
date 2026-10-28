@@ -20,7 +20,7 @@ from compute import (st_confidence, st_disulfides, st_exposure,
                      st_load, st_patches, st_resnum_map)
 from shell import FIT, current_sequences, footer
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28c"
 
 
 def render(method: str) -> None:
@@ -616,4 +616,9 @@ behalf would mean this server making requests that look like they came from you.
         "One static conformer of one model. This section measures; it does not "
         "predict structure, dock, estimate affinity or model flexibility. For a "
         "predicted model, treat side-chain accessibility as indicative.")
-    footer()
+
+    # No footer() here: the router draws it after render() returns, so
+    # that every screen gets exactly one and a new screen cannot forget
+    # it. The footer() calls above are different - they precede an early
+    # st.stop(), which means render() never returns and the router's
+    # call is never reached.

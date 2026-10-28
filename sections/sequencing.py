@@ -14,7 +14,7 @@ import sanger as sg
 from compute import png_quality, process_ab1
 from shell import FIT, footer, go_to
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28c"
 
 
 def render() -> None:
@@ -147,4 +147,8 @@ def render() -> None:
                                file_name="vhh_dna.fasta", mime="text/plain",
                                disabled=not n_usable, **FIT)
 
-    footer()
+    # No footer() here: the router draws it after render() returns, so
+    # that every screen gets exactly one and a new screen cannot forget
+    # it. The footer() calls above are different - they precede an early
+    # st.stop(), which means render() never returns and the router's
+    # call is never reached.

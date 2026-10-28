@@ -106,13 +106,13 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "library": "2026.10.28a", "structure": "2026.10.28e",
                     "shell": "2026.10.28a", "compute": "2026.10.28a",
                     "sections.analysis": "2026.10.28a",
-                    "sections.cloning": "2026.10.28a",
-                    "sections.genes": "2026.10.28b",
-                    "sections.home": "2026.10.28a",
-                    "sections.library": "2026.10.28a",
-                    "sections.manual": "2026.10.28a",
-                    "sections.sequencing": "2026.10.28a",
-                    "sections.structure": "2026.10.28a"}
+                    "sections.cloning": "2026.10.28c",
+                    "sections.genes": "2026.10.28c",
+                    "sections.home": "2026.10.28c",
+                    "sections.library": "2026.10.28c",
+                    "sections.manual": "2026.10.28c",
+                    "sections.sequencing": "2026.10.28c",
+                    "sections.structure": "2026.10.28c"}
 # Resolved from the dict by name rather than from a second hand-written list of
 # (name, wanted, module) triples. That list was the duplication the dict was
 # supposed to avoid: adding a module meant editing both, and forgetting the

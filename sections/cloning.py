@@ -19,7 +19,7 @@ import sanger as sg
 from compute import load_plasmid_cached, plan_cloning_cached, png_plasmid_map, primer_report_cached
 from shell import FIT, footer
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28c"
 
 
 def render() -> None:
@@ -328,4 +328,8 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
         st.caption("The *source* column says whether a feature was read from the file "
                    "or inferred here by motif scan.")
 
-    footer()
+    # No footer() here: the router draws it after render() returns, so
+    # that every screen gets exactly one and a new screen cannot forget
+    # it. The footer() calls above are different - they precede an early
+    # st.stop(), which means render() never returns and the router's
+    # call is never reached.

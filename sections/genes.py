@@ -14,7 +14,7 @@ import vhh_core as vc
 from compute import diagnose_gene, gc_fix_for, gene_summary, png_gc_comparison, png_gene_diagnosis
 from shell import EXAMPLE, FIT, footer, go_to
 
-__version__ = "2026.10.28b"
+__version__ = "2026.10.28c"
 
 
 def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
@@ -270,4 +270,9 @@ def render() -> None:
             if diag:
                 render_gene_detail(picked, gene_dna, diag, g_expected.strip(),
                                    int(g_cluster), int(g_gcwin))
-    footer()
+
+    # No footer() here: the router draws it after render() returns, so
+    # that every screen gets exactly one and a new screen cannot forget
+    # it. The footer() calls above are different - they precede an early
+    # st.stop(), which means render() never returns and the router's
+    # call is never reached.

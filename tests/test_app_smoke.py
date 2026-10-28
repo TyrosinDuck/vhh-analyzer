@@ -128,6 +128,29 @@ def test_every_section_actually_draws_something(app):
             f"{label}: only {count} text elements — the screen looks empty"
 
 
+def test_the_footer_is_drawn_exactly_once(app):
+    """Every screen drew it twice after the split, for a week.
+
+    The router calls ``footer()`` once ``render()`` returns. Each screen module
+    also ended with its own ``footer()``, left behind when the section bodies
+    were lifted out of `app.py` — the extraction stripped the trailing
+    ``st.stop()`` and not the ``footer()`` in front of it. Nothing raised and
+    nothing looked empty, so neither of the other smoke tests noticed; the only
+    symptom was the licence notice and the version line appearing twice at the
+    bottom of every page, which a user reported.
+
+    The ``footer()`` calls still inside the screen modules are deliberate: each
+    one precedes an early ``st.stop()``, so ``render()`` never returns and the
+    router's call is never reached.
+    """
+    for label in NAV:
+        _click(app, label)
+        _no_failure(app, label)
+        drawn = [c.value for c in app.caption if "Built on Biopython" in str(c.value)]
+        assert len(drawn) == 1, \
+            f"{label}: the footer was drawn {len(drawn)} times, expected once"
+
+
 def test_analysis_renders_every_family(app):
     """The break that prompted this file: the sections loaded, Analyze did not."""
     _click(app, "🔬 Sequence analysis")

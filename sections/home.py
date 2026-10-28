@@ -11,7 +11,7 @@ import streamlit as st
 
 from shell import APP_ICON, APP_NAME, FIT, SECTIONS, current_sequences, footer, go_to
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28c"
 
 
 def render() -> None:
@@ -72,4 +72,9 @@ proteins to the analysis and the DNA to gene diagnosis.
 Each section also works on its own: you can go straight to cloning with a pasted
 DNA insert, or straight to analysis with a FASTA file.
 """)
-    footer()
+
+    # No footer() here: the router draws it after render() returns, so
+    # that every screen gets exactly one and a new screen cannot forget
+    # it. The footer() calls above are different - they precede an early
+    # st.stop(), which means render() never returns and the router's
+    # call is never reached.
