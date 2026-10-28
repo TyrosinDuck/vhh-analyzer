@@ -74,11 +74,58 @@ def app():
     return at
 
 
+# Every screen draws its own title, except the manual, which renders MANUAL.md
+# as markdown and has no st.title of its own.
+EXPECTED_TITLE = {
+    "🔬 Sequence analysis": "🔬 Sequence analysis",
+    "🧊 Structure": "🧊 Structure",
+    "🧪 Sanger sequencing": "🧪 Sanger sequencing",
+    "🔧 Gene diagnosis": "🔧 Gene diagnosis",
+    "📚 Sequence library": "📚 Sequence library",
+    "🧬 In-silico cloning": "🧬 In-silico cloning",
+    "🏠 Home": "🧰 VHH tool box",
+    "📖 Manual": None,
+}
+
+
+def _content_count(app):
+    return (len(app.markdown) + len(app.title) + len(app.header)
+            + len(app.subheader) + len(app.caption))
+
+
 def test_every_section_renders(app):
     """The version banner calls ``st.stop()``, so a mismatch shows up here too."""
     for label in NAV:
         _click(app, label)
         _no_failure(app, label)
+
+
+def test_every_section_actually_draws_something(app):
+    """Not raising is not the same as working.
+
+    Splitting the screens out of `app.py` put the Gene diagnosis screen's body
+    inside its own helper function by accident: `render()` was left holding
+    nothing but a docstring. It imported cleanly, raised nothing, and drew an
+    empty page — and ``test_every_section_renders`` passed it, because all that
+    test asked was whether anything had blown up.
+
+    So this one asks for evidence instead: the screen's own title, and enough
+    elements that an empty body cannot pass. The broken version produced no
+    title and two elements, both of them the sidebar's.
+    """
+    for label in NAV:
+        _click(app, label)
+        _no_failure(app, label)
+
+        expected = EXPECTED_TITLE[label]
+        titles = [t.value for t in app.title]
+        if expected is not None:
+            assert expected in titles, \
+                f"{label}: expected the title {expected!r}, found {titles}"
+
+        count = _content_count(app)
+        assert count >= 6, \
+            f"{label}: only {count} text elements — the screen looks empty"
 
 
 def test_analysis_renders_every_family(app):

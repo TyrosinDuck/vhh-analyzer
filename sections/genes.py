@@ -14,11 +14,9 @@ import vhh_core as vc
 from compute import diagnose_gene, gc_fix_for, gene_summary, png_gc_comparison, png_gene_diagnosis
 from shell import EXAMPLE, FIT, footer, go_to
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.28b"
 
 
-def render() -> None:
-    """Draw the screen."""
 def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
     """The per-sequence view: findings, figure, tables, and the GC suggestions."""
     orf = diag["orf"]
@@ -172,6 +170,8 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         "values would give a number that looks precise and means nothing.")
 
 
+def render() -> None:
+    """Draw the screen."""
     st.title("🔧 Gene diagnosis")
     st.markdown(
         "The reverse of designing a gene: paste coding sequences that already "
