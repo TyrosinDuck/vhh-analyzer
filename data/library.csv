@@ -1,4 +1,4 @@
-# VHH tool box — sequence library. Read-only in the app.
+# VHH tool box - sequence library. Read-only in the app.
 # Edit this file on your machine, commit and push; the app serves it
 # on the next deploy. Lines starting with # are ignored.
 #
@@ -6,9 +6,17 @@
 # anyone. Do not put unpublished or confidential sequences here.
 #
 # Columns: name, protein, dna, tags, note
-#   at least one of protein / dna is required; an entry may carry both,
-#   in which case the app checks that the DNA translates to the protein.
-#   tags are comma-separated and are used for filtering in the app.
+#   at least one of protein / dna is required; when both are given the
+#   app checks that the DNA translates to the protein.
+#   tags are comma-separated and drive the filter in the app.
+#
+# The entries below are published reference sequences taken from the PDB,
+# each chosen to exercise a different branch of the app. Keep or delete
+# them as you like; your own sequences go in the same five columns.
 name,protein,dna,tags,note
-NbExample1,EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEGRFTISRDNAKRMVYLQMNSLRAEDTAVYYCAAAGVRAEDGRVRTLPSEYTFWGQGTQVTVSS,,example,Generic VHH used by the Load example button. Delete this row once you have your own.
-cAbLys3,DVQLQASGGGSVQAGGSLRLSCAASGYTIGPYCMGWFRQAPGKEREGVAAINMGGGITYYADSVKGRFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS,GATGTGCAGTTACAGGCGAGCGGCGGCGGCAGCGTGCAGGCGGGCGGCAGCCTGCGCCTGAGCTGCGCGGCGAGCGGCTATACCATTGGCCCGTATTGCATGGGCTGGTTTCGCCAGGCGCCGGGCAAAGAACGCGAAGGCGTGGCGGCGATTAACATGGGCGGCGGCATTACCTATTATGCGGATAGCGTGAAAGGCCGCTTTACCATTAGCCAGGATAACGCGAAAAACACCGTGTATCTGCTGATGAACAGCCTGGAACCGGAAGATACCGCGATTTATTATTGCGCGGCGGATAGCACCATTTATGCGAGCTATTATGAATGCGGTCATGGCCTGAGCACCGGCGGCTATGGCTATGATAGCTGGGGCCAGGGCACCCAGGTGACCGTGAGCAGCTAA,"example,published","Anti-lysozyme VHH, a textbook nanobody. The DNA here is back-translated by this app, not the published gene."
+cAbLys3,DVQLQASGGGSVQAGGSLRLSCAASGYTIGPYCMGWFRQAPGKEREGVAAINMGGGITYYADSVKGRFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS,GATGTGCAGTTACAGGCGAGCGGCGGCGGCAGCGTGCAGGCGGGCGGCAGCCTGCGCCTGAGCTGCGCGGCGAGCGGCTATACCATTGGCCCGTATTGCATGGGCTGGTTTCGCCAGGCGCCGGGCAAAGAACGCGAAGGCGTGGCGGCGATTAACATGGGCGGCGGCATTACCTATTATGCGGATAGCGTGAAAGGCCGCTTTACCATTAGCCAGGATAACGCGAAAAACACCGTGTATCTGCTGATGAACAGCCTGGAACCGGAAGATACCGCGATTTATTATTGCGCGGCGGATAGCACCATTTATGCGAGCTATTATGAATGCGGTCATGGCCTGAGCACCGGCGGCTATGGCTATGATAGCTGGGGCCAGGGCACCCAGGTGACCGTGAGCAGCTAA,"vhh,reference,pdb","Anti-lysozyme VHH, PDB 1MEL chain A. Carries a second CDR1-CDR3 disulfide on top of the canonical one, and a 26-residue CDR3 - the clearest example of both in the app. The PDB entry continues GRYPYDVPDYGSGRA (HA tag) after VTVSS; that tail is not included here. DNA back-translated by this app, not the published gene."
+anti-GFP-Enhancer,AQVQLVESGGALVQPGGSLRLSCAASGFPVNRYSMRWYRQAPGKEREWVAGMSSAGDRSSYEDSVKGRFTISRDDARNTVYLQMNSLKPEDTAVYYCNVNVGFEYWGQGTQVTVSS,GCGCAGGTGCAGTTAGTGGAAAGCGGCGGCGCGTTAGTGCAGCCGGGCGGCAGCTTACGCTTAAGCTGCGCGGCGAGCGGCTTTCCGGTGAACCGCTATAGCATGCGCTGGTATCGCCAGGCGCCGGGCAAAGAACGCGAATGGGTGGCGGGCATGAGCAGCGCGGGCGATCGCAGCAGCTATGAAGATAGCGTGAAAGGCCGCTTTACCATTAGCCGCGATGATGCGCGCAACACCGTGTATTTACAGATGAACAGCTTAAAACCGGAAGATACCGCGGTGTATTATTGCAACGTGAACGTGGGCTTTGAATATTGGGGCCAGGGCACCCAGGTGACCGTGAGCAGCTAA,"vhh,reference,pdb","Anti-GFP nanobody 'Enhancer', PDB 3K1K chain C. Scores 3/4 hallmarks, not 4/4 - a reminder that a genuine VHH need not be perfect on the tetrad. Short 8-residue CDR3. The PDB entry has a leading M and a trailing HHHHHH; neither is included here. DNA back-translated by this app, not the published gene."
+trastuzumab-VH,EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS,,"vh,reference,pdb","Heavy variable domain of trastuzumab, PDB 1N8Z chain B, trimmed at the end of VTVSS. A conventional VH: 0/4 hallmarks and ~100% identity to a human germline. Use it to see what the app says about something that is not a VHH."
+trastuzumab-VL,DIQMTQSPSSLSASVGDRVTITCRASQDVNTAVAWYQQKPGKAPKLLIYSASFLYSGVPSRFSGSRSGTDFTLTISSLQPEDFATYYCQQHYTTPPTFGQGTKVEIK,,"light-chain,reference,pdb","Light (kappa) variable domain of trastuzumab, PDB 1N8Z chain A, trimmed at the end of KVEIK. Classified as a light-chain V domain, so the antibody tabs skip it."
+trastuzumab-heavy-VH-CH1,EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSSASTKGPSVFPLAPSSKSTSGGTAALGCLVKDYFPEPVTVSWNSGALTSGVHTFPAVLQSSGLYSLSSVVTVPSSSLGTQTYICNVNHKPSNTKVDKKVEP,,"fusion,reference,pdb","The whole heavy chain of PDB 1N8Z chain B: VH followed by CH1, 220 residues. The V domain covers 55% of it, so the app reports 'contains a V domain' and skips the VHH analyses - a multi-domain protein, not a single domain."
+hen-lysozyme,KVFGRCELAAAMKRHGLDNYRGYSLGNWVCAAKFESNFNTQATNRNTDGSTDYGILQINSRWWCNDGRTPGSRNLCNIPCSALLSSDITASVNCAKKIVSDGNGMNAWVAWRNRCKGTDVQAWIRGCRL,,"non-antibody,reference,pdb","Hen egg-white lysozyme, PDB 1MEL chain C - the antigen cAbLys3 binds. Not an antibody domain at all, so only the generic analyses run. Its eight cysteines form four ordinary disulfides and are correctly not flagged as free thiols."
