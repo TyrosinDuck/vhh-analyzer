@@ -70,8 +70,9 @@ Three ways in:
 - **Paste** into the text box: FASTA, or a bare sequence, or several bare sequences
   separated by blank lines. Whitespace, digits and gap characters are stripped.
 - **Upload a FASTA file** with the uploader on the right.
-- **Load example** fills the box with three VHHs (two generic, plus cAbLys3) so you
-  can see what every tab looks like before committing your own data.
+- **Load example** fills the box with three published VHHs — caplacizumab, cAbLys3
+  and Nb80 — so you can see what every tab looks like before committing your own
+  data. They come from the library (§6), where their PDB entries are given.
 
 Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The button
 exists because the keyboard shortcut is not discoverable; both do the same thing,
@@ -1073,7 +1074,41 @@ app makes deliberately.
 anyone whether or not they ever open the app. Nothing unpublished, nothing under
 an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
-### 6.1 Using it
+### 6.1 What is in it
+
+Fourteen published sequences, every one taken from its PDB entry rather than
+written from memory, with the entry and chain given in its note. They are chosen
+to span the range the app has to cope with:
+
+| | |
+|---|---|
+| **caplacizumab** (7EOW) | the first nanobody-based medicine approved |
+| **cAbLys3** (1MEL) | the structure that first showed a VHH paratope; extra CDR1–CDR3 disulfide, 26-residue CDR3 |
+| **Nb80** (3P0G) | stabilises the active state of the β2 adrenergic receptor — the conformational-chaperone use |
+| **anti-GFP Enhancer / Minimizer** (3K1K, 3G9A) | the pair that raises and lowers GFP fluorescence; the Minimizer carries an extra disulfide |
+| **NbALFA** (6I2G) | the ALFA detection-tag nanobody |
+| **Ty1** (6ZXN) | neutralises SARS-CoV-2 |
+| **7D12** (4KRL), **2Rs15d** (5MY6) | anti-EGFR and anti-HER2, the latter an imaging tracer |
+| **Nb.b201** (5VNV) | from a synthetic library rather than an immunised animal |
+| **trastuzumab VH, VL, VH+CH1** (1N8Z) | a conventional VH, a light chain, and a two-domain chain |
+| **hen lysozyme** (1MEL) | not an antibody at all — and the antigen cAbLys3 binds |
+
+Together they make a test set as much as a reference: hallmark scores from 0 to 4,
+CDR3 lengths from 8 to 26 residues, three with an extra disulfide, humanness from
+66% to 90%, and one entry for each branch of the classification in §3.1c.
+
+Two are worth looking at closely. **Ty1** is a real published alpaca nanobody that
+scores **1/4** on the hallmark tetrad and carries a VH-like `WVRQ` in FR2, so the
+app calls it ambiguous — it proves on a real case what the hallmark caption claims,
+that the score is indicative and not a classification. **NbALFA** scores 2/4 and is
+a widely used reagent. A VHH is not required to be 4/4.
+
+Where a deposited construct carried a tag or expression residues, the entry is
+trimmed to the variable domain and the note says exactly what was removed. Three
+entries carry DNA, labelled in the note as **back-translated by this app, not the
+published gene**.
+
+### 6.2 Using it
 
 Filter by free text over names and notes, by tag, or by whether an entry carries
 a protein, DNA, or either. Select the entries you want and send them on: the
@@ -1084,7 +1119,7 @@ a protein-only entry and asking for DNA simply sends nothing for it.
 
 Both kinds also download as FASTA if you want them outside the app.
 
-### 6.2 Editing it
+### 6.3 Editing it
 
 The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
 commit, push — the app serves the new version on its next deploy.
