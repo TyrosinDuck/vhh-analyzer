@@ -27,6 +27,15 @@ import vhh_core as vc
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# ANARCI needs the HMMER binary, which is not installed everywhere. The regex
+# annotator covers canonical scaffolds, so the app works without it, and the
+# tests that pin an ANARCI-specific answer skip rather than fail: a contributor
+# who cannot install HMMER should still be able to run most of the suite and
+# see that their change broke nothing.
+needs_anarci = pytest.mark.skipif(
+    not vc.anarci_available(),
+    reason="ANARCI (and its HMMER binary) is not installed here")
+
 THREE_LETTER = {one: three for three, one
                 in PDBData.protein_letters_3to1.items()}
 
@@ -116,6 +125,7 @@ def test_identity_map_is_not_the_identity_function(cablys3):
     assert list(mapping.values()) == list(range(len(cablys3)))
 
 
+@needs_anarci
 def test_regions_land_on_the_right_residue_numbers(cablys3):
     """The consequence of the bug, stated in terms a user would notice.
 

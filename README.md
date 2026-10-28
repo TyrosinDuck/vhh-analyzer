@@ -403,11 +403,15 @@ prediction.
 ## Tests
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 pytest
 ```
 
-47 tests, about 32 seconds (`pytest -m "not smoke"` runs the fast ones in under
+Run it from the repository root. `pytest.ini` puts that directory on the import
+path, so `pytest` and `python -m pytest` behave the same; without that line the
+bare command finds only `tests/` and every test module fails to import.
+
+49 tests, about 32 seconds (`pytest -m "not smoke"` runs the fast ones in under
 ten). `requirements-dev.txt` is **not** installed on
 Streamlit Community Cloud (the app itself needs `requirements.txt` alone) so
 adding a test dependency can never break the deployment.
@@ -440,6 +444,11 @@ compares every module's `__version__` against `REQUIRED_MODULES` in `app.py`.
 That dict drives the staleness banner, and forgetting to update it is the
 easiest way to ship a deploy that refuses to start while complaining about a
 file you did update. It is caught here instead of in the browser.
+
+Tests that pin an ANARCI-specific answer skip when ANARCI is absent rather than
+fail, so the suite stays useful to someone who cannot install HMMER. The smoke
+tests need Streamlit; `pytest -m "not smoke"` leaves them out and runs in about
+seven seconds.
 
 `tests/test_metadata.py` guards something different: the author's name, his
 ORCID, the Zenodo concept DOI and the licence. None of it changes what the app

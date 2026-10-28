@@ -32,6 +32,15 @@ import vhh_core as vc
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# ANARCI needs the HMMER binary, which is not installed everywhere. The regex
+# annotator covers canonical scaffolds, so the app works without it, and the
+# tests that pin an ANARCI-specific answer skip rather than fail: a contributor
+# who cannot install HMMER should still be able to run most of the suite and
+# see that their change broke nothing.
+needs_anarci = pytest.mark.skipif(
+    not vc.anarci_available(),
+    reason="ANARCI (and its HMMER binary) is not installed here")
+
 
 # --------------------------------------------------------------------------- #
 # Fixtures, real sequences, from the shipped library, not invented ones
@@ -152,6 +161,7 @@ def test_triage_leaves_antibody_columns_empty_for_a_non_antibody(lysozyme,
 # 3. Repairs must not break the fold
 # --------------------------------------------------------------------------- #
 
+@needs_anarci
 def test_repairs_never_touch_a_structurally_conserved_position(cablys3):
     """Bug: the repair suggester proposed W36F and W111F.
 
@@ -221,6 +231,7 @@ def test_liabilities_table_keeps_its_columns_when_empty():
 # 5. IMGT numbering semantics
 # --------------------------------------------------------------------------- #
 
+@needs_anarci
 def test_imgt_position_map_keeps_insertion_coded_positions(cablys3):
     """Regression from a refactor, not from a user report.
 
@@ -240,6 +251,7 @@ def test_imgt_position_map_keeps_insertion_coded_positions(cablys3):
             f"{mapping.get(position)!r}"
 
 
+@needs_anarci
 def test_cablys3_cdr3_is_what_the_pdb_entry_says(cablys3):
     """A frozen annotation, checked against PDB 1MEL when the entry was added.
 
