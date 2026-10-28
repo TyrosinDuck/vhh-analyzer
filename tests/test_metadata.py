@@ -130,6 +130,28 @@ def test_the_community_guidelines_exist():
         "CONTRIBUTING.md no longer warns that issues and the library are public"
 
 
+def test_the_app_tells_users_how_to_report_a_problem():
+    """CONTRIBUTING.md lives where only developers look.
+
+    The people who hit defects are using the app, not reading the repository, so
+    the route to the issue tracker has to exist in the interface - and the
+    pre-filled report has to carry the version, which is the one thing nobody
+    supplies unprompted and the one thing that makes a report actionable.
+    """
+    import shell
+
+    assert shell.ISSUES_URL.endswith("/issues")
+    url = shell.report_url("Some screen")
+    assert "/issues/new?" in url, "report_url no longer opens a new issue"
+    from urllib.parse import unquote
+
+    body = unquote(url)
+    assert shell.VERSION in body, \
+        "the pre-filled report no longer carries the version"
+    assert "public" in body.lower(), \
+        "the pre-filled report no longer warns that the issue is public"
+
+
 def test_the_licence_is_declared_in_the_citation_file(citation):
     assert citation["license"] == "MIT", \
         f"CITATION.cff declares {citation['license']!r}, LICENSE is MIT"

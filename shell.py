@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.28c"
+__version__ = "2026.10.28d"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -91,6 +91,30 @@ DOI_URL = f"https://doi.org/{DOI}"
 
 
 LICENCE = "MIT"
+
+
+ISSUES_URL = f"{REPO_URL}/issues"
+
+
+def report_url(screen: str = "") -> str:
+    """A GitHub "new issue" link with the version and the questions pre-filled.
+
+    A user who hits a defect is in the app, not in the repository, and the thing
+    they are least likely to supply unprompted is the one thing that makes a
+    report actionable: which version they were running. Putting it in the link
+    removes that step rather than asking for it.
+    """
+    from urllib.parse import quote
+
+    body = (
+        f"**Version:** {VERSION}\n"
+        f"**Screen:** {screen or '(which screen and panel?)'}\n\n"
+        "**What I expected**\n\n\n"
+        "**What happened**\n\n\n"
+        "**How to reproduce it**\n"
+        "Please use a published sequence if you can - this issue is public, so "
+        "nothing unpublished or confidential should go in it.\n")
+    return f"{REPO_URL}/issues/new?title={quote('')}&body={quote(body)}"
 
 
 APP_NAME = "VHH tool box"
@@ -176,7 +200,8 @@ def footer() -> None:
                "run the app locally.")
     st.caption(
         f"{APP_NAME} · v{VERSION} · by [{AUTHOR}]({AUTHOR_URL}) · "
-        f"{LICENCE} licence · [source]({REPO_URL}) · [doi:{DOI}]({DOI_URL})")
+        f"{LICENCE} licence · [source]({REPO_URL}) · [doi:{DOI}]({DOI_URL}) · "
+        f"[report a problem]({ISSUES_URL})")
 
 
 SECTIONS = {

@@ -10,10 +10,10 @@ from __future__ import annotations
 import streamlit as st
 
 from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT,
-                   LICENCE, REPO_URL, SECTIONS, current_sequences,
-                   footer, go_to)
+                   ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
+                   current_sequences, footer, go_to, report_url)
 
-__version__ = "2026.10.28d"
+__version__ = "2026.10.28e"
 
 
 def render() -> None:
@@ -76,6 +76,31 @@ DNA insert, or straight to analysis with a FASTA file.
 """)
 
     st.write("")
+    with st.expander("🐛 Found a problem, or something that looks wrong?"):
+        st.markdown(
+            "**A wrong number is the most useful thing you can report.** Most of "
+            "what this app computes looks equally plausible whether it is right "
+            "or not, which is exactly what makes a quiet error dangerous. If a "
+            "value disagrees with ANARCI, with a published figure, with a gel or "
+            "with what you measured at the bench, that is worth more than a "
+            "feature request.\n\n"
+            "⚠️ **The issue tracker is public.** Reproduce the problem with a "
+            "published sequence if you can — the library has 22 of them. Nothing "
+            "unpublished or under an NDA should go into an issue. To analyse "
+            "confidential sequences at all, run the app on your own machine "
+            "rather than here; the manual explains how.")
+        st.link_button("Report a problem on GitHub", report_url(),
+                       type="primary", **FIT)
+        st.caption(
+            "The link opens a new issue with the version already filled in — "
+            f"this one is **{VERSION}**. Without it there is no way to tell "
+            "whether a defect still exists.")
+        st.markdown(
+            f"Questions are welcome in the same place. For what a number means "
+            f"and how far to trust it, the manual is usually faster. "
+            f"[All issues]({ISSUES_URL}) · "
+            f"[How to contribute]({REPO_URL}/blob/main/CONTRIBUTING.md)")
+
     with st.expander("📑 Citing this tool"):
         st.markdown(
             f"Archived on Zenodo, which mints a DOI and keeps a copy of the "
