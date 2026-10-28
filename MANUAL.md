@@ -42,7 +42,7 @@ Three things are worth stating plainly before you rely on any number:
 
 ## 2. Getting around
 
-The app opens on a home page with four sections. The sidebar carries the same four
+The app opens on a home page with five sections. The sidebar carries the same five
 entries plus a **Home** button, available from every screen.
 
 | Section | Use it for |
@@ -50,12 +50,14 @@ entries plus a **Home** button, available from every screen.
 | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
 | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
+| 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
 | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
 
 They are connected rather than separate. The sequencing section writes into the
 analysis input; the analysis input is what the cloning section offers as an insert;
-and the analysis section's **DNA** tab hands its back-translated sequences to gene
-diagnosis in one click. Each section still works entirely on its own.
+the analysis section's **DNA** tab hands its back-translated sequences to gene
+diagnosis in one click; and the library feeds proteins to the analysis and DNA to
+gene diagnosis. Each section still works entirely on its own.
 
 ---
 
@@ -1054,7 +1056,59 @@ this tab is still in play.
 
 ---
 
-## 6. In-silico cloning
+## 6. Sequence library
+
+The sequences you come back to, kept as a file in the repository so they are one
+click away instead of being pasted again every time.
+
+**Read-only from the app, on purpose.** Streamlit Community Cloud rebuilds the
+container from the repository on every reboot, redeploy and wake-from-sleep, so
+anything the app wrote to disk would be erased — usually on the day you had
+forgotten it was fragile. Keeping the library in the repository instead makes it
+durable, versioned, and restorable from git history. The cost is that editing
+happens on your own machine rather than in the browser, which is the trade this
+app makes deliberately.
+
+**And it is public.** The file lives in a public repository, so it is readable by
+anyone whether or not they ever open the app. Nothing unpublished, nothing under
+an NDA, nothing from a collaborator who has not agreed, belongs in it.
+
+### 6.1 Using it
+
+Filter by free text over names and notes, by tag, or by whether an entry carries
+a protein, DNA, or either. Select the entries you want and send them on: the
+proteins go to the **analysis** section, the DNA to **gene diagnosis**. The
+buttons say how many of your selection carry each kind, and entries that do not
+carry the requested one are left out rather than treated as an error — selecting
+a protein-only entry and asking for DNA simply sends nothing for it.
+
+Both kinds also download as FASTA if you want them outside the app.
+
+### 6.2 Editing it
+
+The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
+commit, push — the app serves the new version on its next deploy.
+
+| Column | |
+|---|---|
+| `name` | what it is called here; must be unique |
+| `protein` | the amino-acid sequence, or empty |
+| `dna` | the coding sequence, or empty |
+| `tags` | comma-separated, used by the filter |
+| `note` | free text |
+
+At least one of `protein` or `dna` is required. An entry may carry both, and when
+it does the app checks on load that the DNA translates to the protein and flags
+the row if it does not — the only place that check ever happens.
+
+A malformed row is **shown with its problem rather than dropped**: a missing
+name, a duplicate, a non-standard residue, a stray character in the DNA. A
+library that silently loses an entry is worse than one that tells you which line
+to fix, and the message carries the line number.
+
+---
+
+## 7. In-silico cloning
 
 One screen, three steps.
 
@@ -1166,7 +1220,7 @@ FASTA. Plus a short protocol paragraph.
 
 ---
 
-## 7. How your data is handled
+## 8. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file, logged,
 or sent to a third party**. They are processed in the server's memory.
@@ -1186,7 +1240,7 @@ Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
 ---
 
-## 8. Running it on your own machine
+## 9. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -1209,7 +1263,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 9. Limits and caveats, in one place
+## 10. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -1228,7 +1282,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 **"Some modules are out of date."** `app.py` and the analysis modules are released
 together. Update `vhh_core.py`, `sanger.py` and `cloning.py` alongside it.
@@ -1256,7 +1310,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 11. Under the hood
+## 12. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for IMGT
 numbering, FAMSA via `pyfamsa` for multiple alignment, `pymsaviz` for the alignment

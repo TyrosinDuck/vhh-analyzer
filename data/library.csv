@@ -1,0 +1,14 @@
+# VHH tool box — sequence library. Read-only in the app.
+# Edit this file on your machine, commit and push; the app serves it
+# on the next deploy. Lines starting with # are ignored.
+#
+# PUBLIC: this file lives in a public repository and is readable by
+# anyone. Do not put unpublished or confidential sequences here.
+#
+# Columns: name, protein, dna, tags, note
+#   at least one of protein / dna is required; an entry may carry both,
+#   in which case the app checks that the DNA translates to the protein.
+#   tags are comma-separated and are used for filtering in the app.
+name,protein,dna,tags,note
+NbExample1,EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEGRFTISRDNAKRMVYLQMNSLRAEDTAVYYCAAAGVRAEDGRVRTLPSEYTFWGQGTQVTVSS,,example,Generic VHH used by the Load example button. Delete this row once you have your own.
+cAbLys3,DVQLQASGGGSVQAGGSLRLSCAASGYTIGPYCMGWFRQAPGKEREGVAAINMGGGITYYADSVKGRFTISQDNAKNTVYLLMNSLEPEDTAIYYCAADSTIYASYYECGHGLSTGGYGYDSWGQGTQVTVSS,GATGTGCAGTTACAGGCGAGCGGCGGCGGCAGCGTGCAGGCGGGCGGCAGCCTGCGCCTGAGCTGCGCGGCGAGCGGCTATACCATTGGCCCGTATTGCATGGGCTGGTTTCGCCAGGCGCCGGGCAAAGAACGCGAAGGCGTGGCGGCGATTAACATGGGCGGCGGCATTACCTATTATGCGGATAGCGTGAAAGGCCGCTTTACCATTAGCCAGGATAACGCGAAAAACACCGTGTATCTGCTGATGAACAGCCTGGAACCGGAAGATACCGCGATTTATTATTGCGCGGCGGATAGCACCATTTATGCGAGCTATTATGAATGCGGTCATGGCCTGAGCACCGGCGGCTATGGCTATGATAGCTGGGGCCAGGGCACCCAGGTGACCGTGAGCAGCTAA,"example,published","Anti-lysozyme VHH, a textbook nanobody. The DNA here is back-translated by this app, not the published gene."
