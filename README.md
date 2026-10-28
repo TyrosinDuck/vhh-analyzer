@@ -334,7 +334,8 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-32 tests, about 7 seconds. `requirements-dev.txt` is **not** installed on
+44 tests, about 35 seconds (`pytest -m "not smoke"` runs the fast ones in under
+ten). `requirements-dev.txt` is **not** installed on
 Streamlit Community Cloud — the app itself needs `requirements.txt` alone — so
 adding a test dependency can never break the deployment.
 
@@ -364,6 +365,13 @@ compares every module's `__version__` against `REQUIRED_MODULES` in `app.py`.
 That dict drives the staleness banner, and forgetting to update it is the
 easiest way to ship a deploy that refuses to start while complaining about a
 file you did update. It is caught here instead of in the browser.
+
+`tests/test_metadata.py` guards something different: the author's name, his
+ORCID, the Zenodo concept DOI and the licence. None of it changes what the app
+does, which is exactly why it needs a test — the DOI is added to `CITATION.cff`
+in the browser after a release is published, so the next copy of the repository
+overwrites it, and nothing visible breaks when it does. GitHub simply offers a
+citation with no DOI in it, and you find out from someone else's reference list.
 
 The structure tests build their own PDB files in-process — CA atoms on a line,
 with a deliberate numbering offset and a deliberate gap. The geometry is

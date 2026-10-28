@@ -5,8 +5,10 @@
 # GitHub repository or to a Streamlit URL is not a durable reference, and a tool
 # that cannot be cited does not accumulate credit.
 #
-# ONE FIELD STILL NEEDS YOUR INPUT, marked TODO at the bottom: the DOI that
-# Zenodo assigns on the first release. Everything else is filled in.
+# The `doi` at the bottom is the Zenodo CONCEPT DOI: it resolves to the latest
+# release, which is what belongs in a paper. Each release also gets a version
+# DOI of its own, for citing the exact code someone ran - that one is on the
+# Zenodo record, not here.
 cff-version: 1.2.0
 title: "VHH tool box"
 message: "If you use this software, please cite it using the metadata in this file."
@@ -39,6 +41,4 @@ keywords:
   - codon optimisation
   - bioinformatics
 license: MIT
-# TODO: after the first Zenodo release, add the version-independent DOI here as
-#   doi: "10.5281/zenodo.XXXXXXX"
-# and set version/date-released for each release.
+doi: "10.5281/zenodo.23742269"
