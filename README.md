@@ -371,11 +371,87 @@ meaningless and nothing asks anything of it; what is being tested is the
 bookkeeping, and for that a synthetic chain beats a real one because the right
 answer is known by construction.
 
+## Licence
+
+MIT — see `LICENSE`. Use it, change it, redistribute it, build on it; keep the
+copyright notice.
+
+One caveat, stated in `LICENSE` too: the MIT licence covers this repository's
+code and cannot change the terms of its dependencies. All of them are permissive
+except **pyfamsa** (a wrapper around FAMSA, used for the multiple alignment),
+which is **GPL-3.0-or-later**. Anyone redistributing the whole application with
+the alignment in place has to honour GPL-3.0 for that component. It is imported
+in exactly one function — `vhh_core.build_alignment` — so a derivative that does
+not need FAMSA can drop the dependency and is then free of it.
+
+## Maintaining this app
+
+Written for whoever picks this up, including its author in two years.
+
+**Where it runs.** Streamlit Community Cloud, deployed from this repository's
+`main` branch, main file `app.py`. The custom domain redirects to the Streamlit
+URL; Community Cloud cannot host a domain itself.
+
+**To redeploy**, push to `main` — Community Cloud rebuilds automatically. The
+container is rebuilt from the repository every time, so nothing the app writes to
+disk survives a restart. That is by design and is why the sequence library lives
+in `data/library.csv` in the repository rather than in a database.
+
+**If a change does not appear**, or the app reports modules that are out of date
+after you have updated them, Streamlit is serving cached imports. **Reboot app**
+in the Community Cloud dashboard clears it. This is the single most common
+confusing failure.
+
+**Before pushing**, run the tests:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+**When changing a module**, bump its `__version__` *and* its entry in
+`REQUIRED_MODULES` in `app.py`. Mismatches stop the app on purpose, and
+`test_module_versions_match_app` catches them before a deploy does.
+
+**Two rules for the interface**, so `app.py` does not grow back into the
+3 911-line script it was: a screen draws and does not compute (cached work goes
+in `compute.py`), and no screen reads another screen's globals (every screen is a
+`render()` function).
+
+**The domain** renews annually and is the one piece that is neither in git nor
+redeployable. If it lapses, every published link breaks — including any in a
+paper. Keep auto-renew on, and make sure the card behind it is one that will
+still exist next year.
+
 ## Making the tool citable
 
-Once it is stable, connect the GitHub repository to [Zenodo](https://zenodo.org) and cut
-a release: Zenodo archives the code and mints a DOI, so the tool can be cited in a paper
-and stays retrievable independently of GitHub, of any host, and of your affiliation.
+`CITATION.cff` carries the citation metadata; GitHub turns it into a
+**Cite this repository** button. Two fields are still marked `TODO` in it: an
+ORCID, and the DOI.
+
+For the DOI:
+
+1. Sign in to [Zenodo](https://zenodo.org) **with GitHub** and authorise it.
+2. Zenodo → **GitHub** settings, find this repository, flip its toggle to **On**.
+   This installs a webhook. **Do this before releasing** — Zenodo only archives
+   releases created after the toggle is on, and a release made first is simply
+   not seen.
+3. On GitHub: **Releases → Draft a new release**, tag `v1.0.0`, publish. That
+   fires the webhook and Zenodo archives a snapshot of the repository at that
+   tag.
+4. Zenodo mints two DOIs: a **version DOI** for that release, and a
+   version-independent **concept DOI** that always resolves to the latest. The
+   concept DOI is the one that belongs in `CITATION.cff` and in a paper.
+5. Put it in `CITATION.cff`, commit, and tag `v1.0.1`. The DOI cannot be in the
+   first release, because it does not exist until that release is made.
+
+The snapshot is of the repository as it stands at the tag, so `LICENSE` and
+`CITATION.cff` must be committed before step 3 or the archived copy will not
+have them.
+
+That archive is the real answer to "what happens to this when I move on": a
+GitHub URL and a Streamlit URL both depend on accounts someone has to keep alive,
+and a DOI does not.
 
 ## Caveats
 

@@ -1636,4 +1636,12 @@ lists the files and the two rules that keep it from growing back.
 There is a test suite: `pip install -r requirements-dev.txt` then `pytest`. Almost
 every test in it is a bug the app actually had, frozen so it cannot return.
 
-The source is at <https://github.com/TyrosinDuck/vhh-analyzer>.
+The source is at <https://github.com/TyrosinDuck/vhh-analyzer>, under the **MIT
+licence**: use it, change it, redistribute it, build on it — keep the copyright
+notice. One caveat is spelled out in `LICENSE`: that covers the app's own code
+and cannot change its dependencies' terms, and one of them, `pyfamsa` (FAMSA,
+used for the multiple alignment), is GPL-3.0-or-later.
+
+If you use the app in published work, `CITATION.cff` in the repository carries
+the citation metadata, and GitHub turns it into a **Cite this repository**
+button.

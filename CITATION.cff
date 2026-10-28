@@ -1,0 +1,44 @@
+# Citation metadata, in the Citation File Format (https://citation-file-format.org).
+#
+# GitHub reads this file and offers a "Cite this repository" button; Zenodo reads
+# it when it archives a release. Both matter for the same reason: a link to a
+# GitHub repository or to a Streamlit URL is not a durable reference, and a tool
+# that cannot be cited does not accumulate credit.
+#
+# ONE FIELD STILL NEEDS YOUR INPUT, marked TODO at the bottom: the DOI that
+# Zenodo assigns on the first release. Everything else is filled in.
+cff-version: 1.2.0
+title: "VHH tool box"
+message: "If you use this software, please cite it using the metadata in this file."
+type: software
+authors:
+  - given-names: Jonathan
+    family-names: "Vaneyck"
+    orcid: "https://orcid.org/0000-0003-3095-7420"
+    affiliation: "Center for Protein Engineering (CIP), University of Liège, Belgium"
+repository-code: "https://github.com/TyrosinDuck/vhh-analyzer"
+url: "https://vhh-tools-app.org"
+abstract: >-
+  A workbench for single-domain antibodies (VHHs, nanobodies). It characterises
+  sequences, annotates CDRs and frameworks in IMGT numbering, scores camelid
+  hallmarks and humanness, flags chemical liabilities and aggregation-prone
+  regions, groups panning output into clonal families, measures what a 3D model
+  says rather than what the sequence suggests, reads VHHs out of Sanger
+  chromatograms, diagnoses existing coding sequences for rare codons and GC
+  stretches, and plans a restriction cloning between two plasmids. Any protein
+  is accepted and classified; antibody-specific analyses are applied only where
+  they mean something.
+keywords:
+  - nanobody
+  - VHH
+  - single-domain antibody
+  - antibody engineering
+  - developability
+  - IMGT
+  - phage display
+  - codon optimisation
+  - bioinformatics
+license: MIT
+# TODO: after the first Zenodo release, add the version-independent DOI here as
+#   doi: "10.5281/zenodo.XXXXXXX"
+# and set version/date-released for each release.
