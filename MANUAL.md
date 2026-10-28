@@ -1076,8 +1076,8 @@ an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
 ### 6.1 What is in it
 
-Fourteen published sequences, every one taken from its PDB entry rather than
-written from memory, with the entry and chain given in its note. They are chosen
+Twenty-two published sequences, every one taken from the source named in its note —
+a PDB entry or KEGG — rather than written from memory. They are chosen
 to span the range the app has to cope with:
 
 | | |
@@ -1092,6 +1092,11 @@ to span the range the app has to cope with:
 | **Nb.b201** (5VNV) | from a synthetic library rather than an immunised animal |
 | **trastuzumab VH, VL, VH+CH1** (1N8Z) | a conventional VH, a light chain, and a two-domain chain |
 | **hen lysozyme** (1MEL) | not an antibody at all — and the antigen cAbLys3 binds |
+| **cAbBCII10** (3DWT) | anti-β-lactamase VHH, widely reused as a stable framework scaffold |
+| **NbSyn2** (2X6M) | against the α-synuclein C-terminus; extra CDR1–CDR3 disulfide |
+| **α-synuclein** (1XQ8) | the antigen NbSyn2 binds: 140 residues, disordered, pI 4.7 |
+| **neutrophil elastase, human and mouse** (1HNE, KEGG) | the human entry is the mature chain, the mouse one the full precursor — the notes say so, and they are not comparable until the mouse one is trimmed |
+| **serum albumin, human, bovine and mouse** (1AO6, P02769, P07724) | the half-life-extension partner, all three as mature chains so they are directly comparable: 583–585 residues, 66 kDa, 70–76% identical to each other. Human and bovine have 35 cysteines, an odd count, so the app flags the free thiol — which is Cys34 |
 
 Together they make a test set as much as a reference: hallmark scores from 0 to 4,
 CDR3 lengths from 8 to 26 residues, three with an extra disulfide, humanness from
