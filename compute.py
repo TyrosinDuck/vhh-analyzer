@@ -42,7 +42,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.10.28a"
+__version__ = "2026.10.29b"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -471,6 +471,45 @@ def st_patches(raw: bytes, name: str, chain: str, min_rel: float,
     return stx.surface_patches(stx.load_structure(raw, name), chain,
                                min_rel_sasa=min_rel, contact=contact,
                                min_size=min_size)
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=2)
+def manual_sections(text: str) -> list[dict]:
+    """Split MANUAL.md on its top-level headings.
+
+    The manual is around 1 700 lines. Rendering all of it on every interaction
+    is both slow and useless: nobody reads a reference manual from the top. This
+    cuts it into its numbered sections so the screen can show one at a time,
+    and collects each section's own subheadings for a local table of contents.
+    """
+    import re as _re
+
+    # Everything before the first "## " heading is the document title and the
+    # introduction. Dropping it is easy to do and invisible afterwards, because
+    # the screen only ever shows one section and nothing looks missing, so it
+    # is kept as a section of its own.
+    sections: list[dict] = []
+    preamble = {"title": "Introduction", "lines": [], "subs": []}
+    current = preamble
+    for line in text.split("\n"):
+        top = _re.match(r"^##\s+(.+?)\s*$", line)
+        sub = _re.match(r"^###\s+(.+?)\s*$", line)
+        if top and not line.startswith("###"):
+            current = {"title": top.group(1), "lines": [], "subs": []}
+            sections.append(current)
+            continue
+        if sub:
+            current["subs"].append(sub.group(1))
+        current["lines"].append(line)
+    if "".join(preamble["lines"]).strip():
+        title = next((l[2:].strip() for l in preamble["lines"]
+                      if l.startswith("# ")), "Introduction")
+        preamble["title"] = title
+        sections.insert(0, preamble)
+    for section in sections:
+        section["body"] = "\n".join(section["lines"]).strip("\n")
+        del section["lines"]
+    return sections
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)

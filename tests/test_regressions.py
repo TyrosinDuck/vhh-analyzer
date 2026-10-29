@@ -393,6 +393,43 @@ def test_clustering_at_100_percent_groups_only_identical_cdr3s(cablys3):
 # 9. Input validation
 # --------------------------------------------------------------------------- #
 
+def test_the_manual_splits_without_losing_anything():
+    """The manual screen shows one section at a time, so a splitter that drops
+    a section hides part of the documentation with nothing to see.
+
+    Rendering 1 700 lines on every interaction is slow and nobody reads a
+    reference manual from the top, but the price of cutting it up is that a
+    silent loss is invisible: the page still looks complete.
+    """
+    import compute
+    import shell
+
+    text = shell.load_manual()
+    headings = [l for l in text.split("\n") if l.startswith("## ")]
+    sections = compute.manual_sections(text)
+
+    # One per heading, plus the introduction that precedes the first one.
+    assert len(sections) == len(headings) + 1, (
+        f"{len(headings)} top-level headings in MANUAL.md plus an intro, but "
+        f"{len(sections)} sections parsed")
+    for section in sections:
+        assert section["title"].strip(), "a section came back with no title"
+        assert section["body"].strip(), (
+            f"section {section['title']!r} came back empty")
+
+    # Compared on non-blank lines: each section is stripped of the blank lines
+    # at its edges, which is harmless, while a lost paragraph is not. Counting
+    # every line would make the test fail on whitespace and pass on content.
+    def substance(body: str) -> int:
+        return sum(1 for line in body.split("\n") if line.strip())
+
+    kept = sum(substance(s["body"]) for s in sections)
+    total = substance(text) - len(headings)
+    assert kept == total, (
+        f"{total - kept} non-blank line(s) went missing between MANUAL.md and "
+        f"the parsed sections")
+
+
 @pytest.mark.parametrize("junk", ["", "   ", "BJOUXZ" * 10])
 def test_clean_sequence_rejects_junk(junk):
     """Empty input and non-amino-acid letters are refused."""

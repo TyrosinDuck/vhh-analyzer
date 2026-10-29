@@ -14,6 +14,17 @@ Each release is archived on Zenodo and gets a DOI of its own. The DOI in
 the exact code that produced a result, use the version DOI of the release you
 ran, from its Zenodo record.
 
+## [Unreleased]
+
+### Added
+
+- The manual is browsed one section at a time, with a **Jump to** selector,
+  previous/next buttons and a list of what each section contains. Rendering
+  seventeen hundred lines on every interaction was slow and nobody reads a
+  reference manual from the top.
+- The home page explains how the sections feed each other with a diagram rather
+  than four paragraphs, drawn as SVG so it follows the light and dark themes.
+
 ## [1.0.0], 2026-10-28
 
 First public release, and the first that is citable: MIT licence, citation
