@@ -490,6 +490,42 @@ the alignment in place has to honour GPL-3.0 for that component. It is imported
 in exactly one function (`vhh_core.build_alignment`) so a derivative that does
 not need FAMSA can drop the dependency and is then free of it.
 
+## If this project is no longer maintained
+
+It is written and maintained by one person. If the repository has gone quiet,
+the deployed app has stopped answering, or you cannot reach the author, **take
+it and run it**. You do not need permission, and this section exists to say so
+explicitly: most people will not touch an abandoned project even when they are
+entitled to, and a tool nobody dares pick up is a tool that is lost.
+
+Everything you need is preserved independently of any account:
+
+- The complete source of every release is archived on Zenodo at
+  [10.5281/zenodo.23742269](https://doi.org/10.5281/zenodo.23742269). That
+  archive does not depend on this GitHub repository, on the Streamlit
+  deployment, or on the `vhh-tools-app.org` domain, any of which may lapse.
+- The **MIT licence grants you the right** to use, modify, redistribute and
+  redeploy it, commercially or not.
+- `README.md` documents how to run it locally, with Docker, and how to deploy it
+  on Streamlit Community Cloud. `MANUAL.md` documents what every number means and
+  how far to trust it. `CONTRIBUTING.md` documents the conventions the code
+  follows.
+
+Two things are asked of you, and they are not the same kind of thing.
+
+**You must keep the copyright notice.** This is the one condition the MIT
+licence attaches: the notice in `LICENSE` has to travel with any copy or
+substantial portion of the software. It is a legal obligation, not a courtesy.
+
+**Please cite the DOI** if you publish work that uses this, or that uses a
+version you derived from it. That one is an academic norm rather than a licence
+term, so it is a request, not a condition. `CITATION.cff` holds the metadata and
+GitHub turns it into a **Cite this repository** button.
+
+If you fork it and carry it forward, say so in your own README and give your
+fork its own DOI. A successor that is clearly a successor serves everyone better
+than a silent copy.
+
 ## Maintaining this app
 
 Written for whoever picks this up, including its author in two years.

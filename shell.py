@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.28e"
+__version__ = "2026.10.29a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -63,7 +63,7 @@ RELEASE = "1.0.0"
 # The day this particular build was assembled. Two builds of the same release
 # are possible - a fix pushed between releases - and this is what tells them
 # apart in a bug report.
-BUILD = "20261028"
+BUILD = "20261029"
 
 def _source_fingerprint(root: Path | None = None) -> str:
     """Seven hex characters that change whenever any source file changes.
@@ -75,15 +75,23 @@ def _source_fingerprint(root: Path | None = None) -> str:
     exactly when the sources change, needs no bookkeeping, and is the same in
     every environment: locally, in Docker, and on Community Cloud.
 
-    Only the Python files are hashed. They are what determines behaviour, and
-    they are small enough that this costs a few milliseconds once per process.
+    What is hashed is everything the app serves: the Python files, plus
+    `MANUAL.md` and `data/library.csv`, which the manual and library screens read
+    at runtime. A change to either is visible to a user, so it has to move the
+    fingerprint. Files that only a developer reads, `README.md` and
+    `CONTRIBUTING.md` among them, are deliberately left out: they cannot change
+    what the app does, and including them would make the fingerprint move for
+    deploys with nothing to verify.
     """
     import hashlib
 
     root = root or Path(__file__).parent
     digest = hashlib.sha256()
     try:
-        files = sorted(root.glob("*.py")) + sorted((root / "sections").glob("*.py"))
+        files = (sorted(root.glob("*.py"))
+                 + sorted((root / "sections").glob("*.py"))
+                 + [p for p in (root / "MANUAL.md",
+                                root / "data" / "library.csv") if p.exists()])
         for path in files:
             digest.update(path.name.encode())
             digest.update(path.read_bytes())

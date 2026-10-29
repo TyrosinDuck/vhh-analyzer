@@ -209,8 +209,11 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
     import shell
 
     (tmp_path / "sections").mkdir()
+    (tmp_path / "data").mkdir()
     (tmp_path / "a.py").write_text("x = 1\n")
     (tmp_path / "sections" / "b.py").write_text("y = 2\n")
+    (tmp_path / "MANUAL.md").write_text("# manual\n")
+    (tmp_path / "data" / "library.csv").write_text("name\nx\n")
     first = shell._source_fingerprint(tmp_path)
 
     assert re.fullmatch(r"[0-9a-f]{7}", first)
@@ -218,8 +221,19 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
         "the same sources must give the same fingerprint"
 
     (tmp_path / "sections" / "b.py").write_text("y = 3\n")
-    assert shell._source_fingerprint(tmp_path) != first, \
+    second = shell._source_fingerprint(tmp_path)
+    assert second != first, \
         "a changed source file left the fingerprint unchanged"
+
+    # The manual and the library are served by the app, so a change to either is
+    # visible to a user and has to move the fingerprint too.
+    (tmp_path / "MANUAL.md").write_text("# manual, revised\n")
+    third = shell._source_fingerprint(tmp_path)
+    assert third != second, "a changed MANUAL.md left the fingerprint unchanged"
+
+    (tmp_path / "data" / "library.csv").write_text("name\ny\n")
+    assert shell._source_fingerprint(tmp_path) != third, \
+        "a changed library left the fingerprint unchanged"
 
     assert shell._source_fingerprint(tmp_path / "nothing-here") == "unknown"
 
