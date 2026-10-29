@@ -17,7 +17,7 @@ import streamlit as st
 from compute import manual_sections
 from shell import FIT, footer, load_manual
 
-__version__ = "2026.10.29a"
+__version__ = "2026.10.29b"
 
 WHOLE = "Everything, in one page"
 
@@ -66,18 +66,16 @@ def render() -> None:
             st.markdown("\n".join(f"- {sub}" for sub in section["subs"]))
 
     position = titles.index(chosen)
-    nav = st.columns([1, 1, 2])
+    nav = st.columns(2)
     if position > 0:
         with nav[0]:
-            st.button(f"← {titles[position - 1].split('.')[0]}.",
-                      key="manual_prev", **FIT,
-                      on_click=_go, args=(titles[position - 1],),
+            st.button(f"← {_short(titles[position - 1])}", key="manual_prev",
+                      **FIT, on_click=_go, args=(titles[position - 1],),
                       help=titles[position - 1])
     if position < len(titles) - 1:
         with nav[1]:
-            st.button(f"{titles[position + 1].split('.')[0]}. →",
-                      key="manual_next", **FIT,
-                      on_click=_go, args=(titles[position + 1],),
+            st.button(f"{_short(titles[position + 1])} →", key="manual_next",
+                      **FIT, on_click=_go, args=(titles[position + 1],),
                       help=titles[position + 1])
 
     st.divider()
@@ -88,6 +86,19 @@ def render() -> None:
     # it. The footer() calls above are different - they precede an early
     # st.stop(), which means render() never returns and the router's
     # call is never reached.
+
+
+def _short(title: str, limit: int = 34) -> str:
+    """A button label: the number and the chapter name, trimmed to fit.
+
+    A bare number tells you how far you are moving, not where you are going,
+    which is the only thing worth knowing before clicking. Long titles are cut
+    on a word boundary; the full one stays in the button's tooltip.
+    """
+    if len(title) <= limit:
+        return title
+    cut = title[:limit].rsplit(" ", 1)[0].rstrip(",;:")
+    return f"{cut}..."
 
 
 def _go(title: str) -> None:

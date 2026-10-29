@@ -108,9 +108,9 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "sections.analysis": "2026.10.28a",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
-                    "sections.home": "2026.10.29a",
+                    "sections.home": "2026.10.29b",
                     "sections.library": "2026.10.28c",
-                    "sections.manual": "2026.10.29a",
+                    "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
                     "sections.structure": "2026.10.28c"}
 # Resolved from the dict by name rather than from a second hand-written list of
