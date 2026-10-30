@@ -28,7 +28,7 @@ __all__ = [
     "PIPETTE_MINIMUM_UL", "desalting_column", "__version__",
 ]
 
-__version__ = "2026.10.30c"
+__version__ = "2026.10.30d"
 
 
 # --------------------------------------------------------------------------
@@ -461,6 +461,11 @@ PHAGE_OPTICAL_CONSTANT = 6.0e16
 # constant.
 PHAGE_GENOME_BASES = 7249
 
+# A liquid-phase round is run with twice the input of a solid-phase one: the
+# antigen is in solution and the capture step loses more of the library. This
+# is a protocol convention, not something derived from anything here.
+LIQUID_PANNING_FACTOR = 2.0
+
 
 def phage_titre(a260: float, dilution: float = 1.0,
                 glycerol_factor: float = 1.0,
@@ -522,3 +527,193 @@ def phage_aliquot(titre_per_ml: float, target_particles: float) -> dict:
         note = ("more than a millilitre of stock; either the titre is low for "
                 "this target or the target is high for this stock")
     return {"volume_ul": volume_ul, "note": note}
+
+
+# --------------------------------------------------------------------------
+# Batch sheet
+# --------------------------------------------------------------------------
+# What goes on the label of a tube that leaves your bench. Not a certificate
+# of analysis in the regulated sense: there are no specifications here, no
+# acceptance criteria and no release signature, and calling it one would
+# promise a document this is not. It is the page that stops a freezer box
+# turning into a row of unlabelled aliquots in six months.
+
+# The fields the preparer fills in, in the order they go on the page. Kept
+# here rather than in the screen so that a notebook can build the same sheet
+# without Streamlit, and so that adding a field is one edit.
+BATCH_FIELDS = [
+    ("lot", "Lot", "", "Whatever your freezer box calls it."),
+    ("prepared_by", "Prepared by", "", ""),
+    ("date", "Date", "", "Defaults to today."),
+    ("host", "Expression host", "", "E. coli WK6, HEK293, and so on."),
+    ("purification", "Purification", "",
+     "IMAC, size exclusion, the order they were run in."),
+    ("buffer", "Buffer", "PBS, pH 7.4", ""),
+    ("storage", "Storage", "-80 C", ""),
+    ("notes", "Notes", "", "Anything the next person needs to know."),
+]
+
+
+def batch_sheet(name: str, seq: str, properties: dict,
+                measured: dict | None = None,
+                fields: dict | None = None) -> dict:
+    """Assemble what goes on a batch sheet, as plain data.
+
+    Three sources, kept apart on purpose and labelled as such on the page:
+
+    * **From the sequence**: molar mass, pI, extinction coefficients, counts.
+      Theoretical, every one of them.
+    * **Measured**: whatever was actually put on an instrument, passed in
+      ``measured`` (``a280``, ``mg_per_ml``, ``volume_ul``, ``measured_da``).
+    * **Written down**: the free-text fields, which nothing here can check.
+
+    Nothing is computed across the boundary except the two things that are
+    arithmetic rather than judgement: total protein from concentration and
+    volume, and the difference between a measured and a theoretical mass.
+    """
+    from datetime import date as _date
+
+    fields = dict(fields or {})
+    fields.setdefault("date", _date.today().isoformat())
+    measured = dict(measured or {})
+
+    clean = "".join(c for c in (seq or "").upper() if c.isalpha())
+    theoretical = [
+        ("Length", f"{properties.get('length', len(clean))} residues"),
+        ("Molar mass", f"{properties['mw_da']:,.1f} Da"
+         if properties.get("mw_da") else ""),
+        ("pI", f"{properties['pI']:.2f}" if properties.get("pI") else ""),
+        ("eps 280, cystines formed",
+         f"{properties['ext_coeff_cystines']:,} /M/cm"
+         if properties.get("ext_coeff_cystines") else ""),
+        ("eps 280, reduced", f"{properties['ext_coeff_reduced']:,} /M/cm"
+         if properties.get("ext_coeff_reduced") else ""),
+        ("A280 of 1 mg/mL", f"{properties['A280_0.1pct']:.3f}"
+         if properties.get("A280_0.1pct") else ""),
+        ("Cysteines", str(properties.get("n_Cys", clean.count("C")))),
+        ("Primary amines", str(properties.get("n_primary_amines", ""))),
+    ]
+    theoretical = [(label, value) for label, value in theoretical if value != ""]
+
+    rows = []
+    concentration = measured.get("mg_per_ml")
+    volume_ul = measured.get("volume_ul")
+    if measured.get("a280") is not None:
+        rows.append(("A280", f"{measured['a280']:.3f}"))
+    if concentration:
+        rows.append(("Concentration", f"{concentration:.3f} mg/mL"))
+        if properties.get("mw_da"):
+            rows.append(("Concentration, molar",
+                         f"{concentration / properties['mw_da'] * 1e6:.1f} uM"))
+    if volume_ul:
+        rows.append(("Volume", f"{volume_ul:,.0f} uL"))
+    if concentration and volume_ul:
+        rows.append(("Total protein",
+                     f"{concentration * volume_ul / 1000:.3f} mg"))
+
+    difference = None
+    if measured.get("measured_da") and properties.get("mw_da"):
+        difference = float(measured["measured_da"]) - float(properties["mw_da"])
+        rows.append(("Measured mass", f"{measured['measured_da']:,.1f} Da"))
+        rows.append(("Difference from the sequence", f"{difference:+,.1f} Da"))
+
+    return {
+        "name": name,
+        "sequence": clean,
+        "fields": [(label, fields.get(key, ""), key)
+                   for key, label, _default, _help in BATCH_FIELDS],
+        "theoretical": theoretical,
+        "measured": rows,
+        "mass_difference_da": difference,
+    }
+
+
+def build_batch_pdf(path, sheet: dict, version: str = "", author: str = "",
+                    app_name: str = "VHH tool box", doi: str = "") -> "Path":
+    """Render a batch sheet to a one-page PDF.
+
+    Deliberately plain: a header, three blocks, the sequence, and a line
+    saying where the theoretical numbers came from. A tube label does not
+    need a cover page.
+    """
+    from datetime import datetime
+    from pathlib import Path as _Path
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
+                                    TableStyle)
+
+    path = _Path(path)
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontSize=9,
+                          leading=12)
+    mono = ParagraphStyle("mono", parent=body, fontName="Courier", fontSize=7.4,
+                          leading=10)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=15,
+                        spaceAfter=2)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11,
+                        spaceBefore=11, spaceAfter=3)
+    small = ParagraphStyle("small", parent=body, fontSize=7.2,
+                           textColor=colors.grey, leading=9.5)
+
+    doc = SimpleDocTemplate(
+        str(path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=15 * mm, bottomMargin=15 * mm,
+        title=f"Batch sheet, {sheet['name']}", author=author or app_name)
+
+    def block(rows):
+        table = Table([[label, value] for label, value in rows],
+                      colWidths=[55 * mm, 119 * mm], hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("LEADING", (0, 0), (-1, -1), 11),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cccccc")),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef1f5")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return table
+
+    story = [Paragraph(f"Batch sheet: {sheet['name']}", h1)]
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    line = f"Generated {stamp}"
+    if version:
+        line += f" by {app_name} {version}"
+    story += [Paragraph(line, small), Spacer(1, 6)]
+
+    story.append(Paragraph("Preparation", h2))
+    story.append(block([(label, value or "-")
+                        for label, value, _key in sheet["fields"]]))
+
+    if sheet["measured"]:
+        story.append(Paragraph("Measured", h2))
+        story.append(block(sheet["measured"]))
+
+    story.append(Paragraph("From the sequence", h2))
+    story.append(block(sheet["theoretical"]))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(
+        "Every value in this block is theoretical, computed from the sequence "
+        "alone. The extinction coefficient and the pI in particular are "
+        "predictions; confirm them experimentally before relying on them.",
+        small))
+
+    if sheet["sequence"]:
+        story.append(Paragraph("Sequence", h2))
+        wrapped = "<br/>".join(sheet["sequence"][i:i + 60]
+                               for i in range(0, len(sheet["sequence"]), 60))
+        story.append(Paragraph(wrapped, mono))
+
+    footer = ("This is a laboratory batch record, not a certificate of "
+              "analysis: it carries no specifications, no acceptance criteria "
+              "and no release decision.")
+    if doi:
+        footer += f" Tool: https://doi.org/{doi}"
+    story += [Spacer(1, 8), Paragraph(footer, small)]
+
+    doc.build(story)
+    return path

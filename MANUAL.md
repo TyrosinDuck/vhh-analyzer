@@ -1342,11 +1342,11 @@ much protein is in it, whether it is the protein you think it is, and how much
 labelling reagent to add.
 
 It is the arithmetic that gets done on the back of a glove box on a Friday
-afternoon, which is exactly why it is worth writing down once. The first three
-views start from the molar mass, extinction coefficient and lysine count that
-the analysis section already derives from the sequence, so none of those has to
-be typed again or looked up wrong. The fourth is about the step before all of
-that, the phage stock, and needs no sequence at all.
+afternoon, which is exactly why it is worth writing down once. The views start
+from the molar mass, extinction coefficient and lysine count that the analysis
+section already derives from the sequence, so none of those has to be typed
+again or looked up wrong. The exception is the phage titre, which is about the
+step before all of that and needs no sequence at all.
 
 Load your sequences in the analysis section first and pick one at the top. The
 calculators still work without that, with the molar mass and extinction
@@ -1477,10 +1477,18 @@ particles per millilitre, and that is what decides how much stock goes into the
 next round of panning. Nothing here needs a sequence.
 
 You give the reading, how many times the stock was diluted to take it, and a
-**glycerol factor**: how much the stock itself was diluted when glycerol was
-added to it. One volume of phage plus one volume of glycerol is 2. Leave it at
-1 if the stock has none. The three multiply together into the absorbance the
+**glycerol correction**. The three multiply together into the absorbance the
 undiluted stock would have, which is then converted twice.
+
+The glycerol part is the one that is easy to get backwards, so the app asks for
+the two volumes rather than for a factor. If you read the absorbance on the
+phage and *then* add glycerol, the tube you pipette from afterwards is more
+dilute than what you measured, so the correction is **below one**: 500 uL of
+phage plus 55.5 uL of pure glycerol is 555.5 uL, 10% glycerol, and the factor
+is 500/555.5 = 0.900. If instead you read the absorbance after mixing, the
+glycerol is already in the reading and the factor is 1. A factor above one is
+for the other question, what the concentration was before the glycerol went in,
+which is not the titre of the tube you are about to aliquot.
 
 **Two constants, and they do not agree.** This is the whole point of the view,
 so it is worth being blunt about it.
@@ -1510,11 +1518,47 @@ notebook.** A plaque or colony titration settles it outright and is the only
 one of the three that counts particles that actually infect.
 
 Below that, **how much to take**: pick which titre to work from, give the
-number of particles you want, and the app gives the volume of stock. A round of
-panning is usually run with 10^11 to 10^13 particles. If the volume comes out
-below two microlitres it cannot be pipetted accurately, and the app offers a
-dilution instead, exactly as the conjugation planner does and for the same
-reason.
+number of particles you want for a solid-phase round, and the app gives two
+volumes side by side, the solid-phase one and the liquid-phase one, which is
+twice it. Showing only the first and leaving you to double it is how a liquid
+round gets set up with half the phage it should have had. The factor of two is
+a protocol convention and not something the app derives, so if yours differs,
+change the target. A round of panning is usually run with 10^11 to 10^13
+particles. If a volume comes out below two microlitres it cannot be pipetted
+accurately, and the app offers a dilution instead, exactly as the conjugation
+planner does and for the same reason.
+
+
+### 5.5 Batch sheet
+
+The page that goes with a tube when it leaves your bench. You give it a lot
+number, who prepared it, the host, the purification, the buffer and the
+storage, plus whatever you measured, and it produces a one-page PDF.
+
+Three blocks, kept apart on purpose:
+
+- **Preparation**, the free text. Nothing here can be checked by anything.
+- **Measured**, what was actually put on an instrument. A field left at zero
+  stays off the sheet, because a page full of zeros reads as a measurement of
+  zero. Nothing is carried over from the other views: a number you have not
+  retyped is a number you have not checked.
+- **From the sequence**, which is theoretical, every value of it, and labelled
+  as such on the PDF.
+
+Keeping them apart is the only reason the sheet is worth generating. A
+predicted extinction coefficient quoted a year later as though it had been
+measured is the failure this layout exists to prevent.
+
+Two numbers cross the line, because they are arithmetic rather than judgement:
+total protein, from the concentration and the volume, and the difference
+between a measured mass and the sequence. If that difference is more than a
+couple of daltons the screen points you at §5.2, which lists the modifications
+that would explain it and that your sequence allows.
+
+**This is not a certificate of analysis.** That term means something specific
+in regulated quality control: specifications, acceptance criteria, a release
+decision and a signature. There is none of that here, and the PDF says so at
+the bottom so the document cannot be mistaken for one later.
 
 ---
 

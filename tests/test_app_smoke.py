@@ -236,7 +236,7 @@ def test_bench_renders_every_view(app):
     selector = [r for r in app.radio if r.label == "View"]
     assert selector, "the bench view selector did not render"
     views = selector[0].options
-    assert len(views) == 4, f"expected four views, got {views}"
+    assert len(views) == 5, f"expected five views, got {views}"
 
     for view in views:
         [r for r in app.radio if r.label == "View"][0].set_value(view).run()

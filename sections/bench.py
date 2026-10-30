@@ -10,17 +10,22 @@ the three has to be typed again or looked up wrong.
 
 from __future__ import annotations
 
+import tempfile
+from datetime import date
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 import bench as bn
 import vhh_core as vc
 from compute import analyze_one
-from shell import FIT, current_sequences, footer
+from shell import AUTHOR, DOI, FIT, VERSION, current_sequences, footer
 
-__version__ = "2026.10.30c"
+__version__ = "2026.10.30d"
 
-VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate", "🦠 Phage titre"]
+VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate", "🦠 Phage titre",
+         "📄 Batch sheet"]
 
 
 def render(ph: float, method: str) -> None:
@@ -29,11 +34,12 @@ def render(ph: float, method: str) -> None:
     st.markdown(
         "The arithmetic between a purified protein and the next experiment: "
         "how much is in the tube, whether it is the protein you think it is, "
-        "and how much labelling reagent to add. The first three views start "
-        "from the molar mass, extinction coefficient and lysine count the "
-        "analysis section already derives from the sequence, so none of those "
-        "has to be typed again. The fourth is about the step before all of "
-        "that, and needs no sequence at all.")
+        "how much labelling reagent to add, and what goes on the page that "
+        "leaves with the tube. They all start from the molar mass, extinction "
+        "coefficient and lysine count the analysis section already derives "
+        "from the sequence, so none of those has to be typed again. The "
+        "exception is the phage titre, which is about the step before all of "
+        "that and needs no sequence at all.")
 
     # The view is chosen before the sequence is asked for, because one of the
     # four does not use a sequence at all and asking for one anyway would be
@@ -54,8 +60,10 @@ def render(ph: float, method: str) -> None:
         _quantify(props)
     elif view == VIEWS[1]:
         _mass(name, sequences, props)
-    else:
+    elif view == VIEWS[2]:
         _conjugate(name, sequences, props, method)
+    else:
+        _batch(name, props)
 
     _disclaimer()
 
@@ -480,7 +488,7 @@ def _phage() -> None:
         "turns into particles per millilitre, and that decides how much stock "
         "goes into the next round of panning. This one needs no sequence.")
 
-    read = st.columns(3)
+    read = st.columns(2)
     with read[0]:
         a260 = st.number_input("A260 measured", 0.0, 100.0, 0.459, 0.001,
                                format="%.3f", key="ph_a260")
@@ -489,12 +497,42 @@ def _phage() -> None:
             "Dilution factor", 1.0, 1e6, 100.0, 1.0, key="ph_dil",
             help="How many times the stock was diluted to make the "
                  "measurement. 1 for a neat sample.")
-    with read[2]:
+
+    # Glycerol is asked for as the two volumes rather than as a factor,
+    # because the factor is the part that is easy to get backwards. Measuring
+    # the phage and then adding glycerol to it means the tube you pipette from
+    # is more dilute than what you measured, so the correction is below 1; a
+    # field that refused anything below 1 was asking for the number the wrong
+    # way round.
+    glycerol_modes = ["No glycerol", "From the volumes", "Known factor"]
+    mode = st.radio("Glycerol", glycerol_modes, horizontal=True, key="ph_glymode",
+                    label_visibility="collapsed")
+    glycerol = 1.0
+    if mode == glycerol_modes[1]:
+        volumes = st.columns(3)
+        with volumes[0]:
+            v_phage = st.number_input("Phage volume (uL)", 0.1, 1e6, 500.0, 1.0,
+                                      key="ph_vphage")
+        with volumes[1]:
+            v_glycerol = st.number_input("Glycerol added (uL)", 0.0, 1e6, 55.5,
+                                         0.1, key="ph_vgly")
+        glycerol = v_phage / (v_phage + v_glycerol)
+        with volumes[2]:
+            st.write("")
+            st.info(f"Factor **{glycerol:.4f}**")
+        st.caption(
+            f"The absorbance was read on the phage before the glycerol went "
+            f"in, so the tube you now pipette from is "
+            f"{1 / glycerol:.3f} times more dilute than what you measured. If "
+            f"you read the absorbance *after* mixing, the glycerol is already "
+            f"in the reading and the factor is 1.")
+    elif mode == glycerol_modes[2]:
         glycerol = st.number_input(
-            "Glycerol factor", 1.0, 100.0, 1.0, 0.01, key="ph_gly",
-            help="How much the stock itself was diluted when glycerol was "
-                 "added to it. One volume of phage plus one volume of "
-                 "glycerol is 2. Leave at 1 if the stock has none.")
+            "Glycerol factor", 0.01, 100.0, 0.9, 0.01, format="%.4f",
+            key="ph_gly",
+            help="Below 1 when glycerol was added after the reading, which "
+                 "dilutes the tube you pipette from. Above 1 when the stock "
+                 "was already in glycerol and you are correcting back to it.")
 
     with st.expander("The two constants, and why they disagree"):
         st.markdown(f"""
@@ -565,7 +603,7 @@ actually infect.
 
     st.divider()
     st.subheader("How much to take")
-    want = st.columns(3)
+    want = st.columns(2)
     with want[0]:
         basis = st.radio("Titre to use", ["Empirical", "From the genome"],
                          horizontal=True, key="ph_basis")
@@ -574,14 +612,131 @@ actually infect.
     with want[1]:
         target = st.number_input("Particles wanted", 1e6, 1e18, 1e11,
                                  format="%.3e", key="ph_target",
-                                 help="A round of panning is usually run with "
-                                      "1e11 to 1e13 particles.")
+                                 help="The input for one round on a solid "
+                                      "phase. The liquid-phase volume beside "
+                                      "it is twice this.")
     if titre <= 0:
-        with want[2]:
-            st.info("Give an absorbance above zero.")
+        st.info("Give an absorbance above zero.")
         return
-    plan = bn.phage_aliquot(titre, target)
-    with want[2]:
-        st.success(f"**{plan['volume_ul']:.1f} uL** of stock")
-    if plan["note"]:
-        st.caption(plan["note"])
+
+    # Two formats, one titre. A solid-phase round takes the input as given; a
+    # liquid-phase round is run with twice as many particles, because the
+    # antigen is in solution and the capture step loses more of them. Showing
+    # one and leaving the reader to double it is how a round gets set up with
+    # half the phage it should have had.
+    plans = {"Solid phase (adsorbed)": bn.phage_aliquot(titre, target),
+             "Liquid phase": bn.phage_aliquot(
+                 titre, target * bn.LIQUID_PANNING_FACTOR)}
+    shown = st.columns(2)
+    for column, (label, plan) in zip(shown, plans.items()):
+        with column:
+            st.success(f"**{plan['volume_ul']:.1f} uL** of stock\n\n{label}")
+            if plan["note"]:
+                st.caption(plan["note"])
+    st.caption(
+        f"Liquid phase is {bn.LIQUID_PANNING_FACTOR:g}x the solid-phase input, "
+        f"which is a protocol convention and not something this app derives. "
+        f"Change the target above if yours differs.")
+
+
+# --------------------------------------------------------------------------
+def _batch(name, props: dict) -> None:
+    st.subheader("Batch sheet")
+    st.markdown(
+        "The page that goes with a tube when it leaves your bench. Three "
+        "blocks, kept apart on purpose: what you wrote down, what you "
+        "measured, and what the sequence implies. Mixing those is how a "
+        "predicted extinction coefficient ends up being quoted as a "
+        "measurement a year later.")
+    st.info(
+        "**Not a certificate of analysis.** There are no specifications here, "
+        "no acceptance criteria and no release decision. It is a laboratory "
+        "batch record, and the PDF says so at the bottom.", icon="📄")
+
+    if not props:
+        st.warning(
+            "Pick a sequence at the top. Without one there is nothing to put "
+            "in the third block, and a batch sheet with only free text is a "
+            "sticky label.")
+        return
+
+    written = {}
+    pairs = st.columns(2)
+    for position, (key, label, default, hint) in enumerate(bn.BATCH_FIELDS):
+        with pairs[position % 2]:
+            if key == "notes":
+                continue
+            if key == "date":
+                written[key] = st.text_input(
+                    label, value=date.today().isoformat(), key=f"b_{key}",
+                    help=hint or None)
+            else:
+                written[key] = st.text_input(label, value=default,
+                                             key=f"b_{key}",
+                                             help=hint or None)
+    written["notes"] = st.text_area("Notes", key="b_notes", height=70,
+                                    help="Anything the next person needs to "
+                                         "know.")
+
+    st.markdown("**Measured**")
+    st.caption(
+        "Leave a field at zero and it stays off the sheet. Nothing here is "
+        "carried over from the other views: a number you have not retyped is "
+        "a number you have not checked.")
+    got = st.columns(4)
+    with got[0]:
+        a280 = st.number_input("A280", 0.0, 100.0, 0.0, 0.001, format="%.3f",
+                               key="b_a280")
+    with got[1]:
+        mg_per_ml = st.number_input("Concentration (mg/mL)", 0.0, 1000.0, 0.0,
+                                    0.01, key="b_conc")
+    with got[2]:
+        volume = st.number_input("Volume (uL)", 0.0, 1e6, 0.0, 10.0,
+                                 key="b_vol")
+    with got[3]:
+        measured_da = st.number_input("Measured mass (Da)", 0.0, 1e7, 0.0, 1.0,
+                                      key="b_mass")
+
+    sheet = bn.batch_sheet(
+        name, props.get("sequence", ""), props,
+        measured={"a280": a280 or None, "mg_per_ml": mg_per_ml or None,
+                  "volume_ul": volume or None,
+                  "measured_da": measured_da or None},
+        fields=written)
+
+    difference = sheet["mass_difference_da"]
+    if difference is not None and abs(difference) > 2.0:
+        st.warning(
+            f"The measured mass is {difference:+.1f} Da from the sequence. "
+            f"The **Mass check** view lists the modifications that would "
+            f"explain that and that this sequence allows.")
+
+    st.divider()
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**From the sequence**")
+        st.dataframe(pd.DataFrame(sheet["theoretical"],
+                                  columns=["", "value"]),
+                     use_container_width=True, hide_index=True)
+    with right:
+        st.markdown("**Measured**")
+        if sheet["measured"]:
+            st.dataframe(pd.DataFrame(sheet["measured"],
+                                      columns=["", "value"]),
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nothing entered yet.")
+
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "batch.pdf"
+        try:
+            bn.build_batch_pdf(path, sheet, version=VERSION, author=AUTHOR,
+                               doi=DOI)
+        except Exception as exc:
+            st.error(f"The PDF could not be built: {exc}")
+            return
+        stamp = (written.get("lot") or name or "batch").replace(" ", "_")
+        st.download_button(
+            "📄 Download the batch sheet", path.read_bytes(),
+            file_name=f"batch_{stamp}.pdf", mime="application/pdf",
+            key="b_pdf", **FIT)

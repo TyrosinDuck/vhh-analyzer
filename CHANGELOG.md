@@ -34,12 +34,21 @@ ran, from its Zenodo record.
   accurately, and warns when lysines sit in a CDR.
 - **A phage titre calculator**, as a fourth Bench view. An A260, the dilution
   it was read at and a glycerol correction turn into particles per millilitre,
-  and into the volume of stock that holds the number of particles you want.
-  Both routes are shown side by side: the empirical constant from a titration,
-  which is editable because it belongs to a preparation and an instrument
-  rather than to physics, and Day's relation from the genome length. On the
-  same reading they differ by a factor of about 275, and the app says so
-  instead of picking one.
+  and into the volume of stock that holds the number of particles you want,
+  for a solid-phase round and for a liquid-phase one beside it, which is twice
+  as much. Both routes to a titre are shown side by side: the empirical
+  constant from a titration, which is editable because it belongs to a
+  preparation and an instrument rather than to physics, and Day's relation
+  from the genome length. On the same reading they differ by a factor of about
+  275, and the app says so instead of picking one. The glycerol correction is
+  asked for as the two volumes, because the factor is below one when the
+  absorbance was read before the glycerol went in, and that is the direction
+  this protocol always goes.
+- **A batch sheet**, as a fifth Bench view: a one-page PDF for a purified
+  batch, with what you wrote down, what you measured and what the sequence
+  implies in three blocks that are kept apart, so a predicted extinction
+  coefficient cannot be read a year later as a measurement. It is a laboratory
+  batch record, not a certificate of analysis, and the PDF says so.
 - **A Reference screen**, in the sidebar under the manual: the genetic code
   and the twenty amino acids, with the structures drawn as they exist at
   pH 7.4. Nothing on it is transcribed. The codon table is Biopython's, the

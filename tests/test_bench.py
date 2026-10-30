@@ -275,6 +275,24 @@ class TestPhageTitre:
         assert plan["volume_ul"] == pytest.approx(26.2, rel=0.01)
         assert not plan["note"]
 
+    def test_glycerol_added_after_the_reading_dilutes_the_tube(self):
+        """The correction that was briefly impossible to enter.
+
+        500 uL of phage plus 55.5 uL of pure glycerol is 555.5 uL, 10%
+        glycerol, and the tube you pipette from is 1.111 times more dilute
+        than the phage whose absorbance you read. So the factor is
+        500/555.5 = 0.9, which is *below* one. The first version of the
+        screen refused anything below one, which is the only direction this
+        protocol ever goes.
+        """
+        factor = 500.0 / (500.0 + 55.5)
+        assert factor == pytest.approx(0.9, abs=0.001)
+        neat = bench.phage_titre(a260=0.5, dilution=100.0)["empirical_per_ml"]
+        glycerol = bench.phage_titre(a260=0.5, dilution=100.0,
+                                     glycerol_factor=factor)["empirical_per_ml"]
+        assert glycerol == pytest.approx(neat * factor)
+        assert glycerol < neat
+
     def test_the_two_routes_are_both_reported(self):
         """Neither estimate may quietly replace the other.
 
@@ -335,3 +353,97 @@ class TestPhageAliquot:
     def test_impossible_inputs_are_refused(self, titre, target):
         with pytest.raises(ValueError):
             bench.phage_aliquot(titre, target)
+
+
+class TestLiquidPanning:
+    """A liquid-phase round takes twice the input of a solid-phase one."""
+
+    def test_the_liquid_volume_is_double(self):
+        titre = 3.8e12
+        solid = bench.phage_aliquot(titre, 1e11)["volume_ul"]
+        liquid = bench.phage_aliquot(
+            titre, 1e11 * bench.LIQUID_PANNING_FACTOR)["volume_ul"]
+        assert liquid == pytest.approx(solid * 2)
+
+
+# --------------------------------------------------------------------------
+# Batch sheet
+# --------------------------------------------------------------------------
+
+VHH = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+       "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYDYWGQGTQVTVSS")
+
+PROPERTIES = {"length": len(VHH), "mw_da": 13086.2, "pI": 8.60,
+              "ext_coeff_cystines": 35535, "ext_coeff_reduced": 35410,
+              "A280_0.1pct": 2.706, "n_Cys": 2, "n_primary_amines": 5,
+              "sequence": VHH}
+
+
+class TestBatchSheet:
+
+    def test_the_three_blocks_stay_separate(self):
+        """The whole point of the sheet.
+
+        A predicted extinction coefficient quoted a year later as a
+        measurement is the failure this layout exists to prevent, so nothing
+        measured may appear among the sequence-derived values or the other
+        way round.
+        """
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"a280": 0.512})
+        theoretical = {label for label, _value in sheet["theoretical"]}
+        measured = {label for label, _value in sheet["measured"]}
+        assert not theoretical & measured
+        assert "A280" in measured
+        assert "pI" in theoretical
+
+    def test_an_empty_measurement_leaves_the_block_empty(self):
+        """Zeros are what an untouched number input gives, and a sheet full
+        of zeros reads as a measurement of zero."""
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES)
+        assert sheet["measured"] == []
+        assert sheet["mass_difference_da"] is None
+
+    def test_total_protein_is_concentration_times_volume(self):
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"mg_per_ml": 1.84,
+                                            "volume_ul": 450.0})
+        values = dict(sheet["measured"])
+        assert values["Total protein"] == "0.828 mg"
+
+    def test_the_mass_difference_is_measured_minus_theoretical(self):
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"measured_da": 13245.0})
+        assert sheet["mass_difference_da"] == pytest.approx(158.8, abs=0.1)
+
+    def test_the_date_fills_itself_in(self):
+        from datetime import date
+
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES)
+        fields = {key: value for _label, value, key in sheet["fields"]}
+        assert fields["date"] == date.today().isoformat()
+
+    def test_every_declared_field_reaches_the_sheet(self):
+        """Adding a field to BATCH_FIELDS must be one edit, not two."""
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES)
+        keys = {key for _label, _value, key in sheet["fields"]}
+        assert keys == {key for key, _label, _default, _help
+                        in bench.BATCH_FIELDS}
+
+    def test_the_pdf_is_one_page_and_says_what_it_is_not(self, tmp_path):
+        import pypdf
+
+        sheet = bench.batch_sheet("NbTest", VHH, PROPERTIES,
+                                  measured={"a280": 0.512, "mg_per_ml": 1.84},
+                                  fields={"lot": "JV-2026-014"})
+        path = bench.build_batch_pdf(tmp_path / "batch.pdf", sheet,
+                                     version="1.0.0", author="J. Vaneyck")
+        assert path.exists() and path.stat().st_size > 1000
+
+        reader = pypdf.PdfReader(str(path))
+        assert len(reader.pages) == 1, "a tube label does not need two pages"
+        text = reader.pages[0].extract_text()
+        assert "JV-2026-014" in text
+        assert "not a certificate of analysis" in text, \
+            "the sheet must not be mistakable for a regulated document"
+        assert "theoretical" in text
