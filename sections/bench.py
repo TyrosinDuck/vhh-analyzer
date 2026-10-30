@@ -18,7 +18,7 @@ import vhh_core as vc
 from compute import analyze_one
 from shell import FIT, current_sequences, footer
 
-__version__ = "2026.10.30a"
+__version__ = "2026.10.30b"
 
 VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate"]
 
@@ -34,35 +34,64 @@ def render(ph: float, method: str) -> None:
         "section already derives from the sequence, so none of those has to be "
         "typed again.")
 
-    sequences = current_sequences()
-    name = None
+    # Two ways in. The analysis list is the usual one, and keeps the molar
+    # mass, extinction coefficient and lysine count consistent with everything
+    # else the app says about that sequence. But arriving here with a sequence
+    # in the clipboard and no interest in the rest of the app is a real way to
+    # use this screen, and sending someone to another section first to quantify
+    # one tube would be ceremony.
+    loaded = current_sequences()
+    sources = ["From the analysis section", "Paste one here"]
+    source = st.radio("Sequence", sources, horizontal=True, key="bench_source",
+                      index=0 if loaded else 1,
+                      label_visibility="collapsed")
+
+    name, seq = None, None
+    if source == sources[0]:
+        if not loaded:
+            st.info(
+                "No sequences in the analysis section. Load them there, or "
+                "switch to **Paste one here**.")
+        else:
+            pick = st.columns([2, 3])
+            with pick[0]:
+                name = st.selectbox("Protein", list(loaded), key="bench_seq")
+            seq = loaded[name]
+    else:
+        pasted = st.text_area(
+            "Protein sequence", key="bench_paste", height=110,
+            placeholder=">my VHH\nQVQLQESGGGLVQAGGSLRLSCAAS...",
+            help="FASTA or a bare sequence. Only the first one is used: this "
+                 "screen is about one tube.")
+        if pasted.strip():
+            try:
+                parsed = vc.parse_input(pasted)
+                name = next(iter(parsed))
+                seq = parsed[name]
+            except Exception as exc:
+                st.error(f"That could not be read as a protein sequence: {exc}")
+
     props: dict = {}
-    if sequences:
-        pick = st.columns([2, 3])
-        with pick[0]:
-            name = st.selectbox("Protein", list(sequences), key="bench_seq",
-                                help="The sequences currently in the analysis "
-                                     "input. Load or paste them there.")
+    sequences = {name: seq} if (name and seq) else {}
+    if seq:
         try:
-            props, annotation, error = analyze_one(name, sequences[name], ph,
-                                                   method)
+            props, _annotation, _error = analyze_one(name, seq, ph, method)
             props = props or {}
         except Exception as exc:
             st.warning(f"**{name}** could not be characterised: {exc}")
-            props, annotation = {}, None
-        with pick[1]:
-            if props:
-                st.caption(
-                    f"{props['mw_da']:.1f} Da · "
-                    f"eps(280) {props['ext_coeff_cystines']:,} /M/cm with the "
-                    f"cystines formed, {props['ext_coeff_reduced']:,} reduced · "
-                    f"{props['n_primary_amines']} primary amines")
-    else:
+            props = {}
+
+    if props:
+        st.caption(
+            f"**{name}** · {props['mw_da']:.1f} Da · "
+            f"eps(280) {props['ext_coeff_cystines']:,} /M/cm with the cystines "
+            f"formed, {props['ext_coeff_reduced']:,} reduced · "
+            f"{props['n_primary_amines']} primary amines")
+    elif not seq:
         st.info(
-            "No sequences loaded. The calculators below still work if you type "
-            "the molar mass and extinction coefficient yourself, but loading a "
-            "sequence in the analysis section fills them in and removes the "
-            "most common way of getting this wrong.")
+            "The calculators below still work if you type the molar mass and "
+            "extinction coefficient yourself. Giving a sequence fills them in "
+            "and removes the most common way of getting this wrong.")
 
     view = st.radio("View", VIEWS, horizontal=True, label_visibility="collapsed",
                     key="bench_view")

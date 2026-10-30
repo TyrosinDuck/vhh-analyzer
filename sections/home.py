@@ -14,7 +14,7 @@ from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT,
                    ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
                    current_sequences, footer, go_to, report_url)
 
-__version__ = "2026.10.29b"
+__version__ = "2026.10.30a"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -29,14 +29,14 @@ __version__ = "2026.10.29b"
 # The cost of a component is an iframe, which inherits no colour from the page,
 # so the theme is handled inside it: `currentColor` follows the body colour, and
 # a prefers-color-scheme rule sets that colour to match a light or dark theme.
-FLOW_DIAGRAM = """<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg"
+FLOW_DIAGRAM = """<svg viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;height:auto;max-width:900px" role="img"
-     aria-label="How the six sections feed each other. You supply the input
+     aria-label="How the seven sections feed each other. You supply the input
      yourself to Sanger sequencing (.ab1 files), Sequence analysis (sequences),
-     Structure (a model) and Gene diagnosis (coding DNA). Sanger sequencing and
-     the sequence library also feed Sequence analysis, which feeds Structure,
-     Gene diagnosis and In-silico cloning; the library feeds Gene diagnosis
-     directly with DNA.">
+     Structure (a model), Gene diagnosis (coding DNA) and Bench (a sequence).
+     Sanger sequencing and the sequence library feed Sequence analysis, which
+     feeds Structure, Gene diagnosis, In-silico cloning and Bench; the library
+     feeds Gene diagnosis directly with DNA.">
   <defs>
     <marker id="vhh-arrow" viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -44,32 +44,46 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg"
     </marker>
   </defs>
 
+  <!-- Into the analysis, and the library straight to the gene diagnosis -->
   <g fill="none" stroke="currentColor" stroke-opacity="0.4" stroke-width="1.6"
      marker-end="url(#vhh-arrow)" stroke-linejoin="round">
     <path d="M 224 131 H 277 V 224 H 324"/>
     <path d="M 224 303 H 277 V 254 H 324"/>
-    <path d="M 560 214 H 605 V 131 H 644"/>
-    <path d="M 560 238 H 605 V 285 H 644"/>
-    <path d="M 560 262 H 605 V 433 H 644"/>
-    <path d="M 124 340 V 505 H 878 V 297 H 866"/>
+    <path d="M 124 340 V 680 H 878 V 297 H 866"/>
   </g>
 
+  <!-- Out of the analysis, as one trunk with four stubs rather than four
+       lines that would have to cross each other -->
+  <g fill="none" stroke="currentColor" stroke-opacity="0.4" stroke-width="1.6"
+     stroke-linejoin="round">
+    <path d="M 560 238 H 592"/>
+    <path d="M 592 131 V 593"/>
+  </g>
+  <g fill="none" stroke="currentColor" stroke-opacity="0.4" stroke-width="1.6"
+     marker-end="url(#vhh-arrow)">
+    <path d="M 592 131 H 642"/>
+    <path d="M 592 285 H 642"/>
+    <path d="M 592 439 H 642"/>
+    <path d="M 592 593 H 642"/>
+  </g>
+
+  <!-- What you provide yourself -->
   <g fill="none" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.6"
      stroke-dasharray="5 4" marker-end="url(#vhh-arrow)">
     <path d="M 124 74 V 94"/>
     <path d="M 443 168 V 188"/>
     <path d="M 755 74 V 94"/>
     <path d="M 755 228 V 248"/>
+    <path d="M 755 536 V 556"/>
   </g>
-
   <g fill="none" stroke="currentColor" stroke-opacity="0.34" stroke-width="1.3"
      stroke-dasharray="5 4">
     <rect x="29" y="30" width="190" height="42" rx="8"/>
     <rect x="348" y="124" width="190" height="42" rx="8"/>
     <rect x="660" y="30" width="190" height="42" rx="8"/>
     <rect x="660" y="184" width="190" height="42" rx="8"/>
+    <rect x="660" y="492" width="190" height="42" rx="8"/>
   </g>
-
   <g font-size="11" fill="currentColor" fill-opacity="0.72" text-anchor="middle"
      font-family="system-ui, -apple-system, sans-serif">
     <text x="124" y="48">you upload</text>
@@ -80,16 +94,20 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg"
     <text x="755" y="63" font-weight="600">a PDB or AlphaFold model</text>
     <text x="755" y="202">you paste</text>
     <text x="755" y="217" font-weight="600">coding DNA</text>
+    <text x="755" y="510">you paste</text>
+    <text x="755" y="525" font-weight="600">one sequence</text>
   </g>
 
+  <!-- Edge labels -->
   <g font-size="11.5" fill="currentColor" fill-opacity="0.72"
      font-family="system-ui, -apple-system, sans-serif" text-anchor="middle">
     <text x="277" y="119">selected clones</text>
     <text x="277" y="326">proteins</text>
-    <text x="603" y="122">sequences</text>
-    <text x="603" y="276">DNA</text>
-    <text x="603" y="424">insert</text>
-    <text x="470" y="521">DNA, straight to the diagnosis</text>
+    <text x="621" y="122">sequences</text>
+    <text x="621" y="276">DNA</text>
+    <text x="621" y="430">insert</text>
+    <text x="621" y="584">properties</text>
+    <text x="470" y="696">DNA, straight to the diagnosis</text>
   </g>
 
   <g stroke="#4c72b0" stroke-opacity="0.55" stroke-width="1.4">
@@ -99,11 +117,13 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg"
           fill="#4c72b0" fill-opacity="0.10"/>
     <rect x="324" y="190" width="236" height="96" rx="12"
           fill="#4c72b0" fill-opacity="0.22" stroke-width="2.2"/>
-    <rect x="644" y="96" width="220" height="70" rx="10"
+    <rect x="642" y="96" width="222" height="70" rx="10"
           fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="644" y="250" width="220" height="70" rx="10"
+    <rect x="642" y="250" width="222" height="70" rx="10"
           fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="644" y="398" width="220" height="70" rx="10"
+    <rect x="642" y="404" width="222" height="70" rx="10"
+          fill="#4c72b0" fill-opacity="0.10"/>
+    <rect x="642" y="558" width="222" height="70" rx="10"
           fill="#4c72b0" fill-opacity="0.10"/>
   </g>
 
@@ -119,14 +139,17 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg"
     <text x="442" y="248" font-size="11" fill-opacity="0.68">holds the sequence list</text>
     <text x="442" y="265" font-size="11" fill-opacity="0.68">every other section reads</text>
 
-    <text x="754" y="127" font-size="14" font-weight="600">🧊 Structure</text>
-    <text x="754" y="147" font-size="11" fill-opacity="0.68">measured, not inferred</text>
+    <text x="753" y="127" font-size="14" font-weight="600">🧊 Structure</text>
+    <text x="753" y="147" font-size="11" fill-opacity="0.68">measured, not inferred</text>
 
-    <text x="754" y="281" font-size="14" font-weight="600">🔧 Gene diagnosis</text>
-    <text x="754" y="301" font-size="11" fill-opacity="0.68">rare codons, GC stretches</text>
+    <text x="753" y="281" font-size="14" font-weight="600">🔧 Gene diagnosis</text>
+    <text x="753" y="301" font-size="11" fill-opacity="0.68">rare codons, GC stretches</text>
 
-    <text x="754" y="429" font-size="14" font-weight="600">🧬 In-silico cloning</text>
-    <text x="754" y="449" font-size="11" fill-opacity="0.68">backbone + insert</text>
+    <text x="753" y="435" font-size="14" font-weight="600">🧬 In-silico cloning</text>
+    <text x="753" y="455" font-size="11" fill-opacity="0.68">backbone + insert</text>
+
+    <text x="753" y="589" font-size="14" font-weight="600">⚗️ Bench</text>
+    <text x="753" y="609" font-size="11" fill-opacity="0.68">A280, mass, conjugation</text>
   </g>
 </svg>"""
 
@@ -170,7 +193,7 @@ def render() -> None:
             "<style>body{margin:0;background:transparent;color:#31333F;"
             "font-family:system-ui,-apple-system,sans-serif}"
             "@media (prefers-color-scheme: dark){body{color:#fafafa}}</style>"
-            + FLOW_DIAGRAM, height=560, scrolling=False)
+            + FLOW_DIAGRAM, height=720, scrolling=False)
         st.markdown("""
 Three things the diagram cannot carry:
 
