@@ -381,7 +381,7 @@ PROPERTIES = {"length": len(VHH), "mw_da": 13086.2, "pI": 8.60,
 
 class TestBatchSheet:
 
-    def test_the_three_blocks_stay_separate(self):
+    def test_the_blocks_stay_separate(self):
         """The whole point of the sheet.
 
         A predicted extinction coefficient quoted a year later as a
@@ -393,23 +393,76 @@ class TestBatchSheet:
                                   measured={"a280": 0.512})
         theoretical = {label for label, _value in sheet["theoretical"]}
         measured = {label for label, _value in sheet["measured"]}
+        derived = {label for label, _value in sheet["derived"]}
         assert not theoretical & measured
+        assert not theoretical & derived
+        assert not measured & derived
         assert "A280" in measured
         assert "pI" in theoretical
+
+    def test_a_concentration_from_an_absorbance_is_not_measured(self):
+        """It is a reading divided by a predicted extinction coefficient and
+        converted with a predicted molar mass, so it belongs in the derived
+        block with its provenance, not among the readings."""
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"a280": 0.512})
+        measured = {label for label, _value in sheet["measured"]}
+        derived = dict(sheet["derived"])
+        assert "Concentration" not in measured
+        assert "Concentration" in derived
+        expected = bench.concentration_from_a280(
+            0.512, PROPERTIES["ext_coeff_cystines"], PROPERTIES["mw_da"])
+        assert derived["Concentration"] == f"{expected['mg_per_ml']:.3f} mg/mL"
+        assert any("predict" in note for note in sheet["derivation_notes"]), \
+            "the sheet must say the concentration rests on a prediction"
+
+    def test_a_concentration_determined_another_way_is_measured(self):
+        """A BCA does not go through the sequence, so it is a reading, and
+        the method is named because a concentration without one cannot be
+        interpreted later."""
+        sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"mg_per_ml": 1.84,
+                                            "method": "BCA"})
+        labels = [label for label, _value in sheet["measured"]]
+        assert any("BCA" in label for label in labels)
+        assert not any("Concentration" == label
+                       for label, _value in sheet["derived"])
+
+    def test_the_dilution_and_path_length_reach_the_concentration(self):
+        plain = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                  measured={"a280": 0.5})
+        diluted = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                    measured={"a280": 0.5, "dilution": 10.0})
+        # rel rather than exact: the helper rounds, so ten times a rounded
+        # number is not the rounding of ten times it.
+        assert (diluted["concentration_mg_per_ml"]
+                == pytest.approx(plain["concentration_mg_per_ml"] * 10,
+                                 rel=1e-3))
+
+    def test_the_extinction_coefficient_choice_changes_the_answer(self):
+        formed = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                   measured={"a280": 0.5}, cystines=True)
+        reduced = bench.batch_sheet("Nb", VHH, PROPERTIES,
+                                    measured={"a280": 0.5}, cystines=False)
+        assert (formed["concentration_mg_per_ml"]
+                != reduced["concentration_mg_per_ml"])
+        assert any("cystines formed" in note
+                   for note in formed["derivation_notes"])
 
     def test_an_empty_measurement_leaves_the_block_empty(self):
         """Zeros are what an untouched number input gives, and a sheet full
         of zeros reads as a measurement of zero."""
         sheet = bench.batch_sheet("Nb", VHH, PROPERTIES)
         assert sheet["measured"] == []
+        assert sheet["derived"] == []
         assert sheet["mass_difference_da"] is None
 
     def test_total_protein_is_concentration_times_volume(self):
         sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,
                                   measured={"mg_per_ml": 1.84,
+                                            "method": "BCA",
                                             "volume_ul": 450.0})
-        values = dict(sheet["measured"])
-        assert values["Total protein"] == "0.828 mg"
+        assert dict(sheet["derived"])["Total protein"] == "0.828 mg"
 
     def test_the_mass_difference_is_measured_minus_theoretical(self):
         sheet = bench.batch_sheet("Nb", VHH, PROPERTIES,

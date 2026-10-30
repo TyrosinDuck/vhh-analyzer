@@ -28,7 +28,7 @@ __all__ = [
     "PIPETTE_MINIMUM_UL", "desalting_column", "__version__",
 ]
 
-__version__ = "2026.10.30d"
+__version__ = "2026.10.30e"
 
 
 # --------------------------------------------------------------------------
@@ -556,20 +556,33 @@ BATCH_FIELDS = [
 
 def batch_sheet(name: str, seq: str, properties: dict,
                 measured: dict | None = None,
-                fields: dict | None = None) -> dict:
+                fields: dict | None = None,
+                cystines: bool = True) -> dict:
     """Assemble what goes on a batch sheet, as plain data.
 
-    Three sources, kept apart on purpose and labelled as such on the page:
+    Four blocks, kept apart on purpose and labelled as such on the page:
 
+    * **Written down**: the free-text fields, which nothing here can check.
+    * **Measured**: only what an instrument actually read. An absorbance, a
+      volume, a deconvoluted mass. Nothing in this block depends on the
+      sequence.
+    * **Derived**: what comes from combining the two. A concentration in
+      mg/mL is the one everybody calls a measurement and none of them is:
+      it is an absorbance divided by a *predicted* extinction coefficient,
+      and converted to a molarity with a *predicted* molar mass. Putting it
+      in with the readings is how a prediction gets quoted a year later as
+      something that was measured, so it sits in its own block, with the
+      extinction coefficient it used written next to it.
     * **From the sequence**: molar mass, pI, extinction coefficients, counts.
       Theoretical, every one of them.
-    * **Measured**: whatever was actually put on an instrument, passed in
-      ``measured`` (``a280``, ``mg_per_ml``, ``volume_ul``, ``measured_da``).
-    * **Written down**: the free-text fields, which nothing here can check.
 
-    Nothing is computed across the boundary except the two things that are
-    arithmetic rather than judgement: total protein from concentration and
-    volume, and the difference between a measured and a theoretical mass.
+    ``measured`` takes ``a280``, ``dilution``, ``path_cm``, ``volume_ul``,
+    ``measured_da``, and, when the concentration did not come from an
+    absorbance at all, ``mg_per_ml`` with ``method`` naming how it was
+    obtained. A concentration given that way is a measurement and is listed
+    as one.
+
+    ``cystines`` picks which of the two extinction coefficients is used.
     """
     from datetime import date as _date
 
@@ -578,15 +591,19 @@ def batch_sheet(name: str, seq: str, properties: dict,
     measured = dict(measured or {})
 
     clean = "".join(c for c in (seq or "").upper() if c.isalpha())
+    eps_key = "ext_coeff_cystines" if cystines else "ext_coeff_reduced"
+    eps = properties.get(eps_key)
+    eps_label = "cystines formed" if cystines else "all cysteines reduced"
+    mw_da = properties.get("mw_da")
+
     theoretical = [
         ("Length", f"{properties.get('length', len(clean))} residues"),
-        ("Molar mass", f"{properties['mw_da']:,.1f} Da"
-         if properties.get("mw_da") else ""),
+        ("Molar mass", f"{mw_da:.1f} Da" if mw_da else ""),
         ("pI", f"{properties['pI']:.2f}" if properties.get("pI") else ""),
         ("eps 280, cystines formed",
-         f"{properties['ext_coeff_cystines']:,} /M/cm"
+         f"{properties['ext_coeff_cystines']} /M/cm"
          if properties.get("ext_coeff_cystines") else ""),
-        ("eps 280, reduced", f"{properties['ext_coeff_reduced']:,} /M/cm"
+        ("eps 280, reduced", f"{properties['ext_coeff_reduced']} /M/cm"
          if properties.get("ext_coeff_reduced") else ""),
         ("A280 of 1 mg/mL", f"{properties['A280_0.1pct']:.3f}"
          if properties.get("A280_0.1pct") else ""),
@@ -595,27 +612,53 @@ def batch_sheet(name: str, seq: str, properties: dict,
     ]
     theoretical = [(label, value) for label, value in theoretical if value != ""]
 
-    rows = []
-    concentration = measured.get("mg_per_ml")
+    read, derived, notes = [], [], []
+    a280 = measured.get("a280")
+    dilution = float(measured.get("dilution") or 1.0)
+    path_cm = float(measured.get("path_cm") or 1.0)
     volume_ul = measured.get("volume_ul")
-    if measured.get("a280") is not None:
-        rows.append(("A280", f"{measured['a280']:.3f}"))
-    if concentration:
-        rows.append(("Concentration", f"{concentration:.3f} mg/mL"))
-        if properties.get("mw_da"):
-            rows.append(("Concentration, molar",
-                         f"{concentration / properties['mw_da'] * 1e6:.1f} uM"))
+    direct = measured.get("mg_per_ml")
+
+    if a280 is not None:
+        row = f"{a280:.3f}"
+        if dilution != 1.0:
+            row += f" (diluted {dilution:g}x)"
+        if path_cm != 1.0:
+            row += f", {path_cm:g} cm path"
+        read.append(("A280", row))
     if volume_ul:
-        rows.append(("Volume", f"{volume_ul:,.0f} uL"))
+        read.append(("Volume", f"{volume_ul:.0f} uL"))
+
+    concentration = None
+    if direct:
+        # Determined by something that does not go through the sequence, so
+        # it belongs with the readings, named by how it was obtained.
+        method = measured.get("method") or "method not stated"
+        read.append((f"Concentration ({method})", f"{direct:.3f} mg/mL"))
+        concentration = float(direct)
+    elif a280 is not None and eps and mw_da:
+        out = concentration_from_a280(a280, eps, mw_da, path_length_cm=path_cm,
+                                      dilution_factor=dilution)
+        concentration = out["mg_per_ml"]
+        derived.append(("Concentration", f"{concentration:.3f} mg/mL"))
+        derived.append(("Concentration, molar", f"{out['molar_uM']:.1f} uM"))
+        notes.append(
+            f"The concentration is the A280 divided by the extinction "
+            f"coefficient predicted from the sequence, "
+            f"{eps} /M/cm with {eps_label}, and converted to a molarity "
+            f"with the predicted molar mass of {mw_da:.1f} Da. Both are "
+            f"predictions, so this is not a measured concentration.")
+
     if concentration and volume_ul:
-        rows.append(("Total protein",
-                     f"{concentration * volume_ul / 1000:.3f} mg"))
+        derived.append(("Total protein",
+                        f"{concentration * volume_ul / 1000:.3f} mg"))
 
     difference = None
-    if measured.get("measured_da") and properties.get("mw_da"):
-        difference = float(measured["measured_da"]) - float(properties["mw_da"])
-        rows.append(("Measured mass", f"{measured['measured_da']:,.1f} Da"))
-        rows.append(("Difference from the sequence", f"{difference:+,.1f} Da"))
+    if measured.get("measured_da"):
+        read.append(("Measured mass", f"{measured['measured_da']:.1f} Da"))
+        if mw_da:
+            difference = float(measured["measured_da"]) - float(mw_da)
+            derived.append(("Mass minus the sequence", f"{difference:+,.1f} Da"))
 
     return {
         "name": name,
@@ -623,7 +666,10 @@ def batch_sheet(name: str, seq: str, properties: dict,
         "fields": [(label, fields.get(key, ""), key)
                    for key, label, _default, _help in BATCH_FIELDS],
         "theoretical": theoretical,
-        "measured": rows,
+        "measured": read,
+        "derived": derived,
+        "derivation_notes": notes,
+        "concentration_mg_per_ml": concentration,
         "mass_difference_da": difference,
     }
 
@@ -692,6 +738,17 @@ def build_batch_pdf(path, sheet: dict, version: str = "", author: str = "",
     if sheet["measured"]:
         story.append(Paragraph("Measured", h2))
         story.append(block(sheet["measured"]))
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(
+            "Readings only. Nothing in this block depends on the sequence.",
+            small))
+
+    if sheet.get("derived"):
+        story.append(Paragraph("Derived from both", h2))
+        story.append(block(sheet["derived"]))
+        story.append(Spacer(1, 3))
+        for note in sheet.get("derivation_notes") or []:
+            story.append(Paragraph(note, small))
 
     story.append(Paragraph("From the sequence", h2))
     story.append(block(sheet["theoretical"]))

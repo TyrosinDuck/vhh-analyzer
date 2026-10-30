@@ -234,8 +234,8 @@ def load_structure(data: bytes | str, filename: str = "structure") -> Model:
         raise StructureError(f"{filename} contains no atoms.")
     if n_atoms > MAX_ATOMS:
         raise StructureError(
-            f"{filename} has {n_atoms:,} atoms in its first model, over the "
-            f"{MAX_ATOMS:,} limit. Strip it to the chains you care about first.")
+            f"{filename} has {n_atoms} atoms in its first model, over the "
+            f"{MAX_ATOMS} limit. Strip it to the chains you care about first.")
 
     return Model(structure=structure, name=filename,
                  fmt="mmCIF" if is_cif else "PDB",

@@ -22,7 +22,7 @@ import vhh_core as vc
 from compute import analyze_one
 from shell import AUTHOR, DOI, FIT, VERSION, current_sequences, footer
 
-__version__ = "2026.10.30d"
+__version__ = "2026.10.30e"
 
 VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate", "🦠 Phage titre",
          "📄 Batch sheet"]
@@ -134,8 +134,8 @@ def _sequence_source(ph: float, method: str):
     if props:
         st.caption(
             f"**{name}** · {props['mw_da']:.1f} Da · "
-            f"eps(280) {props['ext_coeff_cystines']:,} /M/cm with the cystines "
-            f"formed, {props['ext_coeff_reduced']:,} reduced · "
+            f"eps(280) {props['ext_coeff_cystines']} /M/cm with the cystines "
+            f"formed, {props['ext_coeff_reduced']} reduced · "
             f"{props['n_primary_amines']} primary amines")
     elif not seq:
         st.info(
@@ -264,15 +264,15 @@ def _mass(name, sequences, props: dict) -> None:
                                          "Da on a 14 kDa protein.")
     with cols[2]:
         st.write("")
-        st.caption(f"Expected **{props.get('mw_da', 0):,.2f} Da** from the "
+        st.caption(f"Expected **{props.get('mw_da', 0):.2f} Da** from the "
                    f"sequence as written.")
 
     out = bn.mass_check(seq, measured_da=measured or None,
                         tolerance_da=tolerance)
 
     metric = st.columns(3)
-    metric[0].metric("Average", f"{out['average_da']:,.2f} Da")
-    metric[1].metric("Monoisotopic", f"{out['monoisotopic_da']:,.2f} Da")
+    metric[0].metric("Average", f"{out['average_da']:.2f} Da")
+    metric[1].metric("Monoisotopic", f"{out['monoisotopic_da']:.2f} Da")
     if out["measured_da"]:
         metric[2].metric("Difference", f"{out['difference_da']:+,.2f} Da")
 
@@ -683,26 +683,68 @@ def _batch(name, props: dict) -> None:
         "Leave a field at zero and it stays off the sheet. Nothing here is "
         "carried over from the other views: a number you have not retyped is "
         "a number you have not checked.")
+    routes = ["From the A280", "Determined another way"]
+    route = st.radio("Concentration", routes, horizontal=True, key="b_route",
+                     help="A concentration in mg/mL from an A280 is not a "
+                          "measurement: it is a reading divided by a "
+                          "predicted extinction coefficient. The sheet keeps "
+                          "the two apart. A BCA or a Bradford does not go "
+                          "through the sequence, so it is listed as measured, "
+                          "with the method named.")
+
     got = st.columns(4)
-    with got[0]:
-        a280 = st.number_input("A280", 0.0, 100.0, 0.0, 0.001, format="%.3f",
-                               key="b_a280")
-    with got[1]:
-        mg_per_ml = st.number_input("Concentration (mg/mL)", 0.0, 1000.0, 0.0,
-                                    0.01, key="b_conc")
-    with got[2]:
+    a280 = mg_per_ml = None
+    method = ""
+    if route == routes[0]:
+        with got[0]:
+            a280 = st.number_input("A280", 0.0, 100.0, 0.0, 0.001,
+                                   format="%.3f", key="b_a280")
+        with got[1]:
+            dilution = st.number_input("Dilution factor", 1.0, 1000.0, 1.0,
+                                       1.0, key="b_dil")
+        with got[2]:
+            path_cm = st.number_input("Path length (cm)", 0.01, 10.0, 1.0,
+                                      0.01, key="b_path")
+    else:
+        dilution, path_cm = 1.0, 1.0
+        with got[0]:
+            mg_per_ml = st.number_input("Concentration (mg/mL)", 0.0, 1000.0,
+                                        0.0, 0.01, key="b_conc")
+        with got[1]:
+            method = st.text_input("How", value="BCA", key="b_method",
+                                   help="Named on the sheet, because a "
+                                        "concentration without its method is "
+                                        "not interpretable later.")
+    with got[3]:
         volume = st.number_input("Volume (uL)", 0.0, 1e6, 0.0, 10.0,
                                  key="b_vol")
-    with got[3]:
-        measured_da = st.number_input("Measured mass (Da)", 0.0, 1e7, 0.0, 1.0,
-                                      key="b_mass")
+
+    cystines = st.checkbox(
+        "The canonical disulfide is formed", value=True, key="b_cys",
+        help="Which extinction coefficient the concentration uses. True for "
+             "material out of the periplasm.")
+
+    # The mass is almost never remeasured, so the field is prefilled with the
+    # theoretical value rather than with a zero to retype. It stays behind a
+    # checkbox all the same: a sheet that reports a measured mass identical to
+    # the sequence, because nobody touched a prefilled box, is exactly the
+    # prediction-read-as-measurement this layout exists to prevent.
+    theoretical_da = float(props.get("mw_da") or 0.0)
+    confirmed = st.checkbox("Mass confirmed by MS", value=False, key="b_ms")
+    measured_da = None
+    if confirmed:
+        measured_da = st.number_input(
+            "Measured mass (Da)", 0.0, 1e7, theoretical_da, 0.1,
+            format="%.1f", key="b_mass",
+            help="Prefilled with the sequence mass, so you only edit the "
+                 "digits that differ.")
 
     sheet = bn.batch_sheet(
         name, props.get("sequence", ""), props,
         measured={"a280": a280 or None, "mg_per_ml": mg_per_ml or None,
-                  "volume_ul": volume or None,
-                  "measured_da": measured_da or None},
-        fields=written)
+                  "method": method, "dilution": dilution, "path_cm": path_cm,
+                  "volume_ul": volume or None, "measured_da": measured_da},
+        fields=written, cystines=cystines)
 
     difference = sheet["mass_difference_da"]
     if difference is not None and abs(difference) > 2.0:
@@ -712,20 +754,31 @@ def _batch(name, props: dict) -> None:
             f"explain that and that this sequence allows.")
 
     st.divider()
-    left, right = st.columns(2)
-    with left:
-        st.markdown("**From the sequence**")
-        st.dataframe(pd.DataFrame(sheet["theoretical"],
-                                  columns=["", "value"]),
-                     use_container_width=True, hide_index=True)
-    with right:
+    blocks = st.columns(3)
+    with blocks[0]:
         st.markdown("**Measured**")
+        st.caption("Readings. None of these uses the sequence.")
         if sheet["measured"]:
-            st.dataframe(pd.DataFrame(sheet["measured"],
-                                      columns=["", "value"]),
+            st.dataframe(pd.DataFrame(sheet["measured"], columns=["", "value"]),
                          use_container_width=True, hide_index=True)
         else:
             st.caption("Nothing entered yet.")
+    with blocks[1]:
+        st.markdown("**Derived from both**")
+        st.caption("A reading and a prediction, combined.")
+        if sheet["derived"]:
+            st.dataframe(pd.DataFrame(sheet["derived"], columns=["", "value"]),
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nothing to derive yet.")
+    with blocks[2]:
+        st.markdown("**From the sequence**")
+        st.caption("Theoretical, all of it.")
+        st.dataframe(pd.DataFrame(sheet["theoretical"], columns=["", "value"]),
+                     use_container_width=True, hide_index=True)
+
+    for note in sheet["derivation_notes"]:
+        st.caption(note)
 
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "batch.pdf"

@@ -1535,25 +1535,42 @@ The page that goes with a tube when it leaves your bench. You give it a lot
 number, who prepared it, the host, the purification, the buffer and the
 storage, plus whatever you measured, and it produces a one-page PDF.
 
-Three blocks, kept apart on purpose:
+Four blocks, kept apart on purpose:
 
 - **Preparation**, the free text. Nothing here can be checked by anything.
-- **Measured**, what was actually put on an instrument. A field left at zero
-  stays off the sheet, because a page full of zeros reads as a measurement of
-  zero. Nothing is carried over from the other views: a number you have not
-  retyped is a number you have not checked.
-- **From the sequence**, which is theoretical, every value of it, and labelled
-  as such on the PDF.
+- **Measured**, what an instrument actually read: an absorbance, a volume, a
+  deconvoluted mass. Nothing in this block uses the sequence. A field left at
+  zero stays off the sheet, because a page full of zeros reads as a
+  measurement of zero, and nothing is carried over from the other views: a
+  number you have not retyped is a number you have not checked.
+- **Derived from both**, which is where the concentration lives. A
+  concentration in mg/mL is the number everybody calls a measurement and
+  nobody measures: it is an absorbance divided by an extinction coefficient
+  *predicted from the sequence*, then converted to a molarity with a
+  *predicted* molar mass. The sheet prints which extinction coefficient it
+  used, with the cystines formed or reduced, and says in as many words that
+  the result rests on predictions. Total protein and the gap between a
+  measured mass and the sequence sit here too, for the same reason.
+- **From the sequence**, theoretical, every value of it, and labelled as such.
 
 Keeping them apart is the only reason the sheet is worth generating. A
 predicted extinction coefficient quoted a year later as though it had been
 measured is the failure this layout exists to prevent.
 
-Two numbers cross the line, because they are arithmetic rather than judgement:
-total protein, from the concentration and the volume, and the difference
-between a measured mass and the sequence. If that difference is more than a
-couple of daltons the screen points you at §5.2, which lists the modifications
-that would explain it and that your sequence allows.
+If your concentration did not come from an absorbance, switch to **Determined
+another way** and name the method. A BCA or a Bradford does not go through the
+sequence, so it is a reading and is listed among them, with the method on the
+sheet: a concentration without its method cannot be interpreted later.
+
+If the measured mass is more than a couple of daltons from the sequence, the
+screen points you at §5.2, which lists the modifications that would explain it
+and that your sequence allows. The mass is almost never remeasured, so that
+field sits behind a **Mass confirmed by MS** checkbox and, once ticked, comes
+prefilled with the sequence mass so you only edit the digits that differ.
+Leaving it unticked keeps the line off the sheet entirely, which is the point:
+a batch sheet reporting a measured mass identical to the sequence, because
+nobody touched a prefilled box, would be the same failure in a different
+place.
 
 **This is not a certificate of analysis.** That term means something specific
 in regulated quality control: specifications, acceptance criteria, a release
