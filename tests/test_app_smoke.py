@@ -46,9 +46,9 @@ _FRAME = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
 FASTA = "".join(f">Nb{i}\n{_FRAME.format(cdr3='DRGYSSSWYD' + last)}\n"
                 for i, last in enumerate("YFWLKRD"))
 
-NAV = ["🔬 Sequence analysis", "🧊 Structure", "🧪 Sanger sequencing",
-       "🔧 Gene diagnosis", "📚 Sequence library", "🧬 In-silico cloning",
-       "📖 Manual", "🏠 Home"]
+NAV = ["🔬 Sequence analysis", "🧊 Structure", "⚗️ Bench",
+       "🧪 Sanger sequencing", "🔧 Gene diagnosis", "📚 Sequence library",
+       "🧬 In-silico cloning", "📖 Manual", "🏠 Home"]
 
 
 def _labels(app):
@@ -79,6 +79,7 @@ def app():
 EXPECTED_TITLE = {
     "🔬 Sequence analysis": "🔬 Sequence analysis",
     "🧊 Structure": "🧊 Structure",
+    "⚗️ Bench": "⚗️ Bench",
     "🧪 Sanger sequencing": "🧪 Sanger sequencing",
     "🔧 Gene diagnosis": "🔧 Gene diagnosis",
     "📚 Sequence library": "📚 Sequence library",

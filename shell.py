@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.29a"
+__version__ = "2026.10.30a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -252,6 +252,11 @@ SECTIONS = {
                   "actually pair, which liabilities are buried and which are "
                   "exposed, where the hydrophobic surface is, and, for a "
                   "complex, which residues contact the antigen."),
+    "bench": ("⚗️", "Bench",
+              "The arithmetic between a purified protein and the next "
+              "experiment: concentration from a measured A280, whether the "
+              "measured mass is the protein you think it is, and how much "
+              "labelling reagent to add."),
     "sequencing": ("🧪", "Sanger sequencing",
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "
                    "sequences from the expression cassette, spot frameshifts and "

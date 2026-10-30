@@ -46,6 +46,7 @@ import sanger as sg
 import structure as stx
 import vhh_core as vc
 from sections import (analysis as sections_analysis,
+                      bench as sections_bench,
                       cloning as sections_cloning, genes as sections_genes,
                       home as sections_home, library as sections_library,
                       manual as sections_manual,
@@ -104,8 +105,10 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.10.28e",
-                    "shell": "2026.10.29a", "compute": "2026.10.29b",
+                    "shell": "2026.10.30a", "compute": "2026.10.29b",
                     "sections.analysis": "2026.10.28a",
+                    "sections.bench": "2026.10.30a",
+                    "bench": "2026.10.30a",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
                     "sections.home": "2026.10.29b",
@@ -398,6 +401,11 @@ if section == "structure":
     footer()
     st.stop()
 
+
+if section == "bench":
+    sections_bench.render(ph, method)
+    footer()
+    st.stop()
 
 if section == "sequencing":
     sections_sequencing.render()

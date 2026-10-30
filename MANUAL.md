@@ -64,6 +64,7 @@ entries plus a **Home** button, available from every screen.
 |---|---|
 | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
 | 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
+| ⚗️ **Bench** | the tube: concentration from an A280, mass identity, how much labelling reagent to add |
 | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
@@ -151,7 +152,7 @@ Three ways in:
   separated by blank lines. Whitespace, digits and gap characters are stripped.
 - **Upload a FASTA file** with the uploader on the right.
 - **Load example** fills the box with three published VHHs (caplacizumab, cAbLys3 and Nb80) so you can see what every tab looks like before committing your own
-  data. They come from the library (§7), where their PDB entries are given.
+  data. They come from the library (§8), where their PDB entries are given.
 
 Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The
 button
@@ -1037,7 +1038,7 @@ codon-pair bias or tRNA availability. Run the output through your synthesis
 vendor's
 own checker before ordering.
 
-A **Send to gene diagnosis** button passes the sequences straight to §6, where
+A **Send to gene diagnosis** button passes the sequences straight to §7, where
 the
 frame, rare-codon and GC checks run on them, including the GC balancing this
 optimiser does globally but not window by window.
@@ -1333,9 +1334,144 @@ because side chains are the part a predictor places least reliably.
 
 ---
 
-## 5. Sanger sequencing
+## 5. Bench
 
-### 5.1 What it does
+Every other section reasons about a sequence. This one is about the tube: how
+much protein is in it, whether it is the protein you think it is, and how much
+labelling reagent to add.
+
+It is the arithmetic that gets done on the back of a glove box on a Friday
+afternoon, which is exactly why it is worth writing down once. All three views
+start from the molar mass, extinction coefficient and lysine count that the
+analysis section already derives from the sequence, so none of those has to be
+typed again or looked up wrong.
+
+Load your sequences in the analysis section first and pick one at the top. The
+calculators still work without that, with the molar mass and extinction
+coefficient typed by hand, but typing them is the most common way of getting
+this wrong.
+
+**No empirical model lives in this section.** Every number is a measurement you
+supply, a constant that cites its source, or arithmetic on those two. Nothing
+predicts a labelling efficiency, a yield, or how a conjugate will behave: those
+depend on your protein and your hands.
+
+### 5.1 Quantify
+
+Concentration from a measured A280, by Beer-Lambert, with the extinction
+coefficient computed from the sequence rather than assumed. The generic
+"1 mg/mL = 1 AU" is wrong by about a third for a typical VHH.
+
+Inputs: the A280, the dilution factor (1 for a neat sample, 10 if you measured
+10 uL in 90 uL of buffer), and the path length (1 cm for a cuvette; a NanoDrop
+pedestal already reports a 1 cm equivalent). Outputs: mg/mL and uM, plus the
+total in ug and nmol if you give a volume.
+
+**Cystines formed or all reduced.** The extinction coefficient differs by about
+1% between the two, and this is the choice nobody makes explicitly. A VHH from
+the periplasm has its canonical disulfide formed, so the cystine value is
+usually the right one.
+
+**A260, optional,** buys you the 260/280 ratio. A pure protein sits near 0.57.
+Above about 0.8 there is enough nucleic acid for the A280 to overstate the
+protein, and the concentration becomes an upper bound rather than a
+measurement. The app says so rather than reporting a number that looks the same
+as a good one.
+
+Underneath, a dilution: give a target concentration and a final volume and it
+tells you how much sample and how much buffer. It refuses to dilute upwards,
+which is the arithmetic a spreadsheet happily does.
+
+### 5.2 Mass check
+
+Is the thing in the tube the thing you think it is? Give a measured mass and
+the app compares it against the sequence.
+
+A deconvoluted mass from an intact LC-MS run is an **average** mass, so that is
+what is compared. The monoisotopic value is reported alongside for when you are
+looking at an isotope envelope instead.
+
+When the mass does not match, the app lists the modifications that would
+account for the difference **and that this sequence allows**. The second half
+matters: gluconoylation needs an N-terminal His-tag, methionine excision needs
+an N-terminal methionine, pyroglutamate needs an N-terminal Gln or Glu. An
+explanation that cannot apply to your protein is not an explanation, so it is
+not offered.
+
+Each delta is computed from a chemical formula rather than copied from a table,
+so any of them can be checked by hand:
+
+| Difference | What it usually is |
+|---|---|
+| about -131 | the N-terminal methionine was excised |
+| -2 per bond | a disulfide formed |
+| -17 | pyroglutamate from an N-terminal Gln |
+| -18 | pyroglutamate from an N-terminal Glu |
+| +16 | an oxidation, usually on a methionine |
+| +178 | gluconoylation of an N-terminal His-tag, a documented *E. coli* artefact |
+| +258 | the phosphorylated form of the same artefact |
+| +22, +38 | a sodium or potassium adduct, not a modification of the protein |
+
+**Candidates are offered, not chosen.** More than one combination can land on
+the same number, and picking one for you would be presenting arithmetic as an
+identification. A peptide map settles it.
+
+One thing to check before believing a mismatch: the comparison is against the
+sequence you loaded. If the real protein carries a tag, or has had one cleaved,
+compare against that sequence instead.
+
+### 5.3 Conjugate
+
+How much labelling reagent to add. NHS esters react with the lysine side-chain
+amines and the N-terminal alpha-amine, and the arithmetic is the one on every
+vendor cheat sheet, written out so the units are visible:
+
+```
+nmol protein = volume (mL) x concentration (mg/mL) / molar mass (kDa)
+nmol reagent = nmol protein x molar excess
+volume (uL)  = nmol reagent / stock (mM)
+```
+
+The last line is the one worth remembering: **a millimolar stock is one
+nanomole per microlitre.**
+
+**Reconstitution and the working stock are two steps,** as they are in the
+vendor protocol. NHS esters hydrolyse in water, so the vial is reconstituted
+concentrated and used at once, and the working stock is a dilution of that. The
+app gives the solvent volume for the first and the dilution for the second.
+
+**Only reagents whose molar mass was checked against a primary source are
+listed,** and each one shows where its number came from. Anything else is
+entered by hand. That is the honest option: a catalogue number is not a molar
+mass, vendors renumber products, and a dye's extinction coefficient and 280 nm
+correction factor are printed on the vial because they vary between lots. A
+wrong molar mass does not fail loudly, it quietly changes the molar excess and
+the result gets blamed on the chemistry.
+
+Three things the app checks that a spreadsheet does not:
+
+- **A volume too small to pipette.** Asking for 0.2 uL and delivering 2 uL is a
+  tenfold error in the molar excess, invisible, in the direction that looks like
+  it worked. The app offers a dilution instead, with the excess unchanged.
+- **Co-solvent above about 10%** of the reaction, which is a protein problem
+  rather than a labelling one if the reagent is in DMSO or DMF.
+- **An excess beyond the number of primary amines,** past which the extra
+  reagent can only react with amines already labelled or hydrolyse.
+
+Then it names the spin desalting column that suits the final volume.
+
+**Lysines in a CDR.** The app lists every primary amine with its region and
+warns when any sit in a CDR, because an NHS ester cannot tell them from the
+others and random labelling then risks the paratope. If that matters, a
+site-specific route (sortase, an engineered cysteine, a C-terminal tag) is the
+alternative. Which lysines are actually *accessible* is a structural question
+this cannot answer: upload a model to §4.
+
+---
+
+## 6. Sanger sequencing
+
+### 6.1 What it does
 
 You upload the chromatograms from a screening run. For each read the app:
 
@@ -1349,7 +1485,7 @@ Because all six frames are searched, forward and reverse reads are handled
 without
 being told which is which.
 
-### 5.2 Settings
+### 6.2 Settings
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -1363,7 +1499,7 @@ plasmid map rather than from memory. A wrong layout makes the app report
 missing tags
 on clones that are perfectly fine.
 
-### 5.3 Reading the results table
+### 6.3 Reading the results table
 
 Four counters at the top: reads, VHHs extracted, unique sequences, failures.
 
@@ -1399,12 +1535,12 @@ derived from the anchor that actually matched.
 **Identical protein sequences are grouped.** The same colony picked twice shows up as
 one sequence with a copy count, and the duplicates are marked.
 
-### 5.4 Quality traces
+### 6.4 Quality traces
 
 An expander draws the Phred quality along each read, with the window kept after
 trimming in blue and a dashed line at Phred 20. Up to twelve reads are drawn.
 
-### 5.5 Sending clones to the analysis
+### 6.5 Sending clones to the analysis
 
 Below the table, pick the clones worth keeping and press **Send selected to
 analysis**.
@@ -1413,13 +1549,13 @@ The app switches to the analysis section with those sequences loaded.
 **Duplicates are deselected by default**: one entry per unique protein sequence. Tick
 them back on if you want to see them separately.
 
-### 5.6 Downloads
+### 6.6 Downloads
 
 The full per-read table as CSV, and the extracted VHHs as protein or DNA FASTA.
 
 ---
 
-## 6. Gene diagnosis
+## 7. Gene diagnosis
 
 Its own section, reached from the home page or from the **DNA** tab of the
 analysis section, which hands its back-translated sequences straight over.
@@ -1568,7 +1704,7 @@ this tab is still in play.
 
 ---
 
-## 7. Sequence library
+## 8. Sequence library
 
 The sequences you come back to, kept as a file in the repository so they are
 one
@@ -1588,7 +1724,7 @@ anyone whether or not they ever open the app. Nothing unpublished, nothing
 under
 an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
-### 7.1 What is in it
+### 8.1 What is in it
 
 Twenty-two published sequences, every one taken from the source named in its
 note (a PDB entry or KEGG) rather than written from memory. They are chosen
@@ -1635,7 +1771,7 @@ entries carry DNA, labelled in the note as **back-translated by this app, not
 the
 published gene**.
 
-### 7.2 Using it
+### 8.2 Using it
 
 Filter by free text over names and notes, by tag, or by whether an entry
 carries
@@ -1647,7 +1783,7 @@ a protein-only entry and asking for DNA simply sends nothing for it.
 
 Both kinds also download as FASTA if you want them outside the app.
 
-### 7.3 Editing it
+### 8.3 Editing it
 
 The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
 commit, push, the app serves the new version on its next deploy.
@@ -1673,11 +1809,11 @@ to fix, and the message carries the line number.
 
 ---
 
-## 8. In-silico cloning
+## 9. In-silico cloning
 
 One screen, three steps.
 
-### 8.1 Recipient vector
+### 9.1 Recipient vector
 
 Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can
 also
@@ -1706,7 +1842,7 @@ The **Expected tags** selector says which cassette layout the finished
 construct should
 have; it is used when the construct is translated back.
 
-### 8.2 Donor DNA
+### 9.2 Donor DNA
 
 Two kinds of donor:
 
@@ -1732,7 +1868,7 @@ The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can
 upload your
 own CSV with `name,sequence` columns; nothing is stored.
 
-### 8.3 The plan
+### 9.3 The plan
 
 The app cuts, joins and translates **every candidate enzyme pair for real**,
 then
@@ -1787,7 +1923,7 @@ vector's frame would flag every correct construct. Translating the finished
 construct
 is the only check that means anything.
 
-### 8.4 What you get
+### 9.4 What you get
 
 The recommended enzyme pair, the construct size, the VHH length, how much
 vector is
@@ -1800,7 +1936,7 @@ parts so SnapGene or Benchling opens it ready to read; as FASTA; and the
 amplicon as
 FASTA. Plus a short protocol paragraph.
 
-### 8.5 Folded-away detail
+### 9.5 Folded-away detail
 
 - **All enzyme pairs considered** (every pair with its verdict and, when rejected, why. - **Restriction sites**) every enzyme that cuts the backbone, how often, where, and
   whether it also cuts the insert. An enzyme that cuts the insert is not
@@ -1815,7 +1951,7 @@ vector rather
 
 ---
 
-## 9. How your data is handled
+## 10. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file,
 logged,
@@ -1841,7 +1977,7 @@ Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
 ---
 
-## 10. Running it on your own machine
+## 11. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -1866,7 +2002,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 11. Limits and caveats, in one place
+## 12. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -1893,7 +2029,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 **Did my change actually deploy?** The footer carries a seven-character
 fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
@@ -1936,7 +2072,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 13. Under the hood
+## 14. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for
 IMGT

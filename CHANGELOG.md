@@ -22,6 +22,16 @@ ran, from its Zenodo record.
   previous/next buttons and a list of what each section contains. Rendering
   seventeen hundred lines on every interaction was slow and nobody reads a
   reference manual from the top.
+- **A Bench section**: the arithmetic between a purified protein and the next
+  experiment. Concentration from a measured A280 using the sequence's own
+  extinction coefficient, with the 260/280 ratio when you give an A260 and a
+  dilution that refuses to concentrate. A mass check that compares a measured
+  mass against the sequence and lists the modifications that would explain a
+  difference *and that the sequence allows*, each delta computed from a
+  chemical formula rather than tabulated. And a conjugation planner that works
+  out how much NHS-ester reagent to add, separates reconstituting the vial from
+  the working stock, offers a dilution when the volume is too small to pipette
+  accurately, and warns when lysines sit in a CDR.
 - The home page explains how the sections feed each other with a diagram rather
   than four paragraphs, drawn as SVG so it follows the light and dark themes.
 
