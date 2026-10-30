@@ -28,7 +28,7 @@ __all__ = [
     "PIPETTE_MINIMUM_UL", "desalting_column", "__version__",
 ]
 
-__version__ = "2026.10.30a"
+__version__ = "2026.10.30c"
 
 
 # --------------------------------------------------------------------------
@@ -429,3 +429,96 @@ def mass_check(seq: str, measured_da: float | None = None,
                                   ascending=[False, True]).reset_index(drop=True)
     out["candidates"] = frame
     return out
+
+
+# --------------------------------------------------------------------------
+# Phage
+# --------------------------------------------------------------------------
+# Panning is the step before everything else on this screen: the titre of a
+# phage stock decides how much of it goes into the next round, and it is read
+# off a spectrophotometer like any other concentration.
+#
+# There are two ways to turn an A260 into a titre, and they do not agree.
+# Both are offered, side by side, because choosing one silently would hide a
+# difference of more than two orders of magnitude.
+
+# The empirical route: a titration in which an absorbance of 1 corresponded to
+# this many particles per millilitre. It is the number used in the lab
+# protocol this calculator reproduces. It is a measured correspondence for one
+# phage preparation and one instrument, not a physical constant.
+PHAGE_EMPIRICAL_PER_A260 = 3.0e10
+
+# The optical route: Day's relation for filamentous phage,
+#   virions/mL = A269 x 6e16 / (number of bases in the genome)
+# which is the ssDNA absorbance of the particle worked out from its genome
+# length. Reading at 260 rather than 269 nm, and against a blank rather than
+# with the A320 scatter correction, costs some accuracy but not an order of
+# magnitude.
+PHAGE_OPTICAL_CONSTANT = 6.0e16
+
+# M13mp18 and its phagemid derivatives. A phagemid carrying an insert is
+# shorter than the helper phage, which is why this is an input rather than a
+# constant.
+PHAGE_GENOME_BASES = 7249
+
+
+def phage_titre(a260: float, dilution: float = 1.0,
+                glycerol_factor: float = 1.0,
+                per_a260: float = PHAGE_EMPIRICAL_PER_A260,
+                genome_bases: int = PHAGE_GENOME_BASES) -> dict:
+    """Particles per millilitre in the undiluted stock, both ways.
+
+    ``a260`` is what the instrument read, so ``dilution`` (how many times the
+    stock was diluted to get there) and ``glycerol_factor`` (how much the stock
+    itself was diluted when glycerol was added to it) multiply back up to the
+    stock. A stock made by mixing one volume of phage with one volume of
+    glycerol has a glycerol factor of 2.
+
+    Returns both estimates and the ratio between them. Nothing is chosen: the
+    two numbers describe different things, one a correspondence measured on a
+    particular preparation and one a calculation from the genome, and when they
+    disagree the disagreement is the result.
+    """
+    if a260 < 0:
+        raise ValueError("an absorbance cannot be negative")
+    if dilution <= 0 or glycerol_factor <= 0:
+        raise ValueError("a dilution factor must be greater than zero")
+    if per_a260 <= 0:
+        raise ValueError("the empirical constant must be greater than zero")
+    if genome_bases <= 0:
+        raise ValueError("a genome has a positive number of bases")
+
+    corrected = float(a260) * float(dilution) * float(glycerol_factor)
+    empirical = corrected * float(per_a260)
+    optical = corrected * PHAGE_OPTICAL_CONSTANT / float(genome_bases)
+    return {
+        "a260_corrected": corrected,
+        "empirical_per_ml": empirical,
+        "optical_per_ml": optical,
+        "ratio": (optical / empirical) if empirical else None,
+    }
+
+
+def phage_aliquot(titre_per_ml: float, target_particles: float) -> dict:
+    """How much stock to take to get a given number of particles.
+
+    The volume comes straight out of the titre; what is worth saying is when
+    it is too small to pipette, which is the same objection the conjugation
+    planner makes, for the same reason.
+    """
+    if titre_per_ml <= 0:
+        raise ValueError("the titre must be greater than zero")
+    if target_particles <= 0:
+        raise ValueError("the target must be greater than zero")
+
+    volume_ul = target_particles / float(titre_per_ml) * 1000.0
+    note = ""
+    if volume_ul < PIPETTE_MINIMUM_UL:
+        factor = max(2, int(PIPETTE_MINIMUM_UL / volume_ul) + 1)
+        note = (f"{volume_ul:.2f} uL is below {PIPETTE_MINIMUM_UL:.0f} uL and "
+                f"cannot be pipetted accurately; dilute the stock 1:{factor} "
+                f"and take {volume_ul * factor:.1f} uL of that instead")
+    elif volume_ul > 1000:
+        note = ("more than a millilitre of stock; either the titre is low for "
+                "this target or the target is high for this stock")
+    return {"volume_ul": volume_ul, "note": note}

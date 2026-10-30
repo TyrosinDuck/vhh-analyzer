@@ -18,9 +18,9 @@ import vhh_core as vc
 from compute import analyze_one
 from shell import FIT, current_sequences, footer
 
-__version__ = "2026.10.30b"
+__version__ = "2026.10.30c"
 
-VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate"]
+VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate", "🦠 Phage titre"]
 
 
 def render(ph: float, method: str) -> None:
@@ -29,11 +29,53 @@ def render(ph: float, method: str) -> None:
     st.markdown(
         "The arithmetic between a purified protein and the next experiment: "
         "how much is in the tube, whether it is the protein you think it is, "
-        "and how much labelling reagent to add. Everything here starts from "
-        "the molar mass, extinction coefficient and lysine count the analysis "
-        "section already derives from the sequence, so none of those has to be "
-        "typed again.")
+        "and how much labelling reagent to add. The first three views start "
+        "from the molar mass, extinction coefficient and lysine count the "
+        "analysis section already derives from the sequence, so none of those "
+        "has to be typed again. The fourth is about the step before all of "
+        "that, and needs no sequence at all.")
 
+    # The view is chosen before the sequence is asked for, because one of the
+    # four does not use a sequence at all and asking for one anyway would be
+    # asking a question with no bearing on the answer.
+    view = st.radio("View", VIEWS, horizontal=True, label_visibility="collapsed",
+                    key="bench_view")
+
+    if view == VIEWS[3]:
+        st.divider()
+        _phage()
+        _disclaimer()
+        return
+
+    name, sequences, props = _sequence_source(ph, method)
+    st.divider()
+
+    if view == VIEWS[0]:
+        _quantify(props)
+    elif view == VIEWS[1]:
+        _mass(name, sequences, props)
+    else:
+        _conjugate(name, sequences, props, method)
+
+    _disclaimer()
+
+
+def _disclaimer() -> None:
+    st.divider()
+    st.caption(
+        "Arithmetic on numbers you supply, with constants that cite their "
+        "source. Nothing here predicts a labelling efficiency, a yield or how "
+        "a conjugate will behave: those depend on your protein and your hands.")
+
+
+def _sequence_source(ph: float, method: str):
+    """Ask for the one sequence the first three views work on.
+
+    Returns ``(name, {name: sequence}, properties)``, any of which may be
+    empty: the calculators all work on typed numbers, and refusing to draw
+    them until a sequence is supplied would be worse than letting someone
+    quantify one tube by hand.
+    """
     # Two ways in. The analysis list is the usual one, and keeps the molar
     # mass, extinction coefficient and lysine count consistent with everything
     # else the app says about that sequence. But arriving here with a sequence
@@ -93,22 +135,7 @@ def render(ph: float, method: str) -> None:
             "extinction coefficient yourself. Giving a sequence fills them in "
             "and removes the most common way of getting this wrong.")
 
-    view = st.radio("View", VIEWS, horizontal=True, label_visibility="collapsed",
-                    key="bench_view")
-    st.divider()
-
-    if view == VIEWS[0]:
-        _quantify(props)
-    elif view == VIEWS[1]:
-        _mass(name, sequences, props)
-    else:
-        _conjugate(name, sequences, props, method)
-
-    st.divider()
-    st.caption(
-        "Arithmetic on numbers you supply, with constants that cite their "
-        "source. Nothing here predicts a labelling efficiency, a yield or how "
-        "a conjugate will behave: those depend on your protein and your hands.")
+    return name, sequences, props
 
 
 # --------------------------------------------------------------------------
@@ -443,3 +470,118 @@ def _conjugate(name, sequences, props: dict, method: str) -> None:
                     f"*accessible* is a structural question: upload a model to "
                     f"the structure section.")
             st.dataframe(sites, hide_index=True, **FIT)
+
+
+# --------------------------------------------------------------------------
+def _phage() -> None:
+    st.subheader("Titre of a phage stock from its A260")
+    st.markdown(
+        "The step before the rest of this screen. An absorbance at 260 nm "
+        "turns into particles per millilitre, and that decides how much stock "
+        "goes into the next round of panning. This one needs no sequence.")
+
+    read = st.columns(3)
+    with read[0]:
+        a260 = st.number_input("A260 measured", 0.0, 100.0, 0.459, 0.001,
+                               format="%.3f", key="ph_a260")
+    with read[1]:
+        dilution = st.number_input(
+            "Dilution factor", 1.0, 1e6, 100.0, 1.0, key="ph_dil",
+            help="How many times the stock was diluted to make the "
+                 "measurement. 1 for a neat sample.")
+    with read[2]:
+        glycerol = st.number_input(
+            "Glycerol factor", 1.0, 100.0, 1.0, 0.01, key="ph_gly",
+            help="How much the stock itself was diluted when glycerol was "
+                 "added to it. One volume of phage plus one volume of "
+                 "glycerol is 2. Leave at 1 if the stock has none.")
+
+    with st.expander("The two constants, and why they disagree"):
+        st.markdown(f"""
+There are two ways to turn an absorbance into a titre, and on the same
+reading they differ by more than two orders of magnitude. Both are shown
+below rather than one being picked for you.
+
+**The empirical route** multiplies the absorbance by a number measured
+directly: a titration in which an A260 of 1 corresponded to
+{bn.PHAGE_EMPIRICAL_PER_A260:.1e} particles per millilitre. It is a
+correspondence observed for a particular preparation on a particular
+instrument, not a physical constant, which is why it is editable here.
+
+**The optical route** is Day's relation for filamentous phage,
+
+    virions/mL = A269 x {bn.PHAGE_OPTICAL_CONSTANT:.0e} / (bases in the genome)
+
+which works the absorbance out from the ssDNA the particle contains. Reading
+at 260 nm rather than 269, and without subtracting the A320 scatter, costs
+some accuracy but not an order of magnitude.
+
+A gap this size between them is not rounding. It means one of the two is not
+describing your stock: most often the empirical factor was established on a
+different preparation, or the reading has a large scattering contribution
+that the genome calculation has no way to know about. **Use the one you can
+defend, and say which in the notebook.** A plaque or colony titration settles
+it outright, and is the only one of the three that counts particles that
+actually infect.
+""")
+
+    fine = st.columns(2)
+    with fine[0]:
+        per_a260 = st.number_input(
+            "Empirical constant (particles/mL per A260)",
+            1e6, 1e18, float(bn.PHAGE_EMPIRICAL_PER_A260), format="%.3e",
+            key="ph_const")
+    with fine[1]:
+        bases = st.number_input(
+            "Genome length (bases)", 100, 100_000, bn.PHAGE_GENOME_BASES, 1,
+            key="ph_bases",
+            help="M13mp18 is 7249. A phagemid carrying an insert is a "
+                 "different length, which is why this is not fixed.")
+
+    try:
+        out = bn.phage_titre(a260, dilution=dilution, glycerol_factor=glycerol,
+                             per_a260=per_a260, genome_bases=int(bases))
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+
+    st.divider()
+    shown = st.columns(3)
+    shown[0].metric("Empirical", f"{out['empirical_per_ml']:.2e} /mL",
+                    help="Absorbance x dilution x glycerol x the constant "
+                         "above.")
+    shown[1].metric("From the genome", f"{out['optical_per_ml']:.2e} /mL",
+                    help="Day's relation, from the genome length above.")
+    shown[2].metric("Corrected A260", f"{out['a260_corrected']:.1f}",
+                    help="What the undiluted stock would read, if it could be "
+                         "read undiluted.")
+
+    ratio = out["ratio"]
+    if ratio and (ratio > 3 or ratio < 1 / 3):
+        st.warning(
+            f"The two estimates differ by a factor of "
+            f"{max(ratio, 1 / ratio):.0f}. See the note above: pick the one "
+            f"you can defend and record which.")
+
+    st.divider()
+    st.subheader("How much to take")
+    want = st.columns(3)
+    with want[0]:
+        basis = st.radio("Titre to use", ["Empirical", "From the genome"],
+                         horizontal=True, key="ph_basis")
+    titre = (out["empirical_per_ml"] if basis == "Empirical"
+             else out["optical_per_ml"])
+    with want[1]:
+        target = st.number_input("Particles wanted", 1e6, 1e18, 1e11,
+                                 format="%.3e", key="ph_target",
+                                 help="A round of panning is usually run with "
+                                      "1e11 to 1e13 particles.")
+    if titre <= 0:
+        with want[2]:
+            st.info("Give an absorbance above zero.")
+        return
+    plan = bn.phage_aliquot(titre, target)
+    with want[2]:
+        st.success(f"**{plan['volume_ul']:.1f} uL** of stock")
+    if plan["note"]:
+        st.caption(plan["note"])

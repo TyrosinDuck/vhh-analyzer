@@ -50,6 +50,7 @@ from sections import (analysis as sections_analysis,
                       cloning as sections_cloning, genes as sections_genes,
                       home as sections_home, library as sections_library,
                       manual as sections_manual,
+                      reference as sections_reference,
                       sequencing as sections_sequencing,
                       structure as sections_structure)
 import compute as cpt
@@ -105,10 +106,12 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.10.28e",
-                    "shell": "2026.10.30a", "compute": "2026.10.29b",
+                    "shell": "2026.10.30b", "compute": "2026.10.29b",
+                    "reference": "2026.10.30a",
                     "sections.analysis": "2026.10.28a",
-                    "sections.bench": "2026.10.30b",
-                    "bench": "2026.10.30a",
+                    "sections.bench": "2026.10.30c",
+                    "sections.reference": "2026.10.30a",
+                    "bench": "2026.10.30c",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
                     "sections.home": "2026.10.30a",
@@ -300,8 +303,14 @@ with st.sidebar:
     for key, (icon, label, _desc) in SECTIONS.items():
         st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
                   disabled=section == key, on_click=go_to, args=(key,))
+    # The manual and the reference tables sit below the divider rather than in
+    # SECTIONS: they are what you consult, not what you run, and the home page
+    # cards are built from SECTIONS.
     st.button("📖 Manual", key="nav_manual", **FIT,
               disabled=section == "manual", on_click=go_to, args=("manual",))
+    st.button("📐 Reference", key="nav_reference", **FIT,
+              disabled=section == "reference", on_click=go_to,
+              args=("reference",))
 
     st.divider()
 
@@ -362,6 +371,16 @@ if section == "home":
 
 if section == "manual":
     sections_manual.render()
+    footer()
+    st.stop()
+
+
+# --------------------------------------------------------------------------- #
+# Reference
+# --------------------------------------------------------------------------- #
+
+if section == "reference":
+    sections_reference.render()
     footer()
     st.stop()
 

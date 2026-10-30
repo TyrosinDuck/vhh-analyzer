@@ -32,6 +32,24 @@ ran, from its Zenodo record.
   out how much NHS-ester reagent to add, separates reconstituting the vial from
   the working stock, offers a dilution when the volume is too small to pipette
   accurately, and warns when lysines sit in a CDR.
+- **A phage titre calculator**, as a fourth Bench view. An A260, the dilution
+  it was read at and a glycerol correction turn into particles per millilitre,
+  and into the volume of stock that holds the number of particles you want.
+  Both routes are shown side by side: the empirical constant from a titration,
+  which is editable because it belongs to a preparation and an instrument
+  rather than to physics, and Day's relation from the genome length. On the
+  same reading they differ by a factor of about 275, and the app says so
+  instead of picking one.
+- **A Reference screen**, in the sidebar under the manual: the genetic code
+  and the twenty amino acids, with the structures drawn as they exist at
+  pH 7.4. Nothing on it is transcribed. The codon table is Biopython's, the
+  usage figures and rare-codon flags are the ones the gene diagnosis screen
+  uses, and the masses, hydropathy and charges are the constants the analysis
+  screen builds its profiles from, so the reference and the app cannot
+  disagree. The structures are committed SVG files built once by
+  `tools/aminoacids/build.py`, which checks each formal charge and molecular
+  weight before writing, so that the app need not ship RDKit for twenty
+  pictures that never change.
 - The home page explains how the sections feed each other with a diagram rather
   than four paragraphs, drawn as SVG so it follows the light and dark themes.
 

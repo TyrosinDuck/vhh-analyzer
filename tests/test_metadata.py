@@ -232,8 +232,20 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
     assert third != second, "a changed MANUAL.md left the fingerprint unchanged"
 
     (tmp_path / "data" / "library.csv").write_text("name\ny\n")
-    assert shell._source_fingerprint(tmp_path) != third, \
-        "a changed library left the fingerprint unchanged"
+    fourth = shell._source_fingerprint(tmp_path)
+    assert fourth != third, "a changed library left the fingerprint unchanged"
+
+    # So are the amino acid structures, which are files rather than code and
+    # would otherwise be the one thing a user can see change without the
+    # version following.
+    (tmp_path / "data" / "aminoacids").mkdir()
+    (tmp_path / "data" / "aminoacids" / "Ala.svg").write_text("<svg/>")
+    fifth = shell._source_fingerprint(tmp_path)
+    assert fifth != fourth, "a new structure left the fingerprint unchanged"
+
+    (tmp_path / "data" / "aminoacids" / "Ala.svg").write_text("<svg />")
+    assert shell._source_fingerprint(tmp_path) != fifth, \
+        "a changed structure left the fingerprint unchanged"
 
     assert shell._source_fingerprint(tmp_path / "nothing-here") == "unknown"
 

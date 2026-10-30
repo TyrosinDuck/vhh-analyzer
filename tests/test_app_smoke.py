@@ -48,7 +48,7 @@ FASTA = "".join(f">Nb{i}\n{_FRAME.format(cdr3='DRGYSSSWYD' + last)}\n"
 
 NAV = ["🔬 Sequence analysis", "🧊 Structure", "⚗️ Bench",
        "🧪 Sanger sequencing", "🔧 Gene diagnosis", "📚 Sequence library",
-       "🧬 In-silico cloning", "📖 Manual", "🏠 Home"]
+       "🧬 In-silico cloning", "📖 Manual", "📐 Reference", "🏠 Home"]
 
 
 def _labels(app):
@@ -84,6 +84,7 @@ EXPECTED_TITLE = {
     "🔧 Gene diagnosis": "🔧 Gene diagnosis",
     "📚 Sequence library": "📚 Sequence library",
     "🧬 In-silico cloning": "🧬 In-silico cloning",
+    "📐 Reference": "📐 Reference",
     "🏠 Home": "🧰 VHH tool box",
     "📖 Manual": None,
 }
@@ -218,3 +219,41 @@ def test_sequence_input_survives_leaving_the_section(app):
     _no_failure(app, "returning to the analysis")
     assert app.text_area[0].value.strip() == FASTA.strip(), \
         "the sequence input was lost on leaving and re-entering the section"
+
+
+def test_bench_renders_every_view(app):
+    """Including the phage view, which is the odd one out.
+
+    The other three ask for a sequence before they draw; the phage one does
+    not use a sequence at all, so the screen chooses the view first and skips
+    the sequence block entirely for that one. That is an early ``return`` in
+    the middle of ``render()``, which is exactly the shape of thing that
+    stops drawing the rest of the screen when someone edits around it.
+    """
+    _click(app, "⚗️ Bench")
+    _no_failure(app, "bench section")
+
+    selector = [r for r in app.radio if r.label == "View"]
+    assert selector, "the bench view selector did not render"
+    views = selector[0].options
+    assert len(views) == 4, f"expected four views, got {views}"
+
+    for view in views:
+        [r for r in app.radio if r.label == "View"][0].set_value(view).run()
+        _no_failure(app, f"bench view {view}")
+        assert _content_count(app) >= 6, f"bench view {view} looks empty"
+
+
+def test_reference_renders_every_view(app):
+    """The structures are files on disk, so a deployment that did not copy
+    `data/aminoacids/` draws a table and a warning rather than failing. This
+    checks the ordinary case: both views draw, with the files present."""
+    _click(app, "📐 Reference")
+    _no_failure(app, "reference section")
+
+    selector = [r for r in app.radio if r.label == "View"]
+    assert selector, "the reference view selector did not render"
+    for view in selector[0].options:
+        [r for r in app.radio if r.label == "View"][0].set_value(view).run()
+        _no_failure(app, f"reference view {view}")
+        assert _content_count(app) >= 6, f"reference view {view} looks empty"

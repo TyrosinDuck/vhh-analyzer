@@ -247,3 +247,91 @@ def test_modification_masses_come_from_their_formulas():
         assert modification["why"], f"{modification['name']} has no explanation"
         mass = bench._formula_mass(modification["formula"])
         assert abs(mass) > 1.0, f"{modification['name']} has a null mass delta"
+
+
+# --------------------------------------------------------------------------
+# Phage
+# --------------------------------------------------------------------------
+
+class TestPhageTitre:
+    """The arithmetic a panning round is planned with.
+
+    The reference numbers are a real stock measured in the lab: A260 0.459,
+    diluted 100-fold, with a 2.77-fold glycerol correction, which the
+    spreadsheet this reproduces turned into 3.82e12 particles per millilitre
+    and a 26.2 uL aliquot for 1e11 particles. If this test fails, the
+    calculator and the bench have stopped agreeing.
+    """
+
+    READING = dict(a260=0.459, dilution=100.0, glycerol_factor=2.77)
+
+    def test_reproduces_the_spreadsheet(self):
+        out = bench.phage_titre(**self.READING)
+        assert out["empirical_per_ml"] == pytest.approx(3.82e12, rel=0.01)
+
+    def test_the_aliquot_matches_too(self):
+        out = bench.phage_titre(**self.READING)
+        plan = bench.phage_aliquot(out["empirical_per_ml"], 1e11)
+        assert plan["volume_ul"] == pytest.approx(26.2, rel=0.01)
+        assert not plan["note"]
+
+    def test_the_two_routes_are_both_reported(self):
+        """Neither estimate may quietly replace the other.
+
+        They disagree by more than two orders of magnitude on the same
+        reading, which is the single most important thing this screen has to
+        say. A version that returned one number would be hiding it.
+        """
+        out = bench.phage_titre(**self.READING)
+        assert out["optical_per_ml"] > 0
+        assert out["ratio"] > 100
+
+    def test_the_optical_route_is_days_relation(self):
+        """A260 x 6e16 / bases, checked against the arithmetic by hand."""
+        out = bench.phage_titre(a260=1.0, genome_bases=7249)
+        assert out["optical_per_ml"] == pytest.approx(6e16 / 7249, rel=1e-9)
+
+    def test_a_shorter_genome_gives_a_higher_titre(self):
+        """Same absorbance, less DNA per particle, so more particles."""
+        short = bench.phage_titre(a260=1.0, genome_bases=4000)
+        long = bench.phage_titre(a260=1.0, genome_bases=8000)
+        assert short["optical_per_ml"] > long["optical_per_ml"]
+
+    def test_dilution_and_glycerol_both_multiply_up(self):
+        plain = bench.phage_titre(a260=0.5)["empirical_per_ml"]
+        both = bench.phage_titre(a260=0.5, dilution=10.0,
+                              glycerol_factor=2.0)["empirical_per_ml"]
+        assert both == pytest.approx(plain * 20)
+
+    @pytest.mark.parametrize("bad", [
+        dict(a260=-0.1),
+        dict(a260=0.5, dilution=0.0),
+        dict(a260=0.5, glycerol_factor=-1.0),
+        dict(a260=0.5, per_a260=0.0),
+        dict(a260=0.5, genome_bases=0),
+    ])
+    def test_impossible_inputs_are_refused(self, bad):
+        with pytest.raises(ValueError):
+            bench.phage_titre(**bad)
+
+
+class TestPhageAliquot:
+
+    def test_a_volume_too_small_to_pipette_is_called_out(self):
+        """The same objection the conjugation planner makes, for the same
+        reason: below a couple of microlitres the number is arithmetic rather
+        than something you can put in a tube."""
+        plan = bench.phage_aliquot(1e15, 1e9)
+        assert plan["volume_ul"] < bench.PIPETTE_MINIMUM_UL
+        assert "dilute" in plan["note"]
+
+    def test_an_absurdly_large_volume_is_called_out(self):
+        plan = bench.phage_aliquot(1e9, 1e13)
+        assert plan["volume_ul"] > 1000
+        assert plan["note"]
+
+    @pytest.mark.parametrize("titre,target", [(0.0, 1e11), (1e12, 0.0),
+                                              (-1.0, 1e11)])
+    def test_impossible_inputs_are_refused(self, titre, target):
+        with pytest.raises(ValueError):
+            bench.phage_aliquot(titre, target)

@@ -56,9 +56,9 @@ the
 
 ## 2. Getting around
 
-The app opens on a home page with six sections. The sidebar carries the same
-six
-entries plus a **Home** button, available from every screen.
+The app opens on a home page with seven sections. The sidebar carries the same
+seven entries plus a **Home** button, and, below the divider, the **Manual**
+you are reading and a **Reference** screen, available from every screen.
 
 | Section | Use it for |
 |---|---|
@@ -69,6 +69,7 @@ entries plus a **Home** button, available from every screen.
 | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
 | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
+| 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
 
 They are connected rather than separate. The sequencing section writes into the
 analysis input; the analysis input is what the cloning section offers as an
@@ -1341,10 +1342,11 @@ much protein is in it, whether it is the protein you think it is, and how much
 labelling reagent to add.
 
 It is the arithmetic that gets done on the back of a glove box on a Friday
-afternoon, which is exactly why it is worth writing down once. All three views
-start from the molar mass, extinction coefficient and lysine count that the
-analysis section already derives from the sequence, so none of those has to be
-typed again or looked up wrong.
+afternoon, which is exactly why it is worth writing down once. The first three
+views start from the molar mass, extinction coefficient and lysine count that
+the analysis section already derives from the sequence, so none of those has to
+be typed again or looked up wrong. The fourth is about the step before all of
+that, the phage stock, and needs no sequence at all.
 
 Load your sequences in the analysis section first and pick one at the top. The
 calculators still work without that, with the molar mass and extinction
@@ -1466,6 +1468,53 @@ others and random labelling then risks the paratope. If that matters, a
 site-specific route (sortase, an engineered cysteine, a C-terminal tag) is the
 alternative. Which lysines are actually *accessible* is a structural question
 this cannot answer: upload a model to §4.
+
+
+### 5.4 Phage titre
+
+The step before the rest of this section. An absorbance at 260 nm turns into
+particles per millilitre, and that is what decides how much stock goes into the
+next round of panning. Nothing here needs a sequence.
+
+You give the reading, how many times the stock was diluted to take it, and a
+**glycerol factor**: how much the stock itself was diluted when glycerol was
+added to it. One volume of phage plus one volume of glycerol is 2. Leave it at
+1 if the stock has none. The three multiply together into the absorbance the
+undiluted stock would have, which is then converted twice.
+
+**Two constants, and they do not agree.** This is the whole point of the view,
+so it is worth being blunt about it.
+
+The **empirical** route multiplies by a number measured directly: a titration
+in which an A260 of 1 corresponded to 3 x 10^10 particles per millilitre. That
+is a correspondence observed for a particular preparation on a particular
+instrument, which is why the app lets you edit it rather than burying it.
+
+The **optical** route is Day's relation for filamentous phage,
+
+    virions/mL = A269 x 6e16 / (bases in the genome)
+
+which works the absorbance out from the single-stranded DNA the particle
+carries. The genome length is an input because a phagemid carrying an insert is
+not the length of the helper phage; M13mp18 is 7249 bases. Reading at 260 nm
+rather than 269, and without subtracting the A320 scatter, costs some accuracy
+but not an order of magnitude.
+
+On the same reading these two differ by a factor of roughly 275. A gap that
+size is not rounding, and the app says so rather than choosing for you. It
+means one of the two is not describing your stock: most often the empirical
+factor was established on a different preparation, or the reading carries a
+large scattering contribution that a calculation from the genome has no way to
+know about. **Use the one you can defend, and record which one in the
+notebook.** A plaque or colony titration settles it outright and is the only
+one of the three that counts particles that actually infect.
+
+Below that, **how much to take**: pick which titre to work from, give the
+number of particles you want, and the app gives the volume of stock. A round of
+panning is usually run with 10^11 to 10^13 particles. If the volume comes out
+below two microlitres it cannot be pipetted accurately, and the app offers a
+dilution instead, exactly as the conjugation planner does and for the same
+reason.
 
 ---
 
@@ -1951,7 +2000,81 @@ vector rather
 
 ---
 
-## 10. How your data is handled
+
+## 10. Reference tables
+
+The two tables you look up rather than work out: the genetic code, and the
+twenty amino acids. Reached from **Reference** in the sidebar, under the
+manual, because it is something you consult rather than something you run.
+
+Nothing on that screen is typed in, and that is the only reason it is there.
+A reference table maintained separately can disagree with the app printed next
+to it, and when it does the reader has no way of telling which of the two is
+wrong. So the codon table is Biopython's, the usage figures are the measured
+*E. coli* table that §7 scores CAI against, the rare-codon flags are the same
+eight that §7 raises, and the residue masses, hydropathy and charges are the
+same constants §3 builds its profiles from. They cannot contradict each other,
+because they are the same numbers.
+
+### 10.1 Genetic code
+
+First the textbook block: rows are the first two bases, columns the third.
+Read across a row and the amino acid usually does not change, which is the
+wobble position and the reason a synonymous swap is available at all.
+
+Then all 64 codons, filterable by amino acid or down to the rare ones:
+
+- **share** is the codon's share of its own amino acid's codons, which is what
+  matters when choosing a synonym.
+- **w** is that share divided by the best synonym's, the relative
+  adaptiveness; CAI is the geometric mean of these. A codon with w near 1 is
+  the one the host prefers.
+- **rare_in_ecoli** marks the eight codons §7 flags, each with the tRNA that
+  is limiting for it.
+
+Stop codons have no share, because they do not compete with a synonym for an
+amino acid, so a share would be a number about nothing.
+
+### 10.2 Amino acids
+
+Twenty structures, drawn as they exist **at pH 7.4**: the zwitterion, with
+aspartate and glutamate deprotonated and lysine and arginine protonated.
+Histidine is drawn neutral, because its side-chain pKa is near 6 and at 7.4 the
+neutral imidazole dominates; it is the one residue whose picture would be
+different at a pH you might plausibly work at. A drawing of a charged species
+without its pH is a drawing of nothing in particular, which is why the number
+is on the screen rather than in a footnote.
+
+The stereo descriptors are the CIP ones. Every amino acid here is L, which is
+S at the alpha carbon for all of them except cysteine, where the sulfur
+outranks the carboxyl and the same spatial arrangement is called R. Threonine
+is 2S,3R and isoleucine 2S,3S.
+
+Below the structures, the properties:
+
+- **residue_da** is what the residue adds to a chain, and is the number every
+  molecular weight in the app is built from. **free_da** is the free amino
+  acid.
+- **hydropathy** is Kyte and Doolittle, the scale behind the hydrophobicity
+  profile in §3.
+- **charge_profile** is the approximation the charge profile uses, where
+  histidine counts as +0.1 rather than being treated as fully protonated or
+  fully neutral.
+- **side_chain_pka** is for the free amino acid. In a folded protein the local
+  environment moves these, sometimes by several units, so they say what to
+  expect and not what is the case.
+
+The structures are SVG files committed to `data/aminoacids/`, not drawn when
+the page loads. They are produced once by `tools/aminoacids/build.py`, which
+checks each one's formal charge and its molecular weight against Biopython's
+before writing it and refuses to finish quietly if either is wrong. Doing it
+that way keeps RDKit, 66 MB installed, out of the app for the sake of twenty
+pictures that never change. The carbon skeleton is drawn in `currentColor` so
+it follows the light or dark theme instead of being black in both.
+
+---
+
+## 11. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file,
 logged,
@@ -1977,7 +2100,7 @@ Uploads are capped at 10 MB per file, 50 sequences per analysis.
 
 ---
 
-## 11. Running it on your own machine
+## 12. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -2002,7 +2125,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 12. Limits and caveats, in one place
+## 13. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -2029,7 +2152,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 **Did my change actually deploy?** The footer carries a seven-character
 fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
@@ -2072,7 +2195,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 14. Under the hood
+## 15. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for
 IMGT

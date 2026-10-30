@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.30a"
+__version__ = "2026.10.30b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -76,9 +76,10 @@ def _source_fingerprint(root: Path | None = None) -> str:
     every environment: locally, in Docker, and on Community Cloud.
 
     What is hashed is everything the app serves: the Python files, plus
-    `MANUAL.md` and `data/library.csv`, which the manual and library screens read
-    at runtime. A change to either is visible to a user, so it has to move the
-    fingerprint. Files that only a developer reads, `README.md` and
+    `MANUAL.md`, `data/library.csv` and the amino acid structures, which the
+    manual, library and reference screens read at runtime. A change to any of
+    them is visible to a user, so it has to move the fingerprint. Files that
+    only a developer reads, `README.md`, `tools/` and
     `CONTRIBUTING.md` among them, are deliberately left out: they cannot change
     what the app does, and including them would make the fingerprint move for
     deploys with nothing to verify.
@@ -90,8 +91,11 @@ def _source_fingerprint(root: Path | None = None) -> str:
     try:
         files = (sorted(root.glob("*.py"))
                  + sorted((root / "sections").glob("*.py"))
+                 + sorted((root / "data" / "aminoacids").glob("*.svg"))
                  + [p for p in (root / "MANUAL.md",
-                                root / "data" / "library.csv") if p.exists()])
+                                root / "data" / "library.csv",
+                                root / "data" / "aminoacids" / "meta.json")
+                    if p.exists()])
         for path in files:
             digest.update(path.name.encode())
             digest.update(path.read_bytes())
@@ -255,8 +259,8 @@ SECTIONS = {
     "bench": ("⚗️", "Bench",
               "The arithmetic between a purified protein and the next "
               "experiment: concentration from a measured A280, whether the "
-              "measured mass is the protein you think it is, and how much "
-              "labelling reagent to add."),
+              "measured mass is the protein you think it is, how much "
+              "labelling reagent to add, and the titre of a phage stock."),
     "sequencing": ("🧪", "Sanger sequencing",
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "
                    "sequences from the expression cassette, spot frameshifts and "

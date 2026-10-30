@@ -1,0 +1,50 @@
+# L-amino acids. Two forms each: the neutral free amino acid, used only to check
+# the structure against an independent mass table, and the form at pH 7.4 that
+# actually gets drawn.
+NEUTRAL = {
+ "Gly":"NCC(=O)O",
+ "Ala":"N[C@@H](C)C(=O)O",
+ "Val":"N[C@@H](C(C)C)C(=O)O",
+ "Leu":"N[C@@H](CC(C)C)C(=O)O",
+ "Ile":"N[C@@H]([C@@H](C)CC)C(=O)O",
+ "Pro":"OC(=O)[C@@H]1CCCN1",
+ "Phe":"N[C@@H](Cc1ccccc1)C(=O)O",
+ "Trp":"N[C@@H](Cc1c[nH]c2ccccc12)C(=O)O",
+ "Met":"N[C@@H](CCSC)C(=O)O",
+ "Ser":"N[C@@H](CO)C(=O)O",
+ "Thr":"N[C@@H]([C@H](O)C)C(=O)O",
+ "Cys":"N[C@@H](CS)C(=O)O",
+ "Tyr":"N[C@@H](Cc1ccc(O)cc1)C(=O)O",
+ "Asn":"N[C@@H](CC(N)=O)C(=O)O",
+ "Gln":"N[C@@H](CCC(N)=O)C(=O)O",
+ "Asp":"N[C@@H](CC(=O)O)C(=O)O",
+ "Glu":"N[C@@H](CCC(=O)O)C(=O)O",
+ "Lys":"N[C@@H](CCCCN)C(=O)O",
+ "Arg":"N[C@@H](CCCNC(=N)N)C(=O)O",
+ "His":"N[C@@H](Cc1c[nH]cn1)C(=O)O",
+}
+# At pH 7.4: backbone is a zwitterion everywhere; Asp and Glu are deprotonated,
+# Lys and Arg protonated, His predominantly neutral (side-chain pKa about 6.0).
+PH74 = {
+ "Gly":"[NH3+]CC(=O)[O-]",
+ "Ala":"[NH3+][C@@H](C)C(=O)[O-]",
+ "Val":"[NH3+][C@@H](C(C)C)C(=O)[O-]",
+ "Leu":"[NH3+][C@@H](CC(C)C)C(=O)[O-]",
+ "Ile":"[NH3+][C@@H]([C@@H](C)CC)C(=O)[O-]",
+ "Pro":"[O-]C(=O)[C@@H]1CCC[NH2+]1",
+ "Phe":"[NH3+][C@@H](Cc1ccccc1)C(=O)[O-]",
+ "Trp":"[NH3+][C@@H](Cc1c[nH]c2ccccc12)C(=O)[O-]",
+ "Met":"[NH3+][C@@H](CCSC)C(=O)[O-]",
+ "Ser":"[NH3+][C@@H](CO)C(=O)[O-]",
+ "Thr":"[NH3+][C@@H]([C@H](O)C)C(=O)[O-]",
+ "Cys":"[NH3+][C@@H](CS)C(=O)[O-]",
+ "Tyr":"[NH3+][C@@H](Cc1ccc(O)cc1)C(=O)[O-]",
+ "Asn":"[NH3+][C@@H](CC(N)=O)C(=O)[O-]",
+ "Gln":"[NH3+][C@@H](CCC(N)=O)C(=O)[O-]",
+ "Asp":"[NH3+][C@@H](CC(=O)[O-])C(=O)[O-]",
+ "Glu":"[NH3+][C@@H](CCC(=O)[O-])C(=O)[O-]",
+ "Lys":"[NH3+][C@@H](CCCC[NH3+])C(=O)[O-]",
+ "Arg":"[NH3+][C@@H](CCCNC(=[NH2+])N)C(=O)[O-]",
+ "His":"[NH3+][C@@H](Cc1c[nH]cn1)C(=O)[O-]",
+}
+EXPECTED_CHARGE = {**{k:0 for k in NEUTRAL}, "Asp":-1,"Glu":-1,"Lys":1,"Arg":1}
