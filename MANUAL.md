@@ -1139,7 +1139,16 @@ all.
 `.pdb`, `.cif`/`.mmcif`, and gzipped versions of either. Crystal structures
 from
 the PDB, AlphaFold2, AlphaFold3 and ColabFold models are all read directly,
-pLDDT included, for AlphaFold3, use the `.cif` it writes.
+pLDDT included.
+
+For **AlphaFold3**, upload the **.zip** it gives you, as downloaded from
+AlphaFold Server or zipped from your own run. The app picks the models out of
+it, lets you choose which one to look at (sorted by AlphaFold3's ranking score,
+best first), and reads the confidence files that sit beside each `.cif`:
+ipTM, pTM, the clash flag and the PAE matrix. None of these are in the `.cif`
+itself, so a `.cif` uploaded on its own gives pLDDT only. The `msas/` and
+`templates/` folders are never opened; if the zip is over the 20 MB upload
+limit, delete them and zip again.
 
 The app does **not** fetch structures for you, deliberately: downloading on
 your
@@ -1192,6 +1201,38 @@ pLDDT is the model's confidence in itself. It is neither accuracy nor a
 measurement of flexibility, although low pLDDT and genuine disorder do tend to
 coincide. Side-chain placement is less reliable than the backbone even at high
 pLDDT, which matters when you read the accessibility of a long side chain.
+
+**AlphaFold3: ipTM and PAE.** When an AlphaFold3 `.zip` was uploaded, this view
+opens with what pLDDT cannot say: whether the chains are placed correctly
+**relative to each other**. A VHH and its antigen can both be folded with high
+confidence and still be docked on the wrong face, and pLDDT will not show it.
+
+- **ipTM, whole complex**, as AlphaFold3 reports it. With more than two chains
+  it mixes every pair, so read the next line instead.
+- **ipTM of the pair** you picked above (chain of interest against each binding
+  partner), from AlphaFold3's `chain_pair_iptm`, with the lowest PAE between
+  the two chains. Above **0.8** the arrangement is predicted with confidence,
+  below **0.6** it has likely failed, and between the two correct and wrong
+  arrangements both occur. These are the thresholds published with AlphaFold3.
+- **The table of all models** in the archive. Agreement on a high ipTM is
+  reassuring; disagreement, or agreement on a low value, means the interface is
+  not settled.
+- **The PAE matrix**, chain boundaries marked. The off-diagonal blocks are the
+  inter-chain confidence: pale throughout means the placement is a guess, a dark
+  stripe means some region, an epitope perhaps, is placed with confidence.
+
+The **Interface** view repeats the verdict above its numbers, because a buried
+surface measured on a model with ipTM 0.3 describes that model, not the
+complex.
+
+ipTM is a confidence, not an accuracy and not an affinity. It is pulled down by
+disordered segments, a His-tag, a linker, a floppy terminus, even when the
+interface is right, so predict the construct without its tags when you can.
+
+Which matrix row is which chain is not written in the matrix. The app takes the
+order from the summary's `chain_ids` (AlphaFold Server), then from the PAE
+file's `token_chain_ids`, then from the order of chains in the `.cif`, and says
+which it used.
 
 ### 4.4 Disulfides
 

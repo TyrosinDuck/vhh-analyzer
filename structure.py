@@ -17,7 +17,8 @@ and when a model exists the approximation can simply be replaced by a measuremen
 - Which residues contact the antigen is not inferable from sequence at all.
 
 Accepts `.pdb`, `.cif`/`.mmcif` and gzipped versions of either, including the
-outputs of AlphaFold2, AlphaFold3 and ColabFold.
+outputs of AlphaFold2, AlphaFold3 and ColabFold. AlphaFold3's ipTM and PAE
+are not in the structure file; `af3.py` reads them from the archive.
 
 **What this is not.** It measures one static conformer of one model. It does not
 predict structure, does not dock, does not estimate affinity, and does not model
@@ -69,7 +70,7 @@ __all__ = [
     "PATCH_CONTACT", "PATCH_MIN_SIZE", "PATCH_MIN_REL", "__version__",
 ]
 
-__version__ = "2026.10.28e"
+__version__ = "2026.11.04a"
 
 
 def _three_to_one(resname: str) -> str | None:

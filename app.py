@@ -104,8 +104,9 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
-                    "library": "2026.10.28a", "structure": "2026.10.28e",
-                    "shell": "2026.11.04c", "compute": "2026.10.29b",
+                    "library": "2026.10.28a", "structure": "2026.11.04a",
+                    "shell": "2026.11.04c", "compute": "2026.11.04a",
+                    "af3": "2026.11.04a",
                     "reference": "2026.10.30a",
                     "sections.analysis": "2026.10.28a",
                     "sections.bench": "2026.10.30e",
@@ -117,7 +118,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "sections.library": "2026.10.28c",
                     "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
-                    "sections.structure": "2026.11.04a"}
+                    "sections.structure": "2026.11.04b"}
 
 
 def _imported(name: str):

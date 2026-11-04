@@ -36,13 +36,14 @@ import generator as gn
 import library as lib
 import repertoire as rep
 import sanger as sg
+import af3
 import structure as stx
 import triage as tg
 import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.10.29b"
+__version__ = "2026.11.04a"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -445,6 +446,25 @@ def st_load(raw: bytes, name: str) -> tuple[pd.DataFrame, str, str, int, list]:
     model = stx.load_structure(raw, name)
     kind, reason = stx.confidence_kind(model)
     return (stx.chain_table(model), kind, reason, model.n_models, model.ssbond)
+
+
+# The AlphaFold3 archive is kept as uploaded and these read from it on demand:
+# the summaries of every model at once, because they are a few kB each and the
+# comparison between models is the point, but one model's coordinates and one
+# PAE matrix at a time, because those are what cost memory.
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_af3_index(raw: bytes, name: str) -> af3.AF3Bundle:
+    return af3.read_af3_zip(raw, name)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_af3_member(raw: bytes, member: str) -> bytes:
+    return af3.read_member(raw, member)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_af3_full(raw: bytes, member: str | None) -> dict | None:
+    return af3.load_full_data(raw, member)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)

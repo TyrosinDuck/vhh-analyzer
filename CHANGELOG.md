@@ -49,6 +49,16 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **AlphaFold3 confidence in the structure section.** The structure upload now
+  takes the `.zip` AlphaFold3 produces, as downloaded from AlphaFold Server or
+  zipped from a local run. Pick any of its models; the confidence view then
+  shows ipTM (whole complex and for the chosen VHH–partner pair), pTM, the
+  ranking score, the clash flag, a table comparing every model in the archive,
+  and the PAE matrix. The interface view warns when the pair's ipTM says the
+  arrangement it is measuring has likely failed. A `.cif` on its own still
+  works and gives pLDDT only, which says nothing about where the chains sit
+  relative to each other.
+
 - The manual is browsed one section at a time, with a **Jump to** selector,
   previous/next buttons and a list of what each section contains. Rendering
   seventeen hundred lines on every interaction was slow and nobody reads a

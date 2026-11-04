@@ -203,6 +203,37 @@ def test_structure_renders_every_view(app, tmp_path):
         _no_failure(app, f"structure view {view}")
 
 
+def test_structure_section_reads_an_alphafold3_zip(app):
+    """The .zip path: model picker, ipTM panel and every view, with no failure.
+
+    The ipTM here is high on purpose. A low one draws an ``st.error`` by
+    design, and ``_no_failure`` would read that as the section breaking.
+    """
+    from test_af3 import server_zip
+
+    app.session_state["struct_raw"] = server_zip(iptms=(0.9, 0.85))
+    app.session_state["struct_name"] = "fold_test_job.zip"
+    # The previous test leaves the app on this screen, whose own navigation
+    # button is then disabled; going home first makes the order not matter.
+    _click(app, "🏠 Home")
+    _click(app, "🧊 Structure")
+    _no_failure(app, "structure section, AlphaFold3 zip")
+    pickers = [s for s in app.selectbox if s.label.startswith("Model from")]
+    assert pickers, "the AlphaFold3 model picker did not render"
+    selector = [r for r in app.radio if r.label == "View"][0]
+    selector.set_value("🧬 Chains & confidence").run()
+    _no_failure(app, "AlphaFold3 confidence panel")
+    labels = [m.label for m in app.metric]
+    assert "ipTM, whole complex" in labels
+    assert any("ipTM 0.90" in s.value for s in app.success)
+    for view in [r for r in app.radio if r.label == "View"][0].options:
+        [r for r in app.radio if r.label == "View"][0].set_value(view).run()
+        _no_failure(app, f"AlphaFold3 zip, view {view}")
+    pickers = [s for s in app.selectbox if s.label.startswith("Model from")]
+    pickers[0].set_value("model 1").run()
+    _no_failure(app, "AlphaFold3 zip, second model")
+
+
 def test_sequence_input_survives_leaving_the_section(app):
     """Streamlit discards a widget's state once the widget stops rendering.
 

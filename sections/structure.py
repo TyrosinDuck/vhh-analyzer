@@ -8,18 +8,21 @@ them. The cached wrappers it calls live in `compute.py`.
 
 from __future__ import annotations
 
+import posixpath
 import re
 
+import matplotlib.pyplot as plt
 import streamlit as st
 
+import af3
 import structure as stx
 import vhh_core as vc
-from compute import (st_confidence, st_disulfides, st_exposure,
+from compute import (st_af3_full, st_af3_index, st_af3_member, st_confidence, st_disulfides, st_exposure,
                      st_identity_map, st_interface, st_interface_summary,
                      st_load, st_patches, st_resnum_map)
 from shell import FIT, current_sequences, embed_html, footer
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.04b"
 
 
 def render(method: str) -> None:
@@ -42,10 +45,15 @@ def render(method: str) -> None:
         "measurement. Upload a crystal structure or a predicted model.")
 
     up = st.file_uploader(
-        "Structure (.pdb, .cif, .mmcif, optionally gzipped)",
-        type=["pdb", "cif", "mmcif", "ent", "gz"], key="struct_uploader",
+        "Structure (.pdb, .cif, .mmcif, optionally gzipped), or the .zip of "
+        "an AlphaFold3 prediction",
+        type=["pdb", "cif", "mmcif", "ent", "gz", "zip"], key="struct_uploader",
         help="Crystal structures and AlphaFold2/3 or ColabFold models are all "
-             "accepted. A complex in one file lets the interface be computed.")
+             "accepted. A complex in one file lets the interface be computed. "
+             "For AlphaFold3, upload the .zip exactly as AlphaFold Server (or "
+             "your own run) gives it: ipTM and PAE live in JSON files beside "
+             "the .cif, not in it, and are only shown when the .zip is "
+             "uploaded.")
 
     # The uploader is unmounted when you leave the section, which discards what
     # it held. Parking the bytes under a key of our own is what lets you come
@@ -65,7 +73,12 @@ def render(method: str) -> None:
   there is no interface left to compute.
 - **AlphaFold DB**: `https://alphafold.ebi.ac.uk/`, search a UniProt accession.
 - **Your own predictions**: AlphaFold2, AlphaFold3 and ColabFold outputs are
-  read directly, pLDDT included. For AlphaFold3, use the `.cif` it writes.
+  read directly, pLDDT included. For AlphaFold3, upload the **.zip** AlphaFold
+  Server gives you, unchanged: the app then also shows ipTM, the scores of all
+  five models and the PAE, which say whether the *arrangement* of the chains
+  can be trusted. A `.cif` on its own gives pLDDT only. If the zip is over the
+  upload limit, delete its `msas/` and `templates/` folders, which the app
+  does not read.
 
 This app does not fetch structures for you, deliberately: downloading on your
 behalf would mean this server making requests that look like they came from you.
@@ -73,16 +86,55 @@ behalf would mean this server making requests that look like they came from you.
         footer()
         st.stop()
 
-    try:
-        chains, kind_guess, kind_reason, n_models, ssbond = st_load(raw, fname)
-    except stx.StructureError as exc:
-        st.error(str(exc))
+    def fail(message: str) -> None:
+        st.error(message)
         if st.button("Clear and try another file", key="struct_clear_err"):
-            for key in ("struct_raw", "struct_name"):
+            for key in ("struct_raw", "struct_name", "struct_af3_model"):
                 st.session_state.pop(key, None)
             st.rerun()
         footer()
         st.stop()
+
+    # An AlphaFold3 archive is kept whole, and the model picked from it stands
+    # in for an uploaded .cif from here on: everything below reads `raw` and
+    # `fname` and never needs to know the structure came out of a zip.
+    bundle = sample = zip_raw = None
+    if af3.is_zip(raw):
+        zip_raw = raw
+        try:
+            bundle = st_af3_index(zip_raw, fname)
+        except stx.StructureError as exc:
+            fail(str(exc))
+        labels = [s.label for s in bundle.samples]
+        if st.session_state.get("struct_af3_model") not in labels:
+            st.session_state["struct_af3_model"] = labels[0]
+        pick_model = st.columns([2, 3])
+        with pick_model[0]:
+            chosen = st.selectbox(
+                f"Model from this {bundle.source} job", labels,
+                key="struct_af3_model",
+                format_func=lambda label: next(
+                    f"{s.label}, ranking score {s.ranking_score:.2f}"
+                    if s.ranking_score is not None else s.label
+                    for s in bundle.samples if s.label == label),
+                help="Sorted by AlphaFold3's own ranking score, best first. "
+                     "Everything on this screen describes the model picked "
+                     "here.")
+        with pick_model[1]:
+            st.caption(f"**{bundle.job_name}**, {len(bundle.samples)} model(s) "
+                       f"in the archive. Read in memory and dropped, like any "
+                       f"upload: nothing is kept.")
+        sample = next(s for s in bundle.samples if s.label == chosen)
+        try:
+            raw = st_af3_member(zip_raw, sample.cif_member)
+        except stx.StructureError as exc:
+            fail(str(exc))
+        fname = posixpath.basename(sample.cif_member)
+
+    try:
+        chains, kind_guess, kind_reason, n_models, ssbond = st_load(raw, fname)
+    except stx.StructureError as exc:
+        fail(str(exc))
 
     head = st.columns([3, 1])
     with head[0]:
@@ -90,7 +142,7 @@ behalf would mean this server making requests that look like they came from you.
                    f"{int(chains['length'].sum())} residues.")
     with head[1]:
         if st.button("Clear structure", key="struct_clear", **FIT):
-            for key in ("struct_raw", "struct_name"):
+            for key in ("struct_raw", "struct_name", "struct_af3_model"):
                 st.session_state.pop(key, None)
             st.rerun()
 
@@ -177,6 +229,10 @@ behalf would mean this server making requests that look like they came from you.
 
     # ------------------------------------------------------------------ #
     if view == "🧬 Chains & confidence":
+        if bundle is not None:
+            _af3_panel(bundle, sample, zip_raw, chain, partners,
+                       list(chains["chain"]))
+            st.divider()
         st.subheader("What the B-factor column holds")
         st.markdown(
             "A predicted model stores **pLDDT** in the column a crystal structure "
@@ -451,6 +507,9 @@ behalf would mean this server making requests that look like they came from you.
             "the complex, is the standard operational definition, and unlike a "
             "distance cutoff it weights each residue by how much surface it "
             "actually commits to the contact.")
+        if bundle is not None:
+            _af3_interface_note(bundle, sample, zip_raw, chain, partners,
+                                list(chains["chain"]))
         iface = st_interface(raw, fname, chain, tuple(partners))
         if not len(iface):
             st.info("No residue of this chain loses accessibility, the chains "
@@ -621,3 +680,158 @@ behalf would mean this server making requests that look like they came from you.
     # it. The footer() calls above are different - they precede an early
     # st.stop(), which means render() never returns and the router's
     # call is never reached.
+
+
+# --------------------------------------------------------------------------- #
+# AlphaFold3 confidence, shown only when the .zip was uploaded
+# --------------------------------------------------------------------------- #
+
+def _num(value, digits: int = 2) -> str:
+    return "n/a" if value is None else f"{value:.{digits}f}"
+
+
+def _pair_rows(sample, zip_raw, chain, partners, cif_chains):
+    summary = sample.summary
+    full = st_af3_full(zip_raw, sample.full_member)
+    order, order_source = af3.chain_order(summary, full, cif_chains)
+    rows = []
+    for partner in partners:
+        rows.append({
+            "partner": partner,
+            "iptm": af3.pair_iptm(summary, order, chain, partner),
+            "pae_min": af3.pair_pae_min(summary, order, chain, partner),
+            "block": af3.interface_pae(full, chain, partner) if full else None,
+        })
+    return rows, full, order_source
+
+
+def _af3_panel(bundle, sample, zip_raw, chain, partners, cif_chains) -> None:
+    st.subheader("AlphaFold3: can the arrangement of the chains be trusted?")
+    st.markdown(
+        "pLDDT, further down, says whether each chain is folded right. It says "
+        "nothing about where the chains sit **relative to each other**: two "
+        "chains can both be confidently folded and docked on the wrong face. "
+        "That is what **ipTM** and the **PAE** are for. AlphaFold3 writes them "
+        "beside the `.cif`, not in it, which is why they appear only when the "
+        "`.zip` is uploaded.")
+    summary = sample.summary
+    if not summary:
+        st.warning(f"{sample.label} has no summary_confidences file in the "
+                   f"archive, so there is no ipTM to show for it.")
+        return
+
+    cols = st.columns(4)
+    cols[0].metric("ipTM, whole complex", _num(summary.get("iptm")),
+                   help="Every chain against every other. With more than two "
+                        "chains it mixes all the pairs, so the pair value "
+                        "below is the one to read.")
+    cols[1].metric("pTM", _num(summary.get("ptm")),
+                   help="The whole complex, folding and arrangement together.")
+    cols[2].metric("Ranking score", _num(summary.get("ranking_score")),
+                   help="What AlphaFold3 sorts its models by: 0.8 ipTM + "
+                        "0.2 pTM + 0.5 fraction disordered, minus 100 if "
+                        "there is a clash.")
+    cols[3].metric("Clash", "yes" if summary.get("has_clash") else "no",
+                   help="Chains interpenetrating. A model with a clash is "
+                        "ranked last whatever its other scores.")
+    if summary.get("has_clash"):
+        st.error("AlphaFold3 flags a clash in this model: chains overlap in "
+                 "space. Nothing measured on it at the interface is meaningful.")
+
+    if not partners:
+        st.info("Pick a binding partner above to see the ipTM of that pair, "
+                "which is the number that matters for a VHH and its antigen.")
+    else:
+        rows, full, order_source = _pair_rows(sample, zip_raw, chain, partners,
+                                              cif_chains)
+        for row in rows:
+            level, sentence = af3.iptm_verdict(row["iptm"])
+            text = (f"**Chain {chain} against {row['partner']}: ipTM "
+                    f"{_num(row['iptm'])}**, {sentence}")
+            if row["pae_min"] is not None:
+                text += (f" Lowest PAE between the two chains: "
+                         f"{row['pae_min']:.1f} Å.")
+            {"high": st.success, "grey": st.warning, "low": st.error,
+             "none": st.info}[level](text)
+        st.caption(
+            f"Chain order for the pair values read from {order_source}. "
+            f"Thresholds from AlphaFold3: above {af3.IPTM_HIGH} confident, "
+            f"below {af3.IPTM_LOW} likely failed. ipTM is a confidence, not an "
+            f"accuracy and not an affinity. It is pulled down by disordered "
+            f"segments, a His-tag, a linker, a floppy terminus, even when the "
+            f"interface itself is right, so a construct with tags is worth "
+            f"predicting without them.")
+
+    st.markdown("**All the models in the archive.** Models that agree on a "
+                "high ipTM are reassuring. Models that disagree, or agree on a "
+                "low one, mean the interface is not settled.")
+    table = af3.samples_table(bundle, chain, partners[0] if partners else None,
+                              cif_chains)
+    config = {
+        "model": "Model",
+        "ranking_score": st.column_config.NumberColumn("Ranking", format="%.2f"),
+        "iptm": st.column_config.NumberColumn("ipTM", format="%.2f"),
+        "ptm": st.column_config.NumberColumn("pTM", format="%.2f"),
+        "has_clash": "Clash",
+        "fraction_disordered": st.column_config.NumberColumn(
+            "Disordered", format="%.2f",
+            help="Fraction of the structure AlphaFold3 considers disordered.")}
+    if partners:
+        config["pair_iptm"] = st.column_config.NumberColumn(
+            f"ipTM {chain}–{partners[0]}", format="%.2f")
+        config["pair_pae_min"] = st.column_config.NumberColumn(
+            f"Min PAE {chain}–{partners[0]} (Å)", format="%.1f")
+    st.dataframe(table, hide_index=True, column_config=config, **FIT)
+
+    full = st_af3_full(zip_raw, sample.full_member)
+    if full is None:
+        st.caption("No PAE file for this model in the archive.")
+        return
+    st.markdown("**Predicted aligned error**")
+    left, right = st.columns([3, 2])
+    with left:
+        st.pyplot(af3.plot_pae(full, title=f"PAE, {sample.label}"), **FIT)
+    with right:
+        st.markdown(
+            "Each cell is the error AlphaFold3 expects in the position of the "
+            "column residue when the model is superposed on the row residue. "
+            "**Dark is confident.** The blocks on the diagonal are each chain "
+            "against itself. The **off-diagonal blocks** are the arrangement: "
+            "pale throughout means the chains' relative placement is a guess, "
+            "and a dark stripe means some region of one chain, an epitope "
+            "perhaps, is placed with confidence relative to the other.")
+        if partners:
+            rows, _full, _source = _pair_rows(sample, zip_raw, chain,
+                                              partners, cif_chains)
+            for row in rows:
+                block = row["block"]
+                if block:
+                    st.caption(
+                        f"{chain}–{row['partner']}: mean {block['mean']:.1f} Å, "
+                        f"min {block['min']:.1f} Å, "
+                        f"{block['fraction_close']:.0%} of residue pairs under "
+                        f"{block['close']:.0f} Å. The mean is dominated by the "
+                        f"parts of each chain far from the other; the minimum "
+                        f"and the fraction are what speak to an interface.")
+    plt.close("all")
+
+
+def _af3_interface_note(bundle, sample, zip_raw, chain, partners,
+                        cif_chains) -> None:
+    rows, _full, _source = _pair_rows(sample, zip_raw, chain, partners,
+                                      cif_chains)
+    for row in rows:
+        level, _sentence = af3.iptm_verdict(row["iptm"])
+        if level == "low":
+            st.error(f"AlphaFold3 gives chain {chain} against {row['partner']} "
+                     f"an ipTM of {_num(row['iptm'])}: the arrangement has "
+                     f"likely failed. The interface below is what this model "
+                     f"happens to contain, not evidence of an epitope.")
+        elif level == "grey":
+            st.warning(f"ipTM {chain}–{row['partner']} is {_num(row['iptm'])}, "
+                       f"in the grey zone. Read the interface below as a "
+                       f"hypothesis, and check whether the other models in the "
+                       f"archive put the VHH in the same place.")
+        elif level == "high":
+            st.caption(f"ipTM {chain}–{row['partner']}: {_num(row['iptm'])}, "
+                       f"a confident arrangement.")
