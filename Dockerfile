@@ -1,4 +1,4 @@
-# VHH Analyzer — container image.
+# VHH Analyzer, container image.
 #
 # Based on micromamba so that HMMER (the ANARCI backend) can be installed from
 # bioconda; a pip-only image would fall back to the regex annotator.
@@ -20,7 +20,13 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER requirements.txt /tmp/requirements.txt
 RUN micromamba run -n base pip install --no-cache-dir -r /tmp/requirements.txt
 
 WORKDIR /app
-COPY --chown=$MAMBA_USER:$MAMBA_USER vhh_core.py app.py /app/
+# The whole project, filtered by .dockerignore, rather than a list of files.
+# The list this replaces named two files while app.py imports a dozen modules
+# and reads sections/, data/, MANUAL.md and .streamlit/; nobody updated it as
+# modules were added, and the image failed on its first import. What stays
+# out is decided in .dockerignore, which only has to change when something
+# should be excluded, not every time something is added.
+COPY --chown=$MAMBA_USER:$MAMBA_USER . /app/
 
 EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \

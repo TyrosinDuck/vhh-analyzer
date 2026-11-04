@@ -18,6 +18,23 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+- **The Docker image could not have started.** The `Dockerfile` copied
+  `vhh_core.py` and `app.py` and nothing else, while `app.py` imports a dozen
+  other modules and reads `sections/`, `data/`, `MANUAL.md` and
+  `.streamlit/config.toml`; the first import failed. It now copies the whole
+  project, and a new `.dockerignore` says what stays out (`.git`, caches,
+  zips, `results/`, `paper/`, `tools/`), so the file no longer has to be
+  edited each time a module is added, which is how it went stale. Verified:
+  the build context, by building it with Docker, and the app, by installing
+  the image's environment with micromamba 1.5 (Python 3.11, HMMER and ANARCI
+  from bioconda, then `requirements.txt`) and running it, health check and full
+  test suite, from exactly the files the image receives. Not verified: the
+  image itself, since its base image could not be pulled where this was
+  checked.
+- `requirements-dev.txt` was missing `pypdf`, which `tests/test_bench.py`
+  needs to open the batch sheet it generates. The test passed only where
+  `pypdf` happened to be installed already.
+
 - **File uploads on the deployed app returned 500 while working locally.**
   `.streamlit/config.toml` turned XSRF protection on; Streamlit Community
   Cloud runs every app it hosts with it off, and with it on the upload goes to

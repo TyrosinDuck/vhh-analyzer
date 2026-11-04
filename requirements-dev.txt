@@ -2,3 +2,7 @@
 # The app itself needs requirements.txt alone.
 pytest>=8.0
 PyYAML>=6.0
+# tests/test_bench.py opens the batch-sheet PDF to count its pages. The app
+# writes PDFs with reportlab and never reads one, so this stays out of
+# requirements.txt.
+pypdf>=3.0

@@ -1,0 +1,14 @@
+# What `COPY . /app/` in the Dockerfile leaves out. Everything else in the
+# project goes into the image, so a new module or data file needs no edit
+# here or there.
+.git
+__pycache__
+**/__pycache__
+.pytest_cache
+*.pyc
+*.zip
+results
+paper
+tools
+.DS_Store
+**/.DS_Store

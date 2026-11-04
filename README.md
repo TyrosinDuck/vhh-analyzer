@@ -146,6 +146,11 @@ bioconda, a pip-only image cannot install HMMER, and the app would be limited
 to the
 regex annotator.
 
+The image takes the whole project (`COPY . /app/`) minus what `.dockerignore`
+lists: `.git`, caches, zips, `results/`, `paper/` and `tools/`. A new module or
+data file therefore needs no edit to either file; only something that should
+*stay out* of the image does.
+
 ## Deploy on Streamlit Community Cloud
 
 1. Push this folder to a **public GitHub repository on your personal account** (not an
