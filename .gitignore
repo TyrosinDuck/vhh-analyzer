@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
+results/
+
+# Not *.csv. The app ships four CSV files it cannot run without:
+# data/library.csv, data/ecoli_codon_usage.csv, data/primers.csv and
+# data/vhh_position_freq.csv. A blanket *.csv rule leaves the ones already
+# tracked alone, which is why nothing broke, and silently refuses the next
+# one you add. If you want to keep your own result tables out, put them in
+# results/, which is ignored above.
+
+# .streamlit/ is NOT ignored, deliberately. config.toml is what caps uploads
+# at 10 MB on the deployed app; without it in the repository, Community Cloud
+# runs with its own defaults and the limit the manual quotes is true only on
+# the machine the file happens to sit on.

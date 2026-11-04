@@ -247,6 +247,20 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
     assert shell._source_fingerprint(tmp_path) != fifth, \
         "a changed structure left the fingerprint unchanged"
 
+    # The config file sets the upload cap and is hidden, which makes it the
+    # easiest file in the project to leave behind when copying a folder: a
+    # deployment without it silently runs with Streamlit's 200 MB default.
+    # Hashing it is what makes that visible in the footer.
+    (tmp_path / ".streamlit").mkdir()
+    (tmp_path / ".streamlit" / "config.toml").write_text("[server]\n")
+    sixth = shell._source_fingerprint(tmp_path)
+    assert sixth != fifth, "a missing config.toml left the fingerprint unchanged"
+
+    # Called with a string rather than a Path, which is what comparing two
+    # checkouts does. It used to answer "unknown", indistinguishable from a
+    # directory with nothing in it.
+    assert shell._source_fingerprint(str(tmp_path)) == sixth
+
     assert shell._source_fingerprint(tmp_path / "nothing-here") == "unknown"
 
 

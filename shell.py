@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.04c"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -93,7 +93,11 @@ def _source_fingerprint(root: Path | None = None) -> str:
     """
     import hashlib
 
-    root = root or Path(__file__).parent
+    # Path() around it because this is called with a plain string whenever
+    # someone compares two checkouts, and a str has no .glob: the except below
+    # swallowed the AttributeError and answered "unknown", which looks exactly
+    # like a checkout with no source files in it.
+    root = Path(root) if root else Path(__file__).parent
     digest = hashlib.sha256()
     try:
         files = (sorted(root.glob("*.py"))
@@ -101,7 +105,13 @@ def _source_fingerprint(root: Path | None = None) -> str:
                  + sorted((root / "data" / "aminoacids").glob("*.svg"))
                  + [p for p in (root / "MANUAL.md",
                                 root / "data" / "library.csv",
-                                root / "data" / "aminoacids" / "meta.json")
+                                root / "data" / "aminoacids" / "meta.json",
+                                # Hidden, so the easiest file in the project to
+                                # leave behind when copying a folder, and it
+                                # sets the upload cap. Hashing it means a
+                                # deployment missing it reads differently in
+                                # the footer from the copy it was made of.
+                                root / ".streamlit" / "config.toml")
                     if p.exists()])
         for path in files:
             digest.update(path.name.encode())

@@ -1,0 +1,44 @@
+[server]
+# Per file, in MB. Set so that the structure section's own limit is the one
+# that speaks: it refuses anything over 200 000 atoms, which is about 16 MB of
+# PDB (81 bytes a line) or 14 MB of mmCIF. At 10 MB the byte count bit first
+# and the atom limit could never be reached, so a structure was rejected by a
+# number that has nothing to do with what makes it expensive.
+#
+# It is not generous, and that is the point. Community Cloud gives an app
+# between 690 MB and 2.7 GB of memory, and this app sits at about 150 MB once
+# its imports are done. A parsed structure costs roughly 0.6 to 1.2 kB an
+# atom, measured, so a file at the atom limit adds 120 to 240 MB before any
+# surface calculation, and the structure caches keep several of those at once.
+# On a container at the lower end of that range, a few large structures are
+# enough to end the session.
+#
+# A VHH is about 1000 atoms and an antibody complex a few tens of thousands,
+# so nothing this app is for comes close to either limit.
+maxUploadSize = 20
+
+# Left OFF on purpose, which is also what Streamlit Community Cloud does for
+# every app it hosts.
+#
+# Setting it to true here broke every file upload on the deployed app while
+# the same code worked locally: the browser sends the upload to a different
+# origin than the one that issued the XSRF token, because Community Cloud puts
+# the app behind its own proxy, and the upload endpoint answered 500. The
+# symptom was "AxiosError: Request failed with status code 500" on dropping a
+# PDB into the structure section, with no trace of it in the app's logs,
+# because the request never reached the app's code.
+#
+# Turning it off costs nothing here: the protection it provides is against a
+# third-party page making a logged-in user upload a file. This app has no
+# accounts, no session to ride on, and stores nothing, so there is no state an
+# upload could be made to corrupt. The uploaded bytes are parsed in memory and
+# dropped.
+enableXsrfProtection = false
+
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#4c72b0"
