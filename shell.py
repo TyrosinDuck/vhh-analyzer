@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04f"
+__version__ = "2026.11.04j"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -383,37 +383,133 @@ def footer() -> None:
         f"{name} {version}" for name, version in runtime_versions().items()))
 
 
+# The sections are grouped by the molecule they work on, which is a criterion a
+# user can apply without reading anything: the amino-acid sequence and its fold,
+# the DNA that encodes it, and the purified protein in a tube. The groups are
+# not stages of a workflow, data crosses them in both directions (the flow
+# diagram on the home page shows how), they are only where to look.
+#
+# Each group carries the colour used for it on the home page, in the sidebar
+# and in the flow diagram, so the three cannot disagree. The blue is the one
+# the analysis figures and the theme already use. The green and the orange
+# started as the next two colours of that palette, #55a868 and #dd8452, and
+# were darkened, same hue and saturation, until white text on them reaches the
+# WCAG 2.1 AA minimum of 4.5:1 (4.51 and 4.53; white on the blue is 4.84):
+# the Open buttons on the home page are filled with these colours and carry
+# white text, and at the original lightness that text measured 2.92 and 2.80.
+# A test checks the ratio, so a later change of colour cannot quietly make the
+# buttons unreadable. Colour is never the only carrier: every place that uses
+# it also writes the group name.
+#
+# A group's members are not listed here. Each entry of SECTIONS names its own
+# group, and `sections_by_group()` derives the membership, so adding a section
+# means writing one entry, and a section cannot be silently left out of the
+# grouping: an entry with no group, or a misspelt one, makes
+# `sections_by_group()` raise instead of drawing the section nowhere.
+GROUPS = {
+    "Protein": ("#4c72b0", "The amino-acid sequence and its fold"),
+    "DNA": ("#438452", "Reads, coding sequences and plasmids"),
+    "Bench": ("#bb5b25", "The purified protein in the tube"),
+}
+
+# Ordered by group, then by the order of use within a group, because the home
+# page and the sidebar both list them in this order.
 SECTIONS = {
     "analysis": ("🔬", "Sequence analysis",
                  "Characterize VHHs you provide: physico-chemical properties, "
                  "CDR/framework annotation, hallmarks and germline, liabilities, "
-                 "alignment, codon-optimised DNA and a PDF report."),
+                 "alignment, codon-optimised DNA and a PDF report.",
+                 "Protein"),
     "structure": ("🧊", "Structure",
                   "Upload a PDB, mmCIF or AlphaFold model and replace the "
                   "sequence-based guesses with measurements: which cysteines "
                   "actually pair, which liabilities are buried and which are "
                   "exposed, where the hydrophobic surface is, and, for a "
-                  "complex, which residues contact the antigen."),
-    "bench": ("⚗️", "Bench",
-              "The arithmetic between a purified protein and the next "
-              "experiment: concentration from a measured A280, whether the "
-              "measured mass is the protein you think it is, how much "
-              "labelling reagent to add, and the titre of a phage stock."),
+                  "complex, which residues contact the antigen.",
+                  "Protein"),
+    "library": ("📚", "Sequence library",
+                "The sequences you come back to, kept in the repository and one "
+                "click away: send the proteins to the analysis section or the "
+                "DNA to gene diagnosis, instead of pasting them again.",
+                "Protein"),
     "sequencing": ("🧪", "Sanger sequencing",
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "
                    "sequences from the expression cassette, spot frameshifts and "
-                   "duplicates, then send the clones you want to the analysis."),
+                   "duplicates, then send the clones you want to the analysis.",
+                   "DNA"),
     "genes": ("🔧", "Gene diagnosis",
               "Paste coding sequences that are already in a plasmid and ask what "
               "might be wrong with them: frame and stop checks, documented rare "
               "codons and their clusters, GC stretches, plus synonymous swaps "
-              "that lower GC without touching the protein."),
-    "library": ("📚", "Sequence library",
-                "The sequences you come back to, kept in the repository and one "
-                "click away: send the proteins to the analysis section or the "
-                "DNA to gene diagnosis, instead of pasting them again."),
+              "that lower GC without touching the protein.",
+              "DNA"),
     "cloning": ("🧬", "In-silico cloning",
                 "Load a backbone and an insert, and get the restriction enzymes that "
                 "open the vector in the right place without cutting the VHH, plus "
-                "which of your primers actually bind."),
+                "which of your primers actually bind.",
+                "DNA"),
+    # Not called "Bench" although its key is: the group it sits in is, and a
+    # section with the same name as its group read as a duplicate on the home
+    # page.
+    "bench": ("⚗️", "Batch & QC",
+              "The arithmetic between a purified protein and the next "
+              "experiment: concentration from a measured A280, whether the "
+              "measured mass is the protein you think it is, how much "
+              "labelling reagent to add, and the titre of a phage stock.",
+              "Bench"),
 }
+
+
+def sections_by_group() -> dict[str, list[str]]:
+    """Section keys per group, groups in `GROUPS` order, sections in
+    `SECTIONS` order.
+
+    Derived on every call rather than stored, so that it cannot disagree with
+    `SECTIONS`. A group with no section is left out instead of drawn empty; a
+    section naming a group that does not exist raises, because drawing it
+    nowhere would make it unreachable without any message.
+    """
+    unknown = {group for *_, group in SECTIONS.values()} - set(GROUPS)
+    if unknown:
+        raise KeyError(f"SECTIONS names unknown group(s): {sorted(unknown)}")
+    grouped = {name: [key for key, (*_, group) in SECTIONS.items()
+                      if group == name]
+               for name in GROUPS}
+    return {name: keys for name, keys in grouped.items() if keys}
+
+
+def contrast_ratio(colour_a: str, colour_b: str) -> float:
+    """WCAG 2 contrast ratio between two "#rrggbb" colours, from 1 to 21.
+
+    Relative luminance and contrast ratio as defined in the glossary of
+    W3C, "Web Content Accessibility Guidelines (WCAG) 2.1",
+    https://www.w3.org/TR/WCAG21/ (definitions *relative luminance* and
+    *contrast ratio*; Success Criterion 1.4.3 asks for at least 4.5:1 for
+    normal-size text). The linearisation threshold is 0.04045, the value
+    since the May 2021 erratum; it was 0.03928 before, which the
+    specification notes has no practical effect, and indeed no 8-bit channel
+    value lies between the two.
+    """
+    def luminance(colour: str) -> float:
+        channels = [int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+                   for c in channels)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    high, low = sorted((luminance(colour_a), luminance(colour_b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def group_header_html(name: str, size: str) -> str:
+    """The coloured group title used by the home page and the sidebar.
+
+    One function for both so they cannot drift apart. `size` is a CSS font
+    size: the home page and the sidebar want different ones, but the same
+    shape. The name is written out, the colour only underlines it.
+    """
+    colour, tagline = GROUPS[name]
+    return (f'<div style="border-left:5px solid {colour};padding-left:0.6rem;'
+            f'margin:0.4rem 0 0.5rem 0">'
+            f'<div style="font-size:{size};font-weight:700;line-height:1.2">'
+            f'{name}</div>'
+            f'<div style="font-size:0.85rem;opacity:0.7">{tagline}</div></div>')

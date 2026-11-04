@@ -1,5 +1,5 @@
 """
-sections.home - The landing page: one card per section, and the manual.
+sections.home - The landing page: one card per section, grouped, and the manual.
 
 The screen only. Its computations live in `compute.py`; the chrome it uses
 (`FIT`, `footer`, navigation) lives in `shell.py`.
@@ -7,13 +7,16 @@ The screen only. Its computations live in `compute.py`; the chrome it uses
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
-from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT,
+from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
-                   current_sequences, embed_html, footer, go_to, report_url)
+                   current_sequences, embed_html, footer, go_to,
+                   group_header_html, report_url, sections_by_group)
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.04e"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -28,14 +31,17 @@ __version__ = "2026.11.04a"
 # The cost of a component is an iframe, which inherits no colour from the page,
 # so the theme is handled inside it: `currentColor` follows the body colour, and
 # a prefers-color-scheme rule sets that colour to match a light or dark theme.
-FLOW_DIAGRAM = """<svg viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg"
+FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;height:auto;max-width:900px" role="img"
      aria-label="How the seven sections feed each other. You supply the input
      yourself to Sanger sequencing (.ab1 files), Sequence analysis (sequences),
-     Structure (a model), Gene diagnosis (coding DNA) and Bench (a sequence).
+     Structure (a model), Gene diagnosis (coding DNA) and Batch &amp; QC (a
+     sequence).
      Sanger sequencing and the sequence library feed Sequence analysis, which
-     feeds Structure, Gene diagnosis, In-silico cloning and Bench; the library
-     feeds Gene diagnosis directly with DNA.">
+     feeds Structure, Gene diagnosis, In-silico cloning and Batch &amp; QC; the
+     library
+     feeds Gene diagnosis directly with DNA. Boxes are tinted by group:
+     Protein, DNA and Bench.">
   <defs>
     <marker id="vhh-arrow" viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -109,48 +115,141 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg"
     <text x="470" y="696">DNA, straight to the diagnosis</text>
   </g>
 
-  <g stroke="#4c72b0" stroke-opacity="0.55" stroke-width="1.4">
-    <rect x="24" y="96" width="200" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="24" y="268" width="200" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="324" y="190" width="236" height="96" rx="12"
-          fill="#4c72b0" fill-opacity="0.22" stroke-width="2.2"/>
-    <rect x="642" y="96" width="222" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="642" y="250" width="222" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="642" y="404" width="222" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-    <rect x="642" y="558" width="222" height="70" rx="10"
-          fill="#4c72b0" fill-opacity="0.10"/>
-  </g>
+<!--BOXES-->
 
   <g fill="currentColor" font-family="system-ui, -apple-system, sans-serif"
      text-anchor="middle">
-    <text x="124" y="127" font-size="14" font-weight="600">🧪 Sanger sequencing</text>
     <text x="124" y="147" font-size="11" fill-opacity="0.68">VHHs out of the reads</text>
 
-    <text x="124" y="299" font-size="14" font-weight="600">📚 Sequence library</text>
     <text x="124" y="319" font-size="11" fill-opacity="0.68">22 published sequences</text>
 
-    <text x="442" y="227" font-size="15.5" font-weight="700">🔬 Sequence analysis</text>
     <text x="442" y="248" font-size="11" fill-opacity="0.68">holds the sequence list</text>
     <text x="442" y="265" font-size="11" fill-opacity="0.68">every other section reads</text>
 
-    <text x="753" y="127" font-size="14" font-weight="600">🧊 Structure</text>
     <text x="753" y="147" font-size="11" fill-opacity="0.68">measured, not inferred</text>
 
-    <text x="753" y="281" font-size="14" font-weight="600">🔧 Gene diagnosis</text>
     <text x="753" y="301" font-size="11" fill-opacity="0.68">rare codons, GC stretches</text>
 
-    <text x="753" y="435" font-size="14" font-weight="600">🧬 In-silico cloning</text>
     <text x="753" y="455" font-size="11" fill-opacity="0.68">backbone + insert</text>
 
-    <text x="753" y="589" font-size="14" font-weight="600">⚗️ Bench</text>
     <text x="753" y="609" font-size="11" fill-opacity="0.68">A280, mass, conjugation</text>
   </g>
+<!--LEGEND-->
 </svg>"""
+
+
+# Where each section's box sits in FLOW_DIAGRAM: x, y, width, height, corner
+# radius. The analysis box is larger and drawn with a heavier outline, because
+# it is the hub. The fill colour is not here: it is the colour of the section's
+# group in shell.GROUPS, looked up when the diagram is drawn, so that the
+# diagram, the home page cards and the sidebar always tint a section alike.
+_BOXES = {
+    "sequencing": (24, 96, 200, 70, 10),
+    "library": (24, 268, 200, 70, 10),
+    "analysis": (324, 190, 236, 96, 12),
+    "structure": (642, 96, 222, 70, 10),
+    "genes": (642, 250, 222, 70, 10),
+    "cloning": (642, 404, 222, 70, 10),
+    "bench": (642, 558, 222, 70, 10),
+}
+_HUB = "analysis"
+
+
+def flow_diagram() -> str:
+    """FLOW_DIAGRAM with its section boxes and the group legend filled in.
+
+    Raises KeyError if a section has no box, rather than drawing a diagram
+    that silently omits it; a test draws it for that reason.
+    """
+    boxes = []
+    for key in SECTIONS:
+        x, y, w, h, r = _BOXES[key]
+        colour = GROUPS[SECTIONS[key][3]][0]
+        hub = key == _HUB
+        boxes.append(
+            f'  <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" '
+            f'fill="{colour}" fill-opacity="{0.24 if hub else 0.13}" '
+            f'stroke="{colour}" stroke-opacity="0.6" '
+            f'stroke-width="{2.2 if hub else 1.4}"/>')
+    # The legend is written from GROUPS, one swatch and one name per group,
+    # spaced evenly and centred, so a renamed or added group shows up here.
+    names = list(sections_by_group())
+    step, left = 150, 450 - 150 * (len(names) - 1) / 2
+    legend = ['  <g font-family="system-ui, -apple-system, sans-serif" '
+              'font-size="13" fill="currentColor">']
+    for i, name in enumerate(names):
+        cx, colour = left + i * step, GROUPS[name][0]
+        legend.append(
+            f'    <rect x="{cx - 45:.0f}" y="728" width="16" height="16" '
+            f'rx="4" fill="{colour}" fill-opacity="0.35" stroke="{colour}"/>'
+            f'<text x="{cx - 22:.0f}" y="741" font-weight="600">{name}</text>')
+    legend.append("  </g>")
+    # Box titles come from SECTIONS, so a renamed section is renamed here too.
+    # Escaped, because a label may hold an "&" ("Batch & QC").
+    for key in SECTIONS:
+        x, y, w, _h, _r = _BOXES[key]
+        icon, label, *_ = SECTIONS[key]
+        hub = key == _HUB
+        boxes.append(
+            f'  <text x="{x + w // 2}" y="{y + (37 if hub else 31)}" '
+            f'text-anchor="middle" fill="currentColor" '
+            f'font-family="system-ui, -apple-system, sans-serif" '
+            f'font-size="{15.5 if hub else 14}" '
+            f'font-weight="{700 if hub else 600}">'
+            f'{html.escape(icon + " " + label)}</text>')
+    return (FLOW_DIAGRAM.replace("<!--BOXES-->", "\n".join(boxes))
+            .replace("<!--LEGEND-->", "\n".join(legend)))
+
+
+# White on every group colour, by choice: black was tried on the green and the
+# orange and rejected for its look. GROUPS is darkened to keep this readable.
+BUTTON_TEXT = "#ffffff"
+
+
+def _open_button_css() -> str:
+    """CSS that paints each card's "Open" button in the colour of its group.
+
+    Streamlit gives every keyed widget the CSS class ``st-key-<key>``, and the
+    card buttons are keyed ``home_<section>``, so each rule targets exactly
+    one button and nothing else on the page. Fill colours come from GROUPS;
+    the text is white on all of them, which shell.GROUPS darkens its colours
+    to keep readable (at least 4.5:1, checked by a test). Hover and focus
+    darken the fill a little rather than switching to the theme colour, which
+    is what Streamlit's own primary button style would otherwise do.
+
+    Relies on the ``st-key-`` class, which Streamlit documents for
+    containers and applies to widgets too in the version pinned here; if a
+    later version drops it, the buttons fall back to the theme colour, they
+    do not break. The smoke test checks the rules are emitted, not that the
+    browser applies them; that was checked by eye, in a headless browser.
+    """
+    rules = []
+    for key, (*_rest, group) in SECTIONS.items():
+        fill = GROUPS[group][0]
+        text = BUTTON_TEXT
+        sel = f".st-key-home_{key} button"
+        rules.append(
+            f"{sel}{{background-color:{fill};border-color:{fill};color:{text}}}"
+            f"{sel} p{{color:{text}}}"
+            f"{sel}:hover,{sel}:focus,{sel}:active{{background-color:{fill};"
+            f"border-color:{fill};color:{text};filter:brightness(0.9)}}")
+    return "<style>" + "".join(rules) + "</style>"
+
+
+def _card(key: str, height: str = "content") -> None:
+    """One section card: title, description, and the button that opens it.
+
+    `height` is passed to the card's container: "stretch" when the card has
+    to share out the height of a group drawn beside a taller one.
+    """
+    icon, label, desc, _group = SECTIONS[key]
+    with st.container(border=True, height=height):
+        st.markdown(f"#### {icon} {label}")
+        st.markdown(desc)
+        # The label as written, not lowercased: lowercasing made "Open sanger
+        # sequencing" and would make "Open batch & qc".
+        st.button(f"Open {label}", key=f"home_{key}",
+                  type="primary", **FIT, on_click=go_to, args=(key,))
 
 
 def render() -> None:
@@ -160,17 +259,39 @@ def render() -> None:
         "A workbench for single-domain antibodies: characterize them, pull them out "
         "of sequencing reads, and plan the cloning. Pick where to start.")
 
-    # Two rows of two rather than one row of four: four cards side by side are
-    # too narrow for their descriptions to be readable.
-    entries = list(SECTIONS.items())
-    for row_start in range(0, len(entries), 2):
-        for col, (key, (icon, label, desc)) in zip(
-                st.columns(2), entries[row_start:row_start + 2]):
-            with col, st.container(border=True):
-                st.markdown(f"### {icon} {label}")
-                st.markdown(desc)
-                st.button(f"Open {label.lower()}", key=f"home_{key}",
-                          type="primary", **FIT, on_click=go_to, args=(key,))
+    # Cards grouped by the molecule they work on (see shell.GROUPS), under a
+    # group title larger than the card titles, which is the hierarchy. Groups
+    # are paired two per row, each group a column with its cards stacked in
+    # it; a group left without a partner, Bench today, gets the full width.
+    #
+    # Stacked per group rather than laid out row by row across both groups,
+    # although row by row would line the n-th cards up on a wide screen: on a
+    # narrow one Streamlit stacks columns, and row by row then interleaves
+    # the groups (Structure, Gene diagnosis, Sequence library...), which
+    # undoes the grouping on exactly the screens with the least room to
+    # compensate. Seen on a 420 px viewport before this was changed.
+    #
+    # Two groups side by side are made the same height: each group is a
+    # container with height="stretch", which fills the column, and every card
+    # in it stretches too, so the slack of the shorter group is shared between
+    # its cards instead of leaving a gap under its last one. The bottoms line
+    # up; the tops of the n-th cards only line up when the cards above them
+    # happen to be the same height, which per-group stacking cannot promise.
+    # On a narrow screen the columns stack and "stretch" falls back to the
+    # content height, so nothing changes there. Checked on a prototype and on
+    # the app, at 1400 and 420 px.
+    st.markdown(_open_button_css(), unsafe_allow_html=True)
+    groups = list(sections_by_group().items())
+    for pair_start in range(0, len(groups), 2):
+        pair = groups[pair_start:pair_start + 2]
+        height = "stretch" if len(pair) > 1 else "content"
+        for col, (name, keys) in zip(st.columns(len(pair)), pair):
+            with col, st.container(height=height):
+                st.markdown(group_header_html(name, "2.1rem"),
+                            unsafe_allow_html=True)
+                for key in keys:
+                    _card(key, height)
+        st.write("")
 
     st.write("")
     hcols = st.columns([1, 2])
@@ -192,7 +313,7 @@ def render() -> None:
             "<style>body{margin:0;background:transparent;color:#31333F;"
             "font-family:system-ui,-apple-system,sans-serif}"
             "@media (prefers-color-scheme: dark){body{color:#fafafa}}</style>"
-            + FLOW_DIAGRAM, height=720)
+            + flow_diagram(), height=760)
         st.markdown("""
 Three things the diagram cannot carry:
 

@@ -46,9 +46,9 @@ _FRAME = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
 FASTA = "".join(f">Nb{i}\n{_FRAME.format(cdr3='DRGYSSSWYD' + last)}\n"
                 for i, last in enumerate("YFWLKRD"))
 
-NAV = ["🔬 Sequence analysis", "🧊 Structure", "⚗️ Bench",
-       "🧪 Sanger sequencing", "🔧 Gene diagnosis", "📚 Sequence library",
-       "🧬 In-silico cloning", "📖 Manual", "📐 Reference", "🏠 Home"]
+NAV = ["🔬 Sequence analysis", "🧊 Structure", "📚 Sequence library",
+       "🧪 Sanger sequencing", "🔧 Gene diagnosis", "🧬 In-silico cloning",
+       "⚗️ Batch & QC", "📖 Manual", "📐 Reference", "🏠 Home"]
 
 
 def _labels(app):
@@ -93,7 +93,7 @@ def app():
 EXPECTED_TITLE = {
     "🔬 Sequence analysis": "🔬 Sequence analysis",
     "🧊 Structure": "🧊 Structure",
-    "⚗️ Bench": "⚗️ Bench",
+    "⚗️ Batch & QC": "⚗️ Batch & QC",
     "🧪 Sanger sequencing": "🧪 Sanger sequencing",
     "🔧 Gene diagnosis": "🔧 Gene diagnosis",
     "📚 Sequence library": "📚 Sequence library",
@@ -282,7 +282,7 @@ def test_bench_renders_every_view(app):
     """
     from sections import bench as bench_screen
 
-    _click(app, "⚗️ Bench")
+    _click(app, "⚗️ Batch & QC")
     _no_failure(app, "bench section")
 
     selector = [r for r in app.radio if r.label == "View"]
@@ -316,7 +316,7 @@ def test_the_purification_balance_computes_in_the_screen(app):
     """
     from sections import bench as bench_screen
 
-    _goto(app, "⚗️ Bench")
+    _goto(app, "⚗️ Batch & QC")
     [r for r in app.radio if r.label == "View"][0].set_value(
         bench_screen.V_BALANCE).run()
     _no_failure(app, "purification balance, empty")
@@ -411,3 +411,35 @@ def test_the_footer_reports_the_running_versions(app):
     assert f"Python {platform.python_version()}" in lines[0]
     for name in ("Streamlit", "Biopython", "ANARCI"):
         assert name in lines[0], f"{name} is missing from {lines[0]!r}"
+
+
+def test_sections_are_grouped_on_the_home_page_and_in_the_sidebar(app):
+    """The group titles are drawn, once in the sidebar and once on the home
+    page, and the section buttons follow the grouping in both places.
+
+    The order of the buttons is what tells a user which group a section is
+    in, so it is checked, not only the presence of the titles.
+    """
+    import shell
+
+    # Not _goto: the home screen's title is the app name, not "🏠 Home",
+    # and the Home button is disabled while it is showing.
+    if EXPECTED_TITLE["🏠 Home"] not in [t.value for t in app.title]:
+        _click(app, "🏠 Home")
+    _no_failure(app, "home")
+    grouped = shell.sections_by_group()
+
+    for where, tree in (("sidebar", app.sidebar), ("home", app.main)):
+        headers = [m.value for m in tree.markdown
+                   if "border-left:5px solid" in m.value]
+        names = [n for n in grouped if any(f">{n}<" in h for h in headers)]
+        assert names == list(grouped), f"{where}: group titles {names}"
+
+    expected = [f"{shell.SECTIONS[k][0]} {shell.SECTIONS[k][1]}"
+                for keys in grouped.values() for k in keys]
+    sidebar = [b.label for b in app.sidebar.button if b.label in expected]
+    assert sidebar == expected, f"sidebar order {sidebar}"
+    home = [b.key for b in app.main.button if b.key.startswith("home_")
+            and b.key != "home_manual"]
+    assert home == [f"home_{k}" for keys in grouped.values() for k in keys], \
+        f"home card order {home}"

@@ -16,6 +16,60 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Changed
+
+- **The sections are grouped by the molecule they work on.** The home page
+  and the sidebar now sort the seven sections into three groups, **Protein**
+  (Sequence analysis, Structure, Sequence library), **DNA** (Sanger
+  sequencing, Gene diagnosis, In-silico cloning) and **Bench**, each under a
+  title in a larger type than the section names and with a colour of its
+  own, which the flow diagram on the home page also uses to tint its boxes,
+  with a legend. On the home page, Protein and DNA sit side by side and
+  Bench takes the full width below them. The groups are where to look, not a
+  workflow: the diagram still shows how data moves between them. Each entry
+  of `SECTIONS` in `shell.py` names its group, and the home page, the sidebar
+  and the diagram all derive the grouping from there through
+  `sections_by_group()`, so a section cannot be in one place and missing from
+  another; a section naming no group, or a misspelt one, raises rather than
+  disappearing from the navigation. The cards on the home page are stacked
+  per group rather than laid out row by row: row by row lined them up on a
+  wide screen, but on a phone, where Streamlit stacks the columns, it
+  interleaved the two groups. Verified by rendering the app in a headless
+  browser at 1400 and 420 px wide, and the diagram on a light and a dark
+  background; by new tests in `tests/test_navigation.py` and a smoke test,
+  which fails if the group titles are missing or the order of the buttons
+  stops following the groups (checked by breaking each on purpose).
+- **The Bench section is now called Batch & QC.** The group keeps the name
+  Bench; the section under it had the same name, which read as a duplicate.
+  Its title, sidebar button, home page card and diagram box all take the new
+  name from `SECTIONS`: the screen title and the diagram titles, written out
+  by hand until now, are derived from it, so a later rename happens in one
+  place. The internal key stays `bench`. The home page buttons keep the
+  label's own case, "Open Sanger sequencing" rather than "Open sanger
+  sequencing".
+- **The Protein and DNA groups have the same height on the home page.** Each
+  group fills its column and its cards share out the slack, so the two
+  columns end at the same level instead of one stopping short. The bottoms
+  line up; the tops of facing cards line up only when the cards above them
+  are the same height. Unchanged on a phone, where the columns stack.
+  Verified by rendering at 1400 and 420 px.
+- **The Open buttons on the home page take the colour of their group,**
+  with white text. To keep that text readable, the group green and orange
+  are darker than the palette colours they come from, #438452 instead of
+  #55a868 and #bb5b25 instead of #dd8452, same hue and saturation: white on
+  them now gives 4.51:1 and 4.53:1, against 2.92:1 and 2.80:1 before, and
+  WCAG 2.1 AA asks for 4.5:1 for normal text (white on the blue is 4.84:1).
+  The darker colours apply everywhere the group colour does, titles, sidebar
+  and diagram included. The ratio is computed by `shell.contrast_ratio`,
+  following the WCAG 2.1 glossary, whose linearisation threshold moved from
+  0.03928 to 0.04045 in May 2021; no 8-bit channel value lies between the
+  two, so the results are the same either way. A test fails if any group
+  colour drops below 4.5:1 with white. The buttons are styled through the
+  `st-key-home_<section>` CSS class Streamlit gives keyed widgets; if a
+  future Streamlit drops it, they fall back to the theme colour. Verified in
+  a headless browser, hover included; the tests check the CSS rules and the
+  contrast, not what the browser paints.
+
 ### Fixed
 
 - **The footer fingerprint did not cover most of `data/`.** It hashed three

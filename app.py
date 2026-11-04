@@ -90,7 +90,8 @@ try:
     # surface the section bodies below are allowed to rely on.
     from shell import (APP_ICON, APP_NAME, AUTHOR, AUTHOR_URL, CACHE_MAX_ENTRIES,
         CACHE_TTL, EXAMPLE, FIT, SECTIONS, VERSION, _FIG_CACHE, _fit,
-        anarci_status, current_sequences, fig_to_png, footer, go_to, load_manual)
+        anarci_status, current_sequences, fig_to_png, footer, go_to,
+        group_header_html, load_manual, sections_by_group)
     from compute import (_analyze, _analyze_one, aggregation_for, analyze_one,
         run_analysis,
         analyze_with_progress, classify_cached, comparison_for, diagnose_gene,
@@ -138,16 +139,16 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.04f", "compute": "2026.11.04b",
+                    "shell": "2026.11.04j", "compute": "2026.11.04b",
                     "af3": "2026.11.04a",
                     "reference": "2026.10.30a",
                     "sections.analysis": "2026.10.28a",
-                    "sections.bench": "2026.11.04d",
+                    "sections.bench": "2026.11.04e",
                     "sections.reference": "2026.11.04b",
                     "bench": "2026.11.04b",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
-                    "sections.home": "2026.11.04a",
+                    "sections.home": "2026.11.04e",
                     "sections.library": "2026.10.28c",
                     "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
@@ -350,12 +351,19 @@ with st.sidebar:
     st.markdown(f"### {APP_ICON} {APP_NAME}")
     st.button("🏠 Home", key="nav_home", **FIT,
               disabled=section == "home", on_click=go_to, args=("home",))
-    for key, (icon, label, _desc) in SECTIONS.items():
-        st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
-                  disabled=section == key, on_click=go_to, args=(key,))
+    # Grouped as on the home page, under the same coloured titles, drawn by
+    # the same function so the two cannot drift apart. The group title is
+    # larger than the section buttons beneath it, which is the hierarchy.
+    for group, keys in sections_by_group().items():
+        st.markdown(group_header_html(group, "1.1rem"), unsafe_allow_html=True)
+        for key in keys:
+            icon, label, _desc, _group = SECTIONS[key]
+            st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
+                      disabled=section == key, on_click=go_to, args=(key,))
+    st.divider()
     # The manual and the reference tables sit below the divider rather than in
-    # SECTIONS: they are what you consult, not what you run, and the home page
-    # cards are built from SECTIONS.
+    # SECTIONS: they are what you consult, not what you run, they belong to no
+    # group, and the home page cards are built from SECTIONS.
     st.button("📖 Manual", key="nav_manual", **FIT,
               disabled=section == "manual", on_click=go_to, args=("manual",))
     st.button("📐 Reference", key="nav_reference", **FIT,

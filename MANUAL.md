@@ -56,20 +56,35 @@ the
 
 ## 2. Getting around
 
-The app opens on a home page with seven sections. The sidebar carries the same
-seven entries plus a **Home** button, and, below the divider, the **Manual**
-you are reading and a **Reference** screen, available from every screen.
+The app opens on a home page with seven sections, sorted into three groups by
+the molecule they work on. The sidebar carries the same seven entries under the
+same group titles, plus a **Home** button at the top and, below the divider,
+the **Manual** you are reading and a **Reference** screen, available from every
+screen.
 
-| Section | Use it for |
-|---|---|
-| 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
-| 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
-| ⚗️ **Bench** | the tube: concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered |
-| 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
-| 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
-| 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
-| 🧬 **In-silico cloning** | moving a VHH from one vector into another |
-| 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
+| Group | Section | Use it for |
+|---|---|---|
+| **Protein**, the amino-acid sequence and its fold | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
+| | 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
+| | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
+| **DNA**, reads, coding sequences and plasmids | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
+| | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
+| | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
+| **Bench**, the purified protein in the tube | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered |
+| *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
+
+Each group has its own colour, a blue, a green and an orange, used for the
+group titles on the home page and in the sidebar, for the **Open** button of
+each card on the home page, and for the boxes of the diagram under **How the
+sections fit together**. The colour is never the only cue: the group name is
+always written next to it. The text on the buttons is white, and the green and
+the orange are dark enough for it to meet the WCAG 2.1 AA minimum of 4.5:1 for
+normal text.
+
+The groups say where to look, not in which order to work. Data crosses them in
+both directions: Sanger sequencing (DNA) feeds the analysis (Protein), the
+library (Protein) sends DNA straight to gene diagnosis, and the analysis feeds
+the cloning and Batch & QC. The diagram on the home page shows those paths.
 
 They are connected rather than separate. The sequencing section writes into the
 analysis input; the analysis input is what the cloning section offers as an
@@ -1376,7 +1391,10 @@ because side chains are the part a predictor places least reliably.
 
 ---
 
-## 5. Bench
+## 5. Batch & QC
+
+The only section of the **Bench** group, and named differently from it so the
+home page does not show the same word twice.
 
 Every other section reasons about a sequence. This one is about the tube: how
 much protein is in it, whether it is the protein you think it is, and how much

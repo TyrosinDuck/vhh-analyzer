@@ -22,9 +22,10 @@ import streamlit as st
 import bench as bn
 import vhh_core as vc
 from compute import analyze_one
-from shell import AUTHOR, DOI, FIT, VERSION, current_sequences, footer
+from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, current_sequences,
+                   footer)
 
-__version__ = "2026.11.04d"
+__version__ = "2026.11.04e"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -45,8 +46,10 @@ NO_SEQUENCE = {V_PHAGE}
 
 
 def render(ph: float, method: str) -> None:
-    """Draw the Bench screen."""
-    st.title("⚗️ Bench")
+    """Draw the Batch & QC screen (key "bench")."""
+    # From SECTIONS rather than written out, so the title follows a rename.
+    icon, label, *_ = SECTIONS["bench"]
+    st.title(f"{icon} {label}")
     st.markdown(
         "The arithmetic between a purified protein and the next experiment: "
         "how much is in the tube, whether it is the protein you think it is, "

@@ -55,7 +55,7 @@ floor on codon substitutions, and the back-translation preference order.
 | `compute.py` | 508 | every cached computation, and nothing that draws |
 | `sections/analysis.py` | 1804 | the Sequence analysis screen, six families |
 | `sections/structure.py` | 619 | the Structure screen |
-| `sections/bench.py` | ~330 | the Bench screen |
+| `sections/bench.py` | ~330 | the Batch & QC screen |
 | `sections/cloning.py` | 331 | the In-silico cloning screen |
 | `sections/genes.py` | 273 | the Gene diagnosis screen |
 | `sections/sequencing.py` | 150 | the Sanger screen |
@@ -93,19 +93,19 @@ and
 
 ## Layout
 
-The app opens on a home page with six sections, also reachable from the
-sidebar,
-which carries a **Home** button on every screen:
+The app opens on a home page with seven sections in three groups, Protein,
+DNA and Bench, also reachable from the sidebar, which carries a **Home**
+button on every screen:
 
-| Section | What it does |
-|---|---|
-| **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
-| **Structure** | upload a PDB, mmCIF or AlphaFold model: measured SG–SG disulfides, relative solvent accessibility, which flagged liabilities are actually exposed, hydrophobic surface patches, the ΔSASA interface and epitope of a complex, and a 3Dmol.js viewer |
-| **Bench** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, and how much labelling reagent to add with the volumes you can actually pipette |
-| **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
-| **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
-| **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
-| **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
+| Group | Section | What it does |
+|---|---|---|
+| **Protein** | **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
+| | **Structure** | upload a PDB, mmCIF or AlphaFold model: measured SG–SG disulfides, relative solvent accessibility, which flagged liabilities are actually exposed, hydrophobic surface patches, the ΔSASA interface and epitope of a complex, and a 3Dmol.js viewer |
+| | **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
+| **DNA** | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
+| | **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
+| | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
+| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, and how much labelling reagent to add with the volumes you can actually pipette |
 
 They share one sequence list: what you load in the analysis section is what the
 cloning section offers as an insert, the sequencing section writes into it, the
