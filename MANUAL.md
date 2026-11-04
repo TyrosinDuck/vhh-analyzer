@@ -2157,7 +2157,20 @@ that is not yours. For genuinely confidential or unpublished material, run the
 app on
 your own machine (see the next section) and nothing ever leaves your computer.
 
-Uploads are capped at 10 MB per file, 50 sequences per analysis.
+Uploads are capped at 20 MB per file, 50 sequences per analysis. The upload
+cap comes from `.streamlit/config.toml`, which has to be in the repository for
+it to apply: a deployment that does not carry that file runs with Streamlit's
+own default of 200 MB instead, and this sentence is then wrong wherever it is
+read.
+
+20 MB is set so that the structure section's own limit, 200 000 atoms, is the
+one that decides: that is about 16 MB of PDB or 14 MB of mmCIF, so below 20 MB
+a structure would have been refused by a byte count rather than by the thing
+that makes it expensive. It is not generous on purpose. A parsed structure
+costs roughly 0.6 to 1.2 kB an atom, so a file at the atom limit adds 120 to
+240 MB to a server that has between 690 MB and 2.7 GB in total. A VHH is about
+a thousand atoms and an antibody complex a few tens of thousands, so nothing
+this app is for comes near either limit.
 
 ---
 

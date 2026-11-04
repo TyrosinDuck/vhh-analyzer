@@ -107,6 +107,13 @@ Two conventions hold throughout, and the code reads strangely if you miss them:
 When you change a module, bump its `__version__` and its entry in
 `REQUIRED_MODULES` in `app.py`. A test checks that the two agree.
 
+Set `shell.BUILD` to the day you assemble the build, not to the day of the
+release it belongs to. The footer reads `1.0.0 (build 20261104.e74e7ec)`: the
+fingerprint on the right changes by itself whenever a source file changes, and
+the date on the left does not, so leaving it alone means a build stamped weeks
+before the code it carries. The date is what someone quotes in a bug report
+before they think to quote the fingerprint.
+
 ## Contributing science rather than code
 
 As valuable here, and often more so:

@@ -35,6 +35,17 @@ ran, from its Zenodo record.
 - A page loaded during a deploy no longer shows a raw traceback. Community
   Cloud swaps the source files under a running server, and a run that asked
   for a module mid-swap raised `KeyError`; it now says the app is updating.
+- `.streamlit/config.toml` is now in the repository. It never was, so the
+  deployed app ran with Streamlit's defaults and the 10 MB upload cap the
+  manual quotes applied only on a machine that happened to hold the file.
+- The upload cap is 20 MB rather than 10, so that the structure section's own
+  200 000 atom limit is what refuses a file rather than a byte count: at
+  10 MB that limit could never be reached. It stays deliberately tight, a
+  parsed structure costs 0.6 to 1.2 kB an atom against a server that has
+  between 690 MB and 2.7 GB.
+- `.gitignore` no longer excludes `*.csv`. The app ships four CSV files it
+  cannot run without; the ones already tracked were safe, and the rule would
+  have silently refused the next one added.
 
 ### Added
 

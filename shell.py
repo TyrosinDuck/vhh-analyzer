@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.04b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -62,8 +62,15 @@ RELEASE = "1.0.0"
 
 # The day this particular build was assembled. Two builds of the same release
 # are possible - a fix pushed between releases - and this is what tells them
-# apart in a bug report.
-BUILD = "20261029"
+# apart in a bug report. Set it to the day you build, not the day of the
+# release: a build stamped three weeks before the code it contains is a date
+# that argues with the fingerprint beside it.
+#
+# Deliberately a constant and not today's date computed at import. The app is
+# re-imported on every reboot, so a computed date would change without the
+# code changing, and the one question this line has to answer, which build am
+# I looking at, would get a different answer each morning.
+BUILD = "20261104"
 
 def _source_fingerprint(root: Path | None = None) -> str:
     """Seven hex characters that change whenever any source file changes.
