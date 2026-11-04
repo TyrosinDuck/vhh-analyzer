@@ -14,6 +14,7 @@ results/
 # results/, which is ignored above.
 
 # .streamlit/ is NOT ignored, deliberately. config.toml is what caps uploads
-# at 10 MB on the deployed app; without it in the repository, Community Cloud
+# at 20 MB on the deployed app, and what sets the theme; without it in the 
+# repository, Community Cloud
 # runs with its own defaults and the limit the manual quotes is true only on
 # the machine the file happens to sit on.
