@@ -2215,6 +2215,35 @@ somewhere other than Community Cloud.
 
 ## 14. Troubleshooting
 
+**An upload fails with "AxiosError: Request failed with status code 500".** The
+browser could not hand the file to the server, and the request never reached
+any of this code, which is why nothing appears in the app's logs. Two causes,
+in the order worth trying.
+
+First, a stale container. Push, then **Reboot app** in the Community Cloud
+dashboard, then reload the page in the browser with a forced refresh
+(Ctrl+Shift+R, Cmd+Shift+R on a Mac). A plain reload is not enough: the open
+tab keeps asking for JavaScript files that the new container no longer has,
+which shows up separately as "TypeError: Importing a module script failed",
+usually in a panel that only appears once you click something, because those
+parts of the page are fetched on demand.
+
+Second, the configuration. `.streamlit/config.toml` must keep
+`enableXsrfProtection = false`, which is what Community Cloud runs every app it
+hosts with. Turning it on breaks every upload on the deployed app while
+leaving a local `streamlit run` working perfectly, because locally there is one
+origin and no proxy in between. A test fails if the setting comes back.
+
+If neither helps, and uploads work after a restart but degrade again over
+hours, the cause is memory rather than configuration: look in **Manage app**
+for a container that was killed and restarted.
+
+**"KeyError" or a traceback right after a deploy.** Community Cloud swaps the
+source files under a server that is already running. A page loaded in that
+window can ask for a module in the middle of the swap. The app now catches
+that and says it is updating; reload after a few seconds.
+
+
 **Did my change actually deploy?** The footer carries a seven-character
 fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
 It changes whenever any `.py` file changes, so if it still reads the same after

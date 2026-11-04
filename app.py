@@ -118,15 +118,39 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
                     "sections.structure": "2026.11.04a"}
+
+
+def _imported(name: str):
+    """Import a module by name, or return None while it is being replaced.
+
+    A deploy swaps the source files under a server that is already running,
+    and Streamlit drops the changed modules out of ``sys.modules`` so the next
+    run picks them up. A page loaded in that window can ask for a module in
+    the middle of that swap and get a ``KeyError`` out of importlib, which
+    reaches the visitor as a raw traceback on what is otherwise a working app.
+    It is transient by definition: the next run, a second later, imports fine.
+    """
+    try:
+        return importlib.import_module(name)
+    except (KeyError, ImportError):
+        return None
+
+
+_checked = {name: _imported(name) for name in REQUIRED_MODULES}
+if any(module is None for module in _checked.values()):
+    st.info("The app is updating. Reload the page in a few seconds.",
+            icon="🔄")
+    st.stop()
+
 # Resolved from the dict by name rather than from a second hand-written list of
 # (name, wanted, module) triples. That list was the duplication the dict was
 # supposed to avoid: adding a module meant editing both, and forgetting the
 # second one meant the new module was never checked at all.
-_stale = [f"`{name}.py` (has {getattr(_mod, '__version__', 'no version')}, "
+_stale = [f"`{name}.py` (has {getattr(_module, '__version__', 'no version')}, "
           f"needs {want})"
           for name, want in REQUIRED_MODULES.items()
-          for _mod in (importlib.import_module(name),)
-          if getattr(_mod, "__version__", None) != want]
+          for _module in (_checked[name],)
+          if getattr(_module, "__version__", None) != want]
 if _stale:
     st.error("Some modules are out of date, update " + ", ".join(_stale) +
              " alongside `app.py`, they are released together.")

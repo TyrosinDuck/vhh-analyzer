@@ -26,6 +26,15 @@ ran, from its Zenodo record.
   was nothing in the logs, and the only symptom was "AxiosError: Request
   failed with status code 500" on dropping a structure, a chromatogram or a
   FASTA into any section. A test now fails if the setting comes back.
+- `st.components.v1.html`, which Streamlit has deprecated and says it will
+  remove, is no longer called directly. The home diagram, the amino acid
+  structures and the 3D viewer all go through one helper that uses `st.iframe`
+  where it exists and the old call where it does not, so the app works on both
+  and the deployed one, which installs whatever Streamlit is current, does not
+  break the day the old call goes. A test fails if a second call site appears.
+- A page loaded during a deploy no longer shows a raw traceback. Community
+  Cloud swaps the source files under a running server, and a run that asked
+  for a module mid-swap raised `KeyError`; it now says the app is updating.
 
 ### Added
 
