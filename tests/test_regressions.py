@@ -454,3 +454,46 @@ def test_clean_sequence_strips_whitespace_and_case(cablys3):
     messy = "  " + "\n".join(cablys3[i:i + 10].lower()
                              for i in range(0, len(cablys3), 10)) + "  "
     assert vc.clean_sequence(messy) == cablys3
+
+
+def test_every_project_import_in_app_py_is_guarded():
+    """``KeyError: 'generator'`` reached a visitor as a traceback mid-deploy.
+
+    A deploy swaps the files under the running server, and a run that imports
+    a module in the middle of the swap gets a ``KeyError``. The guard that
+    turns it into "The app is updating" used to wrap only the version check,
+    which runs after the imports at the top of `app.py`, so the import that
+    actually raised was unprotected. The guard is now a ``try`` around those
+    imports; this fails if a module of this project is imported at the top
+    level of `app.py` outside it. Project modules are found from the files on
+    disk, not listed here.
+    """
+    import ast
+
+    local = ({p.stem for p in ROOT.glob("*.py")}
+             | {p.name for p in ROOT.iterdir()
+                if p.is_dir() and (p / "__init__.py").exists()})
+    tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+
+    def project_imports(nodes):
+        for node in nodes:
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level:
+                names = [node.module or ""]
+            else:
+                continue
+            if any(name.split(".")[0] in local for name in names):
+                yield node
+
+    unguarded = [node.lineno for node in project_imports(tree.body)]
+    assert not unguarded, (
+        f"app.py imports project modules outside the update guard, at lines "
+        f"{unguarded}; move them into the try block at the top")
+
+    guards = [node for node in tree.body if isinstance(node, ast.Try)
+              and list(project_imports(node.body))]
+    assert len(guards) == 1, "expected one try block holding the imports"
+    caught = ast.unparse(guards[0].handlers[0].type)
+    assert "KeyError" in caught and "ImportError" in caught, \
+        f"the import guard catches {caught}, it must catch KeyError and ImportError"

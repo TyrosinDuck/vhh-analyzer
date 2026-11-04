@@ -35,7 +35,7 @@ ran, from its Zenodo record.
   Community Cloud installs both, so editing either changes the deployed app,
   and the fingerprint did not move. It still does not move when a dependency
   releases a new version under an unchanged file, because the versions are
-  minimums, not pins. The README and the manual described the fingerprint as
+  minimums, not pins (since fixed, see *Changed*). The README and the manual described the fingerprint as
   a hash of the `.py` files only, which was already incomplete; both now list
   what it covers and what it does not.
 - `requirements-dev.txt` was missing `pypdf`, which `tests/test_bench.py`
@@ -56,9 +56,18 @@ ran, from its Zenodo record.
   where it exists and the old call where it does not, so the app works on both
   and the deployed one, which installs whatever Streamlit is current, does not
   break the day the old call goes. A test fails if a second call site appears.
-- A page loaded during a deploy no longer shows a raw traceback. Community
-  Cloud swaps the source files under a running server, and a run that asked
-  for a module mid-swap raised `KeyError`; it now says the app is updating.
+- **A page loaded during a deploy no longer shows a raw traceback.**
+  Community Cloud swaps the source files under a running server, and a run
+  that asked for a module mid-swap raised `KeyError` (seen in the console as
+  `KeyError: 'generator'`). A first fix caught it only around the module
+  version check, which runs after the imports at the top of `app.py`, so the
+  import that actually raised was still unprotected. Every project import is
+  now inside the guard, which says the app is updating and names the error
+  underneath in small type, so that a file that is really missing is not
+  taken for an update forever. Tested by making the import of `generator`
+  raise inside Streamlit's `AppTest`, which reproduced the original traceback
+  on the old `app.py`; the race against a real deploy was not reproduced. A
+  test also fails if a project module is imported outside the guard.
 - `.streamlit/config.toml` is now in the repository. It never was, so the
   deployed app ran with Streamlit's defaults and the 10 MB upload cap the
   manual quotes applied only on a machine that happened to hold the file.
@@ -71,8 +80,34 @@ ran, from its Zenodo record.
   cannot run without; the ones already tracked were safe, and the rule would
   have silently refused the next one added.
 
+### Changed
+
+- **Dependencies are pinned.** `requirements.txt` is now a lockfile generated
+  by pip-compile from `requirements.in`, which keeps the ranges it used to
+  hold: every package Community Cloud installs, transitive ones included, is
+  at an exact version, so a rebuild installs what was tested rather than
+  whatever is current that day, and a dependency can no longer change under
+  an unchanged footer fingerprint. The lock is resolved for Python 3.14, the
+  interpreter of the deployed app, and some of its pins (contourpy 1.4.0
+  among them) do not install on 3.11, so the `Dockerfile` moves to Python
+  3.14 too, and takes ANARCI from the lockfile rather than from bioconda. The
+  update routine is in the README, *Updating dependencies*. Verified: the
+  lock installs and the full suite passes in a fresh Python 3.14.6, and in
+  a micromamba 1.5 environment built like the image (Python 3.14 and HMMER
+  from conda, then `requirements.txt`) running on the files the image
+  receives. Not verified: the Docker image itself, whose base image could not
+  be pulled where this was checked, and a Community Cloud rebuild from the
+  lock, which only a push will show.
+
 ### Added
 
+- **The footer says what the server is running**: a line under it reads, for
+  example, `Running on Python 3.14.6 · Streamlit 1.66.1 · Biopython 1.88 ·
+  ANARCI 2026.2.13.2`, taken from the running process. The fingerprint says
+  which files were deployed; this says which interpreter and which library
+  versions are executing them, including the interpreter, which a lockfile
+  cannot pin. ANARCI reads `absent` when the
+  package is not installed.
 - **AlphaFold3 confidence in the structure section.** The structure upload now
   takes the `.zip` AlphaFold3 produces, as downloaded from AlphaFold Server or
   zipped from a local run. Pick any of its models; the confidence view then

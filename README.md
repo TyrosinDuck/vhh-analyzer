@@ -10,7 +10,8 @@ plots and multiple sequence alignment.
 vhh_webapp/
 ├── vhh_core.py        all analysis logic, no Streamlit, no notebook dependency
 ├── app.py             Streamlit front-end
-├── requirements.txt   pip dependencies
+├── requirements.in    pip dependencies, as ranges: the file you edit
+├── requirements.txt   generated from it by pip-compile, every version pinned
 ├── packages.txt       apt dependencies (HMMER, the ANARCI backend)
 ├── Dockerfile         for a container host, if you ever outgrow Community Cloud
 └── .streamlit/
@@ -126,6 +127,12 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+`requirements.txt` is a lockfile resolved for Python 3.14, the version the
+deployed app runs, and some of its pins do not install on older interpreters.
+On another Python, install the ranges instead, `pip install -r
+requirements.in`, and you get the newest versions that fit, as the deployed
+app did before the lock.
+
 Opens on <http://localhost:8501>. ANARCI is optional: without it the app
 silently uses
 the regex annotator and says so in the sidebar. To get ANARCI:
@@ -141,10 +148,11 @@ docker build -t vhh-toolbox .
 docker run -p 8501:8501 vhh-toolbox
 ```
 
-The image is built on micromamba specifically so HMMER and ANARCI can come from
-bioconda, a pip-only image cannot install HMMER, and the app would be limited
-to the
-regex annotator.
+The image is built on micromamba specifically so HMMER can come from
+bioconda: a pip-only image cannot install HMMER, and the app would be limited
+to the regex annotator. Python comes from conda-forge, at the version
+`requirements.txt` was compiled for, and everything else, ANARCI included,
+from that lockfile.
 
 The image takes the whole project (`COPY . /app/`) minus what `.dockerignore`
 lists: `.git`, caches, zips, `results/`, `paper/` and `tools/`. A new module or
@@ -157,7 +165,11 @@ data file therefore needs no edit to either file; only something that should
    institutional one, the app should outlive any particular affiliation).
 2. Go to <https://share.streamlit.io>, sign in with GitHub, click **New app**.
 3. Point it at the repository, branch `main`, main file `app.py`.
-4. In **Advanced settings**, select a Python version of 3.11 or later.
+4. In **Advanced settings**, select Python 3.14. That is the version
+   `requirements.txt` is compiled for (its header says so), and the lockfile
+   does not install on older ones. The Python version can only be chosen
+   when the app is deployed; changing it later means deleting and
+   redeploying the app, and recompiling the lock for the new version.
 5. Deploy. The first build takes a few minutes: `packages.txt` installs HMMER through
    apt, then `requirements.txt` installs the Python packages including ANARCI.
 
@@ -175,7 +187,8 @@ Apps sleep after a period without traffic and wake on the next visit.
 
 ### If the build fails on ANARCI
 
-Delete `packages.txt` and the `anarci` line from `requirements.txt`. The app
+Delete `packages.txt` and the `anarci` line from `requirements.in`, then
+recompile `requirements.txt` (see *Updating dependencies*). The app
 then runs
 with the regex annotator only, which handles canonical VHH scaffolds perfectly
 well, the sidebar says which method is active.
@@ -419,8 +432,8 @@ Run it from the repository root. `pytest.ini` puts that directory on the import
 path, so `pytest` and `python -m pytest` behave the same; without that line the
 bare command finds only `tests/` and every test module fails to import.
 
-72 tests, about 20 seconds (`pytest -m "not smoke"` runs the fast ones in under
-ten). `requirements-dev.txt` is **not** installed on
+The whole suite takes about 30 seconds (`pytest -m "not smoke"` runs the fast
+ones in under ten). `requirements-dev.txt` is **not** installed on
 Streamlit Community Cloud (the app itself needs `requirements.txt` alone) so
 adding a test dependency can never break the deployment.
 
@@ -557,9 +570,62 @@ amino acid structures, `.streamlit/config.toml`, `requirements.txt` and
 be mistaken for it. Same fingerprint after a push means the old container is
 still being served. Files Community Cloud does not use, this README, the
 changelog, the `Dockerfile`, are left out on purpose, so a push that touches
-only those leaves the fingerprint where it was. One limit: `requirements.txt`
-sets minimum versions, not exact ones, so a new release of a dependency
-installed on a rebuild changes the app without changing the fingerprint.
+only those leaves the fingerprint where it was. Since `requirements.txt` is a
+lockfile, a dependency cannot change version without the file, and so the
+fingerprint, changing with it. Two things still can: the Python interpreter
+Community Cloud runs, and the HMMER apt installs for `packages.txt`, which
+names no version. The line under the footer, **Running on Python … ·
+Streamlit … · Biopython … · ANARCI …**, is read from the running process for
+that reason; ANARCI reads `absent` when the package is not installed.
+
+### Updating dependencies
+
+`requirements.in` holds the app's direct dependencies as ranges, and is the
+only one of the two files you edit. `requirements.txt` is generated from it by
+[pip-compile](https://pip-tools.readthedocs.io/) with every package pinned,
+transitive ones included, and it is the file Community Cloud installs. It
+never reads `requirements.in`. Never edit `requirements.txt` by hand: a test
+fails if a line in it is not an exact pin, or if a package in
+`requirements.in` is missing from it.
+
+The lock has to be compiled **under the Python the deployed app runs**,
+3.14, because pip-compile resolves for the interpreter it runs in. From the
+repository root, with any Python 3.14:
+
+```bash
+python3.14 -m venv .venv-lock
+.venv-lock/bin/pip install pip-tools
+# Everything to the newest version requirements.in allows:
+.venv-lock/bin/pip-compile --upgrade --strip-extras --no-emit-index-url \
+    --output-file=requirements.txt requirements.in
+# Or one package only, the rest left where they are:
+.venv-lock/bin/pip-compile --upgrade-package streamlit --strip-extras \
+    --no-emit-index-url --output-file=requirements.txt requirements.in
+```
+
+Without `--upgrade`, pip-compile keeps every pin already in `requirements.txt`
+that still satisfies `requirements.in`, so adding a dependency does not
+upgrade everything else behind your back. Then install the new lock into a
+fresh Python 3.14 environment and run the whole suite there before pushing:
+
+```bash
+python3.14 -m venv .venv-check
+.venv-check/bin/pip install -r requirements.txt -r requirements-dev.txt
+.venv-check/bin/python -m pytest
+```
+
+The diff of `requirements.txt` is the list of what changed, worth reading
+before the commit, a new major version especially. The push changes the footer fingerprint, since
+`requirements.txt` is part of it, and the **Running on** line confirms what
+the rebuilt container actually loaded.
+
+If Community Cloud moves the app to another Python (only by deleting and
+redeploying it), recompile under that version, and change the version named in
+the deploy steps above, the `Dockerfile` and the manual: a test checks that
+they all name the one in the lockfile header. The lock is also resolved for
+Linux, which is what Community Cloud and the Docker image run; on macOS or
+Windows a platform-specific dependency may be missing from it, and
+`requirements.in` is the fallback.
 
 **If a change does not appear**, or the app reports modules that are out of date
 after you have updated them, Streamlit is serving cached imports. **Reboot
@@ -570,7 +636,7 @@ confusing failure.
 **Before pushing**, run the tests:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 pytest
 ```
 

@@ -288,3 +288,58 @@ def test_reference_renders_every_view(app):
         [r for r in app.radio if r.label == "View"][0].set_value(view).run()
         _no_failure(app, f"reference view {view}")
         assert _content_count(app) >= 6, f"reference view {view} looks empty"
+
+
+class _BrokenImport:
+    """A meta-path finder that fails one import the way a deploy does."""
+
+    def __init__(self, name, error):
+        self.name, self.error = name, error
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == self.name:
+            raise self.error
+        return None
+
+
+@pytest.mark.parametrize("error", [KeyError("generator"),
+                                   ImportError("cannot import name 'x'")],
+                         ids=["KeyError", "ImportError"])
+def test_a_run_mid_deploy_says_the_app_is_updating(error, monkeypatch):
+    """``KeyError: 'generator'`` in the console, and a traceback on the page.
+
+    Community Cloud swaps the files under a running server and Streamlit drops
+    the changed modules from ``sys.modules``; a run that imports one in that
+    window raised out of the first lines of `app.py`. The run must instead end
+    on the "updating" notice, with the exception named underneath so that a
+    file that is really missing is not mistaken for an update forever.
+
+    Simulated by removing ``generator`` from ``sys.modules`` and making its
+    next import raise, which is what the swap does. Not reproduced: the race
+    itself, against a real deploy.
+    """
+    import sys
+
+    monkeypatch.delitem(sys.modules, "generator", raising=False)
+    monkeypatch.setattr(sys, "meta_path",
+                        [_BrokenImport("generator", error)] + sys.meta_path)
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert any("updating" in str(i.value) for i in at.info), \
+        "no 'The app is updating' notice"
+    assert any(type(error).__name__ in str(c.value) for c in at.caption), \
+        "the notice does not name the exception underneath"
+    assert not at.title, "the run went on to draw a screen"
+
+
+def test_the_footer_reports_the_running_versions(app):
+    """The fingerprint covers the files, this line covers what runs them."""
+    import platform
+
+    lines = [str(c.value) for c in app.caption
+             if str(c.value).startswith("Running on ")]
+    assert len(lines) == 1, f"expected one 'Running on' line, found {lines}"
+    assert f"Python {platform.python_version()}" in lines[0]
+    for name in ("Streamlit", "Biopython", "ANARCI"):
+        assert name in lines[0], f"{name} is missing from {lines[0]!r}"

@@ -34,48 +34,81 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
-import cloning as cl
-import generator as gn
-import constructs as ctm
-import repertoire as rep
-import triage as tg
-import codons as cdn
-import library as lib
-import sanger as sg
-import structure as stx
-import vhh_core as vc
-from sections import (analysis as sections_analysis,
-                      bench as sections_bench,
-                      cloning as sections_cloning, genes as sections_genes,
-                      home as sections_home, library as sections_library,
-                      manual as sections_manual,
-                      reference as sections_reference,
-                      sequencing as sections_sequencing,
-                      structure as sections_structure)
-import compute as cpt
-import shell as shl
-# The shared chrome and the cached computation layer. Listed by name
-# rather than star-imported, so that this block is the documented
-# surface the section bodies below are allowed to rely on.
-from shell import (APP_ICON, APP_NAME, AUTHOR, AUTHOR_URL, CACHE_MAX_ENTRIES,
-    CACHE_TTL, EXAMPLE, FIT, SECTIONS, VERSION, _FIG_CACHE, _fit,
-    anarci_status, current_sequences, fig_to_png, footer, go_to, load_manual)
-from compute import (_analyze, _analyze_one, aggregation_for, analyze_one,
-    run_analysis,
-    analyze_with_progress, classify_cached, comparison_for, diagnose_gene,
-    disulfides_for, dna_for, evaluate_pairs_cached, families_for, gc_fix_for,
-    gene_summary, generate_cached, generator_matrix, germline_data,
-    hallmark_data, humanness_for, liabilities_for, load_library_cached,
-    load_plasmid_cached, pcr_cached, plan_cloning_cached, png_aggregation,
-    png_cdr_lengths, png_charge, png_chou_fasman, png_composition,
-    png_construct, png_differences, png_family_dendrogram, png_gc_comparison,
-    png_gene_diagnosis, png_identity, png_liability_map,
-    png_liability_profile, png_logo, png_msa, png_plasmid_map, png_profiles,
-    png_quality, png_rarity, png_secondary_structure, primer_report_cached,
-    process_ab1, proteases_for, rarity_for, rarity_tables, repairs_for,
-    repertoire_stats, st_confidence, st_disulfides, st_exposure,
-    st_identity_map, st_interface, st_interface_summary, st_load, st_patches,
-    st_resnum_map, triage_for)
+
+def _updating(exc: BaseException) -> None:
+    """Say the app is updating and end this run, instead of a traceback.
+
+    A deploy swaps the source files under a server that is already running,
+    and Streamlit drops the changed modules out of ``sys.modules`` so the next
+    run picks them up. A page loaded in that window can ask for a module in
+    the middle of that swap and get a ``KeyError`` naming it (seen in the
+    console as ``KeyError: 'generator'``), or an ``ImportError`` from a file
+    caught half written. Either reaches the visitor as a raw traceback on what
+    is otherwise a working app, and it is transient: the next run, a second
+    later, imports fine.
+
+    The same message would hide a file that is really missing, which is a
+    plausible outcome of copying a build over a folder by hand, so the
+    exception itself is printed underneath, small: a message that is still
+    there after a reload is not an update.
+    """
+    st.info("The app is updating. Reload the page in a few seconds.",
+            icon="🔄")
+    st.caption(f"If this is still here after a reload, the import failed "
+               f"with {type(exc).__name__}: {exc}")
+    st.stop()
+
+
+# Every module of this project is imported inside this block, because these
+# imports are the first thing a run does and therefore the first thing a
+# mid-deploy run trips on. The guard used to sit only around the version check
+# further down, which runs after them and so never got the chance.
+# tests/test_regressions.py fails if a project module is imported outside it.
+try:
+    import cloning as cl
+    import generator as gn
+    import constructs as ctm
+    import repertoire as rep
+    import triage as tg
+    import codons as cdn
+    import library as lib
+    import sanger as sg
+    import structure as stx
+    import vhh_core as vc
+    from sections import (analysis as sections_analysis,
+                          bench as sections_bench,
+                          cloning as sections_cloning, genes as sections_genes,
+                          home as sections_home, library as sections_library,
+                          manual as sections_manual,
+                          reference as sections_reference,
+                          sequencing as sections_sequencing,
+                          structure as sections_structure)
+    import compute as cpt
+    import shell as shl
+    # The shared chrome and the cached computation layer. Listed by name
+    # rather than star-imported, so that this block is the documented
+    # surface the section bodies below are allowed to rely on.
+    from shell import (APP_ICON, APP_NAME, AUTHOR, AUTHOR_URL, CACHE_MAX_ENTRIES,
+        CACHE_TTL, EXAMPLE, FIT, SECTIONS, VERSION, _FIG_CACHE, _fit,
+        anarci_status, current_sequences, fig_to_png, footer, go_to, load_manual)
+    from compute import (_analyze, _analyze_one, aggregation_for, analyze_one,
+        run_analysis,
+        analyze_with_progress, classify_cached, comparison_for, diagnose_gene,
+        disulfides_for, dna_for, evaluate_pairs_cached, families_for, gc_fix_for,
+        gene_summary, generate_cached, generator_matrix, germline_data,
+        hallmark_data, humanness_for, liabilities_for, load_library_cached,
+        load_plasmid_cached, pcr_cached, plan_cloning_cached, png_aggregation,
+        png_cdr_lengths, png_charge, png_chou_fasman, png_composition,
+        png_construct, png_differences, png_family_dendrogram, png_gc_comparison,
+        png_gene_diagnosis, png_identity, png_liability_map,
+        png_liability_profile, png_logo, png_msa, png_plasmid_map, png_profiles,
+        png_quality, png_rarity, png_secondary_structure, primer_report_cached,
+        process_ab1, proteases_for, rarity_for, rarity_tables, repairs_for,
+        repertoire_stats, st_confidence, st_disulfides, st_exposure,
+        st_identity_map, st_interface, st_interface_summary, st_load, st_patches,
+        st_resnum_map, triage_for)
+except (KeyError, ImportError) as _exc:
+    _updating(_exc)
 
 
 # Three published sequences rather than invented ones, each verifiable: see
@@ -105,7 +138,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.04d", "compute": "2026.11.04a",
+                    "shell": "2026.11.04e", "compute": "2026.11.04a",
                     "af3": "2026.11.04a",
                     "reference": "2026.10.30a",
                     "sections.analysis": "2026.10.28a",
@@ -122,26 +155,19 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
 
 
 def _imported(name: str):
-    """Import a module by name, or return None while it is being replaced.
+    """Import a module by name, or end the run while it is being replaced.
 
-    A deploy swaps the source files under a server that is already running,
-    and Streamlit drops the changed modules out of ``sys.modules`` so the next
-    run picks them up. A page loaded in that window can ask for a module in
-    the middle of that swap and get a ``KeyError`` out of importlib, which
-    reaches the visitor as a raw traceback on what is otherwise a working app.
-    It is transient by definition: the next run, a second later, imports fine.
+    The imports above have already loaded every module, so this is normally a
+    lookup in ``sys.modules``. It can still race a deploy that drops a module
+    between the two, and gets the same treatment, see ``_updating``.
     """
     try:
         return importlib.import_module(name)
-    except (KeyError, ImportError):
-        return None
+    except (KeyError, ImportError) as exc:
+        _updating(exc)
 
 
 _checked = {name: _imported(name) for name in REQUIRED_MODULES}
-if any(module is None for module in _checked.values()):
-    st.info("The app is updating. Reload the page in a few seconds.",
-            icon="🔄")
-    st.stop()
 
 # Resolved from the dict by name rather than from a second hand-written list of
 # (name, wanted, module) triples. That list was the duplication the dict was

@@ -11,9 +11,15 @@ USER root
 RUN useradd -m -u 1000 appuser || true
 USER $MAMBA_USER
 
-# HMMER + ANARCI come from bioconda; everything else from pip
+# Python and HMMER come from conda-forge and bioconda; everything else,
+# ANARCI included, from pip. The Python version is the one requirements.txt
+# was compiled for (see its header): the lockfile pins packages that do not
+# install on older interpreters, so the two have to move together, and
+# tests/test_metadata.py fails if they do not. ANARCI used to come from
+# bioconda as well, which put a second, unpinned copy beside the one the lock
+# names.
 RUN micromamba install -y -n base -c conda-forge -c bioconda \
-        python=3.11 hmmer anarci && \
+        python=3.14 hmmer && \
     micromamba clean --all --yes
 
 COPY --chown=$MAMBA_USER:$MAMBA_USER requirements.txt /tmp/requirements.txt

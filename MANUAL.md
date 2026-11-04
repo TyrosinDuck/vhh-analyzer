@@ -2226,6 +2226,13 @@ streamlit run app.py
 
 It opens on `http://localhost:8501`.
 
+`requirements.txt` pins every package to the version the deployed app runs,
+and was resolved for Python 3.14, the interpreter of the deployed app. Some of
+those pins do not install on an older Python. On another version, install
+`requirements.in` instead, which holds the same dependencies as ranges, and
+you get the newest versions that fit. The footer's **Running on** line says
+which versions you ended up with.
+
 ANARCI is optional. Without it the app silently uses the regex annotator and
 says so in
 the sidebar; the hallmark and germline features degrade accordingly. To get it:
@@ -2292,10 +2299,15 @@ If neither helps, and uploads work after a restart but degrade again over
 hours, the cause is memory rather than configuration: look in **Manage app**
 for a container that was killed and restarted.
 
-**"KeyError" or a traceback right after a deploy.** Community Cloud swaps the
-source files under a server that is already running. A page loaded in that
-window can ask for a module in the middle of the swap. The app now catches
-that and says it is updating; reload after a few seconds.
+**"The app is updating", or a traceback, right after a deploy.** Community
+Cloud swaps the source files under a server that is already running, and a
+page loaded in that window can ask for a module in the middle of the swap,
+which used to show `KeyError: 'generator'` or similar as a traceback. The app
+catches that now, on every one of its own imports, and says it is updating;
+reload after a few seconds. Underneath, in small type, it names the error it
+caught. If the message is still there after several reloads, it is not an
+update: that line says which import failed, typically a file missing from
+the deployment.
 
 
 **Did my change actually deploy?** The footer carries a seven-character
@@ -2304,10 +2316,20 @@ It changes whenever a file the deployed app is made of changes: the code, this
 manual, the library, the amino acid structures, the Streamlit configuration and
 the two dependency lists Community Cloud installs. If it still reads the same
 after a push that touched one of those, Streamlit is serving the old container,
-not your new code. It does not move for a new version of a dependency, since
-the versions are not pinned. **Reboot app**
+not your new code. Every Python package is pinned in `requirements.txt`, so a
+dependency cannot change version without the fingerprint changing too.
+**Reboot app**
 in the Community Cloud dashboard. A build date alone cannot tell you this: two
 pushes on the same day carry the same date.
+
+**Which versions is the deployed app running?** The line under the footer,
+for example `Running on Python 3.14.6 · Streamlit 1.66.1 · Biopython 1.88 ·
+ANARCI 2026.2.13.2`, is read from the running server, not from a file, so it
+covers what the fingerprint cannot: the interpreter Community Cloud actually
+runs. Streamlit and Biopython
+are the versions loaded in memory; ANARCI is the installed package, and reads
+`absent` when it is not installed. A version there does not mean ANARCI works:
+it also needs HMMER, and the analysis sidebar is where that is tested.
 
 **"Some modules are out of date."** Every file is released together, and each one
 carries a version `app.py` checks on startup. The message names the file and
@@ -2377,7 +2399,8 @@ was a
 single 3 911-line script before those screens were pulled out of it; the README
 lists the files and the two rules that keep it from growing back.
 
-There is a test suite: `pip install -r requirements-dev.txt` then `pytest`.
+There is a test suite: `pip install -r requirements.txt -r requirements-dev.txt`
+then `pytest`.
 Almost
 every test in it is a bug the app actually had, frozen so it cannot return.
 

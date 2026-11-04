@@ -88,7 +88,10 @@ will be declined. Some things are out of scope on purpose:
 
 1. Fork the repository and work on a branch.
 2. Install the dependencies: `pip install -r requirements.txt -r requirements-dev.txt`.
-   Run the tests from the repository root.
+   `requirements.txt` is pinned for Python 3.14; on another version use
+   `requirements.in` instead. Run the tests from the repository root. To
+   add or change a dependency, edit `requirements.in` and recompile, as
+   described in README.md, *Updating dependencies*.
 3. Make the change.
 4. Run the tests: `pytest`. They take about half a minute. Everything must pass.
 5. **Add a test.** Almost every test in `tests/` is a defect that shipped once;

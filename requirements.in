@@ -1,0 +1,27 @@
+# The app's direct dependencies, as ranges. This is the file to edit.
+#
+# Community Cloud does not read it: it installs requirements.txt, which
+# pip-compile generates from this file with every package pinned, transitive
+# ones included, for the Python version the deployed app runs (3.14). Never
+# edit requirements.txt by hand. To change a dependency, edit this file, then
+# recompile and rerun the test suite; the routine is in README.md, "Updating
+# dependencies".
+biopython>=1.81
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+pyfamsa>=0.5
+pymsaviz>=0.4
+logomaker>=0.8
+streamlit>=1.30
+reportlab>=4.0
+dna_features_viewer>=3.1
+packaging>=23.0
+# Only the 3D viewer in the structure section. It loads 3Dmol.js from a CDN, so
+# the viewer needs the browser to reach cdn.jsdelivr.net; every table and figure
+# in that section is computed with Biopython and works without it.
+py3Dmol>=2.0
+# ANARCI needs the HMMER binary, which comes from packages.txt.
+# Remove this line (and packages.txt) to run with the regex annotator only.
+anarci>=2024.0
