@@ -16,6 +16,142 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+## [1.1.0], 2026-11-04
+
+A release built around the bench: a new Batch & QC section, which turns
+readings into concentrations, titres and recoveries and records a purified batch
+on a one-page sheet, kept apart from what the sequence only predicts. The
+sections are now grouped on the home page by what they work on, the footer
+says which files and which library versions the server is running, and the
+dependencies are pinned. No function signature in `vhh_core.py` changed, so
+code importing it from a notebook is unaffected.
+
+Several of the fixes below concern things added in this same release, among
+them the footer fingerprint, the batch sheet and its record, and the upload
+settings, so 1.0.0 never had those defects. They are kept because they record
+why the code is the way it is.
+
+### Added
+
+- **A Batch & QC section**, in the Bench group: the arithmetic between a
+  purified protein and the next experiment. Concentration from a measured
+  A280 using the sequence's own extinction coefficient, with the 260/280
+  ratio when you give an A260 and a dilution that refuses to concentrate. A mass check that compares a measured
+  mass against the sequence and lists the modifications that would explain a
+  difference *and that the sequence allows*, each delta computed from a
+  chemical formula rather than tabulated. And a conjugation planner that works
+  out how much NHS-ester reagent to add, separates reconstituting the vial from
+  the working stock, offers a dilution when the volume is too small to pipette
+  accurately, and warns when lysines sit in a CDR.
+- **A phage titre calculator**, as a view of Batch & QC. An A260, the dilution
+  it was read at and a glycerol correction turn into particles per millilitre,
+  and into the volume of stock that holds the number of particles you want,
+  for a solid-phase round and for a liquid-phase one beside it, which is twice
+  as much. Both routes to a titre are shown side by side: the empirical
+  constant from a titration, which is editable because it belongs to a
+  preparation and an instrument rather than to physics, and Day's relation
+  from the genome length. On the same reading they differ by a factor of about
+  275, and the app says so instead of picking one. The glycerol correction is
+  asked for as the two volumes, because the factor is below one when the
+  absorbance was read before the glycerol went in, and that is the direction
+  this protocol always goes.
+- **A batch sheet**, as a view of Batch & QC: a one-page PDF for a purified
+  batch, with what you wrote down, what you measured and what the sequence
+  implies in three blocks that are kept apart, so a predicted extinction
+  coefficient cannot be read a year later as a measurement. It is a laboratory
+  batch record, not a certificate of analysis, and the PDF says so.
+- **The batch sheet saves a machine-readable record** beside the PDF, and
+  takes it back. The JSON file holds the inputs, the text and the readings,
+  which are the part that cannot be recomputed, plus the page as it was
+  rendered so a reprint can be compared against the original. Loading one
+  refills the form; the derived values are recomputed from the readings rather
+  than restored, and the view says so when the record was made with another
+  version of the app or for another sequence. A record whose format number or
+  whose readings this version cannot read is refused with the reason, rather
+  than partly read into a sheet with fields silently missing. Still no
+  server-side storage: the file goes to whoever generated it and comes back
+  from them, it is not an audit trail, and nothing in it can tell whether it
+  has been edited.
+- **A purification balance**, as a view of Batch & QC. One row per step of a
+  preparation, with a volume and a concentration given either as an A280,
+  divided by the extinction coefficient and therefore derived, or as a reading
+  from a method that does not go through the sequence, which takes precedence
+  and is named in the table. It reports the total in mg per step, the recovery
+  against the step before it, the cumulative recovery and, given a culture
+  volume, the yield per litre. Steps marked **Crude**, a lysate or a
+  clarified supernatant, keep their total and stay out of the recovery
+  arithmetic: an A280 there is every protein in the tube, so a ratio against a
+  purified pool is not the target's recovery, which would have been the most
+  flattering number on the page. It says so rather than printing a number when
+  a step recovers more than it was given, when the steps compared were not
+  quantified the same way, and when an A280 arrives with no extinction
+  coefficient to divide it by. Nothing predicts what a step ought to recover.
+- **AlphaFold3 confidence in the structure section.** The structure upload now
+  takes the `.zip` AlphaFold3 produces, as downloaded from AlphaFold Server or
+  zipped from a local run. Pick any of its models; the confidence view then
+  shows ipTM (whole complex and for the chosen VHH–partner pair), pTM, the
+  ranking score, the clash flag, a table comparing every model in the archive,
+  and the PAE matrix. The interface view warns when the pair's ipTM says the
+  arrangement it is measuring has likely failed. A `.cif` on its own still
+  works and gives pLDDT only, which says nothing about where the chains sit
+  relative to each other.
+- **A Reference screen**, in the sidebar under the manual: the genetic code
+  and the twenty amino acids, with the structures drawn as they exist at
+  pH 7.4. Nothing on it is transcribed. The codon table is Biopython's, the
+  usage figures and rare-codon flags are the ones the gene diagnosis screen
+  uses, and the masses, hydropathy and charges are the constants the analysis
+  screen builds its profiles from, so the reference and the app cannot
+  disagree. The structures are committed SVG files built once by
+  `tools/aminoacids/build.py`, which checks each formal charge and molecular
+  weight before writing, so that the app need not ship RDKit for twenty
+  pictures that never change.
+- The home page explains how the sections feed each other with a diagram rather
+  than four paragraphs, drawn as SVG so it follows the light and dark themes.
+- The manual is browsed one section at a time, with a **Jump to** selector,
+  previous/next buttons and a list of what each section contains. Rendering
+  seventeen hundred lines on every interaction was slow and nobody reads a
+  reference manual from the top.
+- **The footer says what the server is running**: a line under it reads, for
+  example, `Running on Python 3.14.6 · Streamlit 1.66.1 · Biopython 1.88 ·
+  ANARCI 2026.2.13.2`, taken from the running process. The fingerprint says
+  which files were deployed; this says which interpreter and which library
+  versions are executing them, including the interpreter, which a lockfile
+  cannot pin. ANARCI reads `absent` when the
+  package is not installed.
+- **Continuous integration.** A GitHub Actions workflow runs the full suite on
+  every push and pull request, and once a week on a schedule, on Python 3.14
+  and from `requirements.txt`, which is the interpreter and the dependency set
+  Community Cloud runs. HMMER comes from `packages.txt` read by the workflow
+  rather than named again in it, so the system package list stays in one
+  place. The weekly run is there because the lockfile pins the Python packages
+  and not the interpreter patch release or the apt packages under them. The
+  suite had been run only on one machine, which the 1.0.0 changelog listed as
+  a known limitation; it no longer is. Verified: the lockfile installs and all
+  158 tests pass in a clean virtual environment built from
+  `requirements.txt` and `requirements-dev.txt` alone, and `pip check` is
+  clean there. Not verified: the workflow itself, which only a push can run,
+  and Python 3.14, which was not available where this was checked (the clean
+  install and the suite were run on 3.13). Since then the full suite has been
+  run on Python 3.14.6 from the lockfile, see *Dependencies are pinned*.
+- **A dev container**, `.devcontainer/devcontainer.json`, for GitHub
+  Codespaces or VS Code. It installs HMMER from `packages.txt`, then
+  `requirements.txt` and `requirements-dev.txt`, and starts the app. The
+  file as first committed was Streamlit's template, on Python 3.11, where the
+  lockfile cannot install: contourpy 1.4.0 requires Python 3.12 or later,
+  which `uv pip install --dry-run` on 3.11 confirms. It now starts from
+  Microsoft's `python:3-3.14-bookworm` image, a variant listed in that
+  image's manifest, and no longer installs Streamlit a second time outside
+  the lock. Not verified: building the container, which could not be done
+  where this was checked.
+- `pytest` now says on its first line when HMMER is missing, with the command
+  to install it. ANARCI shells out to the `hmmscan` binary, which no Python
+  requirements file can provide, and without it the smoke test failed with
+  `[Errno 2] No such file or directory: 'hmmscan'` inside an assertion about a
+  Streamlit element in the Comparison view, which is accurate and says nothing
+  about what to install. It warns rather than skips: a suite that skipped the
+  annotator tests would pass on the one machine where the app's default
+  annotator is never exercised.
+
 ### Changed
 
 - **The sections are grouped by the molecule they work on.** The home page
@@ -39,9 +175,9 @@ ran, from its Zenodo record.
   background; by new tests in `tests/test_navigation.py` and a smoke test,
   which fails if the group titles are missing or the order of the buttons
   stops following the groups (checked by breaking each on purpose).
-- **The Bench section is now called Batch & QC.** The group keeps the name
-  Bench; the section under it had the same name, which read as a duplicate.
-  Its title, sidebar button, home page card and diagram box all take the new
+- **The bench section is called Batch & QC.** It was called Bench while this
+  release was being written; the group now has that name, and a section under
+  it with the same name read as a duplicate. Its title, sidebar button, home page card and diagram box all take the new
   name from `SECTIONS`: the screen title and the diagram titles, written out
   by hand until now, are derived from it, so a later rename happens in one
   place. The internal key stays `bench`. The home page buttons keep the
@@ -69,6 +205,22 @@ ran, from its Zenodo record.
   future Streamlit drops it, they fall back to the theme colour. Verified in
   a headless browser, hover included; the tests check the CSS rules and the
   contrast, not what the browser paints.
+- **Dependencies are pinned.** `requirements.txt` is now a lockfile generated
+  by pip-compile from `requirements.in`, which keeps the ranges it used to
+  hold: every package Community Cloud installs, transitive ones included, is
+  at an exact version, so a rebuild installs what was tested rather than
+  whatever is current that day, and a dependency can no longer change under
+  an unchanged footer fingerprint. The lock is resolved for Python 3.14, the
+  interpreter of the deployed app, and some of its pins (contourpy 1.4.0
+  among them) do not install on 3.11, so the `Dockerfile` moves to Python
+  3.14 too, and takes ANARCI from the lockfile rather than from bioconda. The
+  update routine is in the README, *Updating dependencies*. Verified: the
+  lock installs and the full suite passes in a fresh Python 3.14.6, and in
+  a micromamba 1.5 environment built like the image (Python 3.14 and HMMER
+  from conda, then `requirements.txt`) running on the files the image
+  receives. Not verified: the Docker image itself, whose base image could not
+  be pulled where this was checked, and a Community Cloud rebuild from the
+  lock, which only a push will show.
 
 ### Fixed
 
@@ -175,136 +327,6 @@ ran, from its Zenodo record.
 - `.gitignore` no longer excludes `*.csv`. The app ships four CSV files it
   cannot run without; the ones already tracked were safe, and the rule would
   have silently refused the next one added.
-
-### Changed
-
-- **Dependencies are pinned.** `requirements.txt` is now a lockfile generated
-  by pip-compile from `requirements.in`, which keeps the ranges it used to
-  hold: every package Community Cloud installs, transitive ones included, is
-  at an exact version, so a rebuild installs what was tested rather than
-  whatever is current that day, and a dependency can no longer change under
-  an unchanged footer fingerprint. The lock is resolved for Python 3.14, the
-  interpreter of the deployed app, and some of its pins (contourpy 1.4.0
-  among them) do not install on 3.11, so the `Dockerfile` moves to Python
-  3.14 too, and takes ANARCI from the lockfile rather than from bioconda. The
-  update routine is in the README, *Updating dependencies*. Verified: the
-  lock installs and the full suite passes in a fresh Python 3.14.6, and in
-  a micromamba 1.5 environment built like the image (Python 3.14 and HMMER
-  from conda, then `requirements.txt`) running on the files the image
-  receives. Not verified: the Docker image itself, whose base image could not
-  be pulled where this was checked, and a Community Cloud rebuild from the
-  lock, which only a push will show.
-
-### Added
-
-- **A purification balance**, as a sixth Bench view. One row per step of a
-  preparation, with a volume and a concentration given either as an A280,
-  divided by the extinction coefficient and therefore derived, or as a reading
-  from a method that does not go through the sequence, which takes precedence
-  and is named in the table. It reports the total in mg per step, the recovery
-  against the step before it, the cumulative recovery and, given a culture
-  volume, the yield per litre. Steps marked **Crude**, a lysate or a
-  clarified supernatant, keep their total and stay out of the recovery
-  arithmetic: an A280 there is every protein in the tube, so a ratio against a
-  purified pool is not the target's recovery, which would have been the most
-  flattering number on the page. It says so rather than printing a number when
-  a step recovers more than it was given, when the steps compared were not
-  quantified the same way, and when an A280 arrives with no extinction
-  coefficient to divide it by. Nothing predicts what a step ought to recover.
-- **The batch sheet saves a machine-readable record** beside the PDF, and
-  takes it back. The JSON file holds the inputs, the text and the readings,
-  which are the part that cannot be recomputed, plus the page as it was
-  rendered so a reprint can be compared against the original. Loading one
-  refills the form; the derived values are recomputed from the readings rather
-  than restored, and the view says so when the record was made with another
-  version of the app or for another sequence. A record whose format number or
-  whose readings this version cannot read is refused with the reason, rather
-  than partly read into a sheet with fields silently missing. Still no
-  server-side storage: the file goes to whoever generated it and comes back
-  from them, it is not an audit trail, and nothing in it can tell whether it
-  has been edited.
-- **Continuous integration.** A GitHub Actions workflow runs the full suite on
-  every push and pull request, and once a week on a schedule, on Python 3.14
-  and from `requirements.txt`, which is the interpreter and the dependency set
-  Community Cloud runs. HMMER comes from `packages.txt` read by the workflow
-  rather than named again in it, so the system package list stays in one
-  place. The weekly run is there because the lockfile pins the Python packages
-  and not the interpreter patch release or the apt packages under them. The
-  suite had been run only on one machine, which the 1.0.0 changelog listed as
-  a known limitation; it no longer is. Verified: the lockfile installs and all
-  158 tests pass in a clean virtual environment built from
-  `requirements.txt` and `requirements-dev.txt` alone, and `pip check` is
-  clean there. Not verified: the workflow itself, which only a push can run,
-  and Python 3.14, which was not available where this was checked (the clean
-  install and the suite were run on 3.13).
-- `pytest` now says on its first line when HMMER is missing, with the command
-  to install it. ANARCI shells out to the `hmmscan` binary, which no Python
-  requirements file can provide, and without it the smoke test failed with
-  `[Errno 2] No such file or directory: 'hmmscan'` inside an assertion about a
-  Streamlit element in the Comparison view, which is accurate and says nothing
-  about what to install. It warns rather than skips: a suite that skipped the
-  annotator tests would pass on the one machine where the app's default
-  annotator is never exercised.
-- **The footer says what the server is running**: a line under it reads, for
-  example, `Running on Python 3.14.6 · Streamlit 1.66.1 · Biopython 1.88 ·
-  ANARCI 2026.2.13.2`, taken from the running process. The fingerprint says
-  which files were deployed; this says which interpreter and which library
-  versions are executing them, including the interpreter, which a lockfile
-  cannot pin. ANARCI reads `absent` when the
-  package is not installed.
-- **AlphaFold3 confidence in the structure section.** The structure upload now
-  takes the `.zip` AlphaFold3 produces, as downloaded from AlphaFold Server or
-  zipped from a local run. Pick any of its models; the confidence view then
-  shows ipTM (whole complex and for the chosen VHH–partner pair), pTM, the
-  ranking score, the clash flag, a table comparing every model in the archive,
-  and the PAE matrix. The interface view warns when the pair's ipTM says the
-  arrangement it is measuring has likely failed. A `.cif` on its own still
-  works and gives pLDDT only, which says nothing about where the chains sit
-  relative to each other.
-
-- The manual is browsed one section at a time, with a **Jump to** selector,
-  previous/next buttons and a list of what each section contains. Rendering
-  seventeen hundred lines on every interaction was slow and nobody reads a
-  reference manual from the top.
-- **A Bench section**: the arithmetic between a purified protein and the next
-  experiment. Concentration from a measured A280 using the sequence's own
-  extinction coefficient, with the 260/280 ratio when you give an A260 and a
-  dilution that refuses to concentrate. A mass check that compares a measured
-  mass against the sequence and lists the modifications that would explain a
-  difference *and that the sequence allows*, each delta computed from a
-  chemical formula rather than tabulated. And a conjugation planner that works
-  out how much NHS-ester reagent to add, separates reconstituting the vial from
-  the working stock, offers a dilution when the volume is too small to pipette
-  accurately, and warns when lysines sit in a CDR.
-- **A phage titre calculator**, as a fourth Bench view. An A260, the dilution
-  it was read at and a glycerol correction turn into particles per millilitre,
-  and into the volume of stock that holds the number of particles you want,
-  for a solid-phase round and for a liquid-phase one beside it, which is twice
-  as much. Both routes to a titre are shown side by side: the empirical
-  constant from a titration, which is editable because it belongs to a
-  preparation and an instrument rather than to physics, and Day's relation
-  from the genome length. On the same reading they differ by a factor of about
-  275, and the app says so instead of picking one. The glycerol correction is
-  asked for as the two volumes, because the factor is below one when the
-  absorbance was read before the glycerol went in, and that is the direction
-  this protocol always goes.
-- **A batch sheet**, as a fifth Bench view: a one-page PDF for a purified
-  batch, with what you wrote down, what you measured and what the sequence
-  implies in three blocks that are kept apart, so a predicted extinction
-  coefficient cannot be read a year later as a measurement. It is a laboratory
-  batch record, not a certificate of analysis, and the PDF says so.
-- **A Reference screen**, in the sidebar under the manual: the genetic code
-  and the twenty amino acids, with the structures drawn as they exist at
-  pH 7.4. Nothing on it is transcribed. The codon table is Biopython's, the
-  usage figures and rare-codon flags are the ones the gene diagnosis screen
-  uses, and the masses, hydropathy and charges are the constants the analysis
-  screen builds its profiles from, so the reference and the app cannot
-  disagree. The structures are committed SVG files built once by
-  `tools/aminoacids/build.py`, which checks each formal charge and molecular
-  weight before writing, so that the app need not ship RDKit for twenty
-  pictures that never change.
-- The home page explains how the sections feed each other with a diagram rather
-  than four paragraphs, drawn as SVG so it follows the light and dark themes.
 
 ## [1.0.0], 2026-10-28
 

@@ -105,7 +105,7 @@ button on every screen:
 | **DNA** | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | | **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
 | | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
-| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, and how much labelling reagent to add with the volumes you can actually pipette |
+| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, how much labelling reagent to add with the volumes you can actually pipette, a phage titre from an A260, a purification balance step by step, and a one-page batch sheet with a JSON record that reloads it |
 
 They share one sequence list: what you load in the analysis section is what the
 cloning section offers as an insert, the sequencing section writes into it, the
@@ -162,6 +162,16 @@ The image takes the whole project (`COPY . /app/`) minus what `.dockerignore`
 lists: `.git`, caches, zips, `results/`, `paper/` and `tools/`. A new module or
 data file therefore needs no edit to either file; only something that should
 *stay out* of the image does.
+
+## Run in a dev container
+
+`.devcontainer/devcontainer.json` is what GitHub Codespaces, or VS Code with
+the Dev Containers extension, builds from. It starts from Microsoft's Python
+3.14 image, the interpreter `requirements.txt` is compiled for, installs
+HMMER from `packages.txt`, then the lockfile and the test requirements, and
+starts the app on port 8501. The image is pinned to its major version
+(`3-3.14-bookworm`), so a new major release of Microsoft's images does not
+change it silently.
 
 ## Deploy on Streamlit Community Cloud
 
@@ -673,8 +683,13 @@ identical.
 
 To cut a release:
 
-1. Update `CHANGELOG.md` with an entry for the new version (Added / Changed / Fixed, written for someone who uses the app. 2. Bump `RELEASE` (and `BUILD`) in `shell.py`, and `version` / `date-released` in `CITATION.cff`. 3. `pytest`) three tests check that the footer, `CITATION.cff` and the changelog
-   all name the same version. They exist because a footer reading
+1. Move the entries under `[Unreleased]` in `CHANGELOG.md` into a section
+   for the new version (Added, Changed, Fixed), written for someone who uses
+   the app.
+2. Bump `RELEASE` (and `BUILD`) in `shell.py`, and `version` and
+   `date-released` in `CITATION.cff`.
+3. Run `pytest`: three tests check that the footer, `CITATION.cff` and the
+   changelog all name the same version. They exist because a footer reading
    `version 20261028.2600` matched no git tag and no Zenodo record, so a bug
    report or a citation referred to something nobody could find.
 4. Commit, push, then **Releases → Draft a new release** on GitHub with the tag
@@ -692,8 +707,9 @@ produced the result rather than whatever the latest version happens to be.
 ## Making the tool citable
 
 `CITATION.cff` carries the citation metadata; GitHub turns it into a
-**Cite this repository** button. Two fields are still marked `TODO` in it: an
-ORCID, and the DOI.
+**Cite this repository** button. The ORCID and the concept DOI are both in
+it; the steps below are how the DOI was obtained, kept for whoever has to
+redo them on another account.
 
 For the DOI:
 

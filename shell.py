@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04j"
+__version__ = "2026.11.04k"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -59,7 +59,7 @@ FTISRDNAANTVYLQMNSLKPEDTAVYYCNVKDYGAVLYEYDYWGQGTQVTVSS
 # MAJOR is not hypothetical here: the analysis modules are importable from a
 # notebook, so changing the signature of a vhh_core function breaks somebody's
 # notebook even though the app looks identical.
-RELEASE = "1.0.0"
+RELEASE = "1.1.0"
 
 # The day this particular build was assembled. Two builds of the same release
 # are possible - a fix pushed between releases - and this is what tells them

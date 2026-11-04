@@ -25,9 +25,14 @@ abstract: >-
   sequences, annotates CDRs and frameworks in IMGT numbering, scores camelid
   hallmarks and humanness, flags chemical liabilities and aggregation-prone
   regions, groups panning output into clonal families, measures what a 3D model
-  says rather than what the sequence suggests, reads VHHs out of Sanger
+  says rather than what the sequence suggests, including the confidence
+  metrics of an AlphaFold3 prediction, reads VHHs out of Sanger
   chromatograms, diagnoses existing coding sequences for rare codons and GC
-  stretches, and plans a restriction cloning between two plasmids. Any protein
+  stretches, and plans a restriction cloning between two plasmids. At the
+  bench, it derives concentrations from an A280, checks a measured mass
+  against the sequence, plans a labelling reaction, computes phage titres and
+  a purification balance, and records a purified batch on a one-page sheet
+  that keeps measured values apart from those the sequence only predicts. Any protein
   is accepted and classified; antibody-specific analyses are applied only where
   they mean something.
 keywords:
@@ -42,5 +47,5 @@ keywords:
   - bioinformatics
 license: MIT
 doi: "10.5281/zenodo.23742269"
-version: "1.0.0"
-date-released: "2026-10-28"
+version: "1.1.0"
+date-released: "2026-11-04"
