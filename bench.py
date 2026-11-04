@@ -25,10 +25,12 @@ import pandas as pd
 __all__ = [
     "REAGENTS", "SOLVENTS", "concentration_from_a280", "dilution_plan",
     "stock_preparation", "conjugation_plan", "mass_check", "MODIFICATIONS",
-    "PIPETTE_MINIMUM_UL", "desalting_column", "__version__",
+    "PIPETTE_MINIMUM_UL", "desalting_column", "PURIFICATION_STEPS",
+    "purification_balance", "BATCH_RECORD_SCHEMA", "batch_record",
+    "batch_record_inputs", "__version__",
 ]
 
-__version__ = "2026.10.30e"
+__version__ = "2026.11.04b"
 
 
 # --------------------------------------------------------------------------
@@ -530,6 +532,181 @@ def phage_aliquot(titre_per_ml: float, target_particles: float) -> dict:
 
 
 # --------------------------------------------------------------------------
+# Purification balance
+# --------------------------------------------------------------------------
+# The other views in this section are about one tube. This one follows the
+# material through a preparation: how much protein was in the pool after each
+# step, how much of the previous step survived it, and how much came out per
+# litre of culture. It is the page a platform hands to whoever asked for the
+# protein, and it is arithmetic on volumes and absorbances, with no model of
+# what a step ought to recover.
+#
+# The reason this is not simply a column of divisions is the crude steps. An
+# A280 on a lysate or a clarified supernatant is the absorbance of every
+# protein in it; dividing it by the extinction coefficient of the target gives
+# a quantity of total protein expressed in the target's units, and a ratio
+# between that and a purified pool is not a recovery of the target. Anything
+# before the first capture step is therefore marked crude, kept in the table
+# because it is worth recording, and left out of the recovery arithmetic.
+
+# The steps of a typical VHH preparation, used to prefill the editor. Only
+# names: no volume, no absorbance and no expectation of what any step
+# recovers.
+PURIFICATION_STEPS = [
+    "Clarified lysate",
+    "IMAC eluate",
+    "Size exclusion pool",
+    "Final concentrate",
+]
+
+
+def purification_balance(steps: list[dict], ext_coeff: float | None = None,
+                         mw_da: float | None = None,
+                         culture_volume_ml: float | None = None) -> dict:
+    """Total protein, step recovery and cumulative recovery, step by step.
+
+    Each entry of ``steps`` is a dict with a ``step`` name, a ``volume_ml``,
+    and a concentration given one of two ways: ``a280`` (with optional
+    ``dilution`` and ``path_cm``), which needs ``ext_coeff`` and ``mw_da`` and
+    is *derived*, or ``mg_per_ml`` with ``method``, which is a reading by
+    something that does not go through the sequence and is *measured*. A step
+    with no volume or no concentration is skipped rather than counted as zero.
+
+    ``crude`` marks a step where the target is not the only thing absorbing:
+    a lysate, a clarified supernatant, a flow-through. Those rows carry a
+    total, because the number is worth writing down, but no recovery, because
+    the ratio would not be the target's.
+
+    Recovery is computed only between two rows that are both non-crude and
+    quantified the same way. A step recovery is against the row before it in
+    the table, and the cumulative recovery is against the first non-crude row,
+    which is named in ``reference_step``.
+
+    Returns plain data: ``rows``, ``warnings``, ``final_total_mg``,
+    ``yield_mg_per_litre`` and ``reference_step``. Nothing here predicts a
+    yield; every number is a volume or an absorbance you supplied, or
+    arithmetic on those.
+    """
+    rows: list[dict] = []
+    warnings: list[str] = []
+
+    for raw in steps or []:
+        name = str(raw.get("step") or "").strip()
+        volume_ml = raw.get("volume_ml")
+        a280 = raw.get("a280")
+        direct = raw.get("mg_per_ml")
+
+        volume_ml = float(volume_ml or 0.0)
+        if volume_ml < 0:
+            raise ValueError(f"{name or 'a step'} has a negative volume")
+        if a280 is not None and float(a280 or 0.0) < 0:
+            raise ValueError(f"{name or 'a step'} has a negative A280")
+        if direct is not None and float(direct or 0.0) < 0:
+            raise ValueError(f"{name or 'a step'} has a negative concentration")
+
+        concentration = None
+        basis = None
+        detail = ""
+        if direct:
+            concentration = float(direct)
+            basis = "measured"
+            detail = str(raw.get("method") or "method not stated")
+        elif a280:
+            if not (ext_coeff and mw_da):
+                # Said once, below, rather than per row: a table of eight
+                # identical warnings is a table nobody reads.
+                basis = "needs the sequence"
+            else:
+                out = concentration_from_a280(
+                    float(a280), float(ext_coeff), float(mw_da),
+                    path_length_cm=float(raw.get("path_cm") or 1.0),
+                    dilution_factor=float(raw.get("dilution") or 1.0))
+                concentration = out["mg_per_ml"]
+                basis = "derived"
+                detail = f"A280, eps {ext_coeff:g} /M/cm"
+
+        if not name and concentration is None and not volume_ml:
+            continue
+
+        total_mg = (round(concentration * volume_ml, 4)
+                    if (concentration and volume_ml) else None)
+        rows.append({
+            "step": name or "unnamed step",
+            "volume_ml": volume_ml or None,
+            "concentration_mg_per_ml": (round(concentration, 4)
+                                        if concentration else None),
+            "total_mg": total_mg,
+            "basis": basis,
+            "basis_detail": detail,
+            "crude": bool(raw.get("crude")),
+            "step_recovery_pct": None,
+            "cumulative_recovery_pct": None,
+            "comment": "",
+        })
+
+    if any(row["basis"] == "needs the sequence" for row in rows):
+        warnings.append(
+            "Some steps give an A280 but there is no extinction coefficient to "
+            "divide it by. Pick a sequence at the top, or enter those "
+            "concentrations as a reading with the method named.")
+
+    countable = [row for row in rows if row["total_mg"] and not row["crude"]]
+    reference = countable[0] if countable else None
+
+    if reference:
+        bases = {row["basis"] for row in countable}
+        if len(bases) > 1:
+            warnings.append(
+                "The steps counted here were not all quantified the same way, "
+                "so a ratio between them compares two methods as much as two "
+                "steps. The recoveries below are shown anyway, and the basis "
+                "column says which is which, but treat them as approximate.")
+
+        previous = None
+        for row in rows:
+            if not row["total_mg"] or row["crude"]:
+                if row["crude"]:
+                    row["comment"] = ("crude, left out of the recovery: the "
+                                      "A280 is not only the target")
+                continue
+            if previous is not None:
+                row["step_recovery_pct"] = round(
+                    100.0 * row["total_mg"] / previous["total_mg"], 1)
+            row["cumulative_recovery_pct"] = round(
+                100.0 * row["total_mg"] / reference["total_mg"], 1)
+            previous = row
+
+        # A recovery above 100% is arithmetically fine and physically not: the
+        # later pool cannot hold more of the target than the one it came from.
+        # It is almost always a volume or a dilution factor, so say that
+        # rather than printing a number that looks like a good yield.
+        gained = [row["step"] for row in rows
+                  if row["step_recovery_pct"] and row["step_recovery_pct"] > 100.0]
+        if gained:
+            warnings.append(
+                "More protein came out of " + ", ".join(gained) + " than went "
+                "in. A step cannot recover more than it was given, so one of "
+                "the volumes or dilution factors above is wrong, or the two "
+                "pools were not quantified the same way.")
+
+    final = countable[-1]["total_mg"] if countable else None
+    per_litre = None
+    if final and culture_volume_ml:
+        culture_volume_ml = float(culture_volume_ml)
+        if culture_volume_ml <= 0:
+            raise ValueError("the culture volume must be positive")
+        per_litre = round(final / (culture_volume_ml / 1000.0), 3)
+
+    return {
+        "rows": rows,
+        "warnings": warnings,
+        "final_total_mg": final,
+        "yield_mg_per_litre": per_litre,
+        "reference_step": reference["step"] if reference else None,
+    }
+
+
+# --------------------------------------------------------------------------
 # Batch sheet
 # --------------------------------------------------------------------------
 # What goes on the label of a tube that leaves your bench. Not a certificate
@@ -658,7 +835,7 @@ def batch_sheet(name: str, seq: str, properties: dict,
         read.append(("Measured mass", f"{measured['measured_da']:.1f} Da"))
         if mw_da:
             difference = float(measured["measured_da"]) - float(mw_da)
-            derived.append(("Mass minus the sequence", f"{difference:+,.1f} Da"))
+            derived.append(("Mass minus the sequence", f"{difference:+.1f} Da"))
 
     return {
         "name": name,
@@ -671,6 +848,137 @@ def batch_sheet(name: str, seq: str, properties: dict,
         "derivation_notes": notes,
         "concentration_mg_per_ml": concentration,
         "mass_difference_da": difference,
+    }
+
+
+# The identifier a reader checks before trusting the keys below. The number is
+# the format's own, not the app's: a record written today has to stay readable
+# by a later version of the app, and the only way to notice that it is not is
+# to refuse a schema the code does not know rather than to guess at its keys.
+BATCH_RECORD_SCHEMA = "vhh-toolbox-batch-record/1"
+
+
+def batch_record(name: str, seq: str, fields: dict, measured: dict,
+                 cystines: bool, sheet: dict | None = None,
+                 version: str = "") -> dict:
+    """The batch sheet as data a program can read, for saving beside the PDF.
+
+    The PDF is for a human and for a freezer box. This is the same batch in a
+    form something else can ingest: a lab's own database, a spreadsheet, a
+    script that collects a year of preparations. The app stores nothing, so the
+    file goes to whoever generated it and comes back the same way.
+
+    What is kept is the *inputs*: the free-text fields, the readings, and which
+    extinction coefficient was chosen. Those are what cannot be recomputed.
+    The rendered blocks are kept alongside them, under ``rendered``, so that a
+    sheet reprinted later can be compared against what the original said
+    rather than assumed to match it: the derived values are recomputed on
+    reload, and ``created_with`` is there because a later version of the app
+    could compute them differently.
+
+    This is not a certificate, an audit trail or a signature. It carries no
+    release decision, nothing stops it being edited in a text editor, and
+    nothing here can tell whether it was.
+    """
+    from datetime import datetime, timezone
+
+    record = {
+        "schema": BATCH_RECORD_SCHEMA,
+        "created_with": version,
+        "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "name": name or "",
+        "sequence": "".join(c for c in (seq or "").upper() if c.isalpha()),
+        "cystines_formed": bool(cystines),
+        "fields": {key: str((fields or {}).get(key, "") or "")
+                   for key, _label, _default, _help in BATCH_FIELDS},
+        # Only the keys batch_sheet actually reads, so that a record cannot
+        # carry a number the sheet silently ignores.
+        "measured": {key: (measured or {}).get(key)
+                     for key in ("a280", "dilution", "path_cm", "volume_ul",
+                                 "measured_da", "mg_per_ml", "method")},
+    }
+    if sheet:
+        record["rendered"] = {
+            "measured": [list(pair) for pair in sheet.get("measured") or []],
+            "derived": [list(pair) for pair in sheet.get("derived") or []],
+            "theoretical": [list(pair) for pair in sheet.get("theoretical") or []],
+            "derivation_notes": list(sheet.get("derivation_notes") or []),
+        }
+    return record
+
+
+def batch_record_inputs(data: dict) -> dict:
+    """Read a saved record back into the inputs that made it.
+
+    Returns ``name``, ``sequence``, ``fields``, ``measured``, ``cystines``,
+    ``created_with`` and ``rendered``. The derived values are deliberately not
+    returned: they are recomputed from the readings by `batch_sheet`, so a
+    reprint says what this version of the app makes of those readings rather
+    than repeating a number whose derivation nobody can check.
+
+    Refuses a schema it does not know instead of picking out the keys it
+    recognises. A record half understood is worse than one rejected: the
+    fields that did not survive would be missing from the reprinted sheet
+    without anything saying so.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("a batch record is a JSON object, and this is not one")
+    schema = str(data.get("schema") or "")
+    if not schema:
+        raise ValueError(
+            "this file carries no `schema` key, so it is not a batch record "
+            "written by this app")
+    family, _, number = schema.rpartition("/")
+    expected_family, _, expected_number = BATCH_RECORD_SCHEMA.rpartition("/")
+    if family != expected_family:
+        raise ValueError(
+            f"this file says it is `{schema}`, and this app reads "
+            f"`{BATCH_RECORD_SCHEMA}`")
+    if number != expected_number:
+        raise ValueError(
+            f"this record is format {schema} and this app reads "
+            f"{BATCH_RECORD_SCHEMA}. A newer app wrote it, or an older one: "
+            f"either way the keys are not guaranteed to mean the same thing, "
+            f"so it is not being read rather than read wrongly")
+
+    # Typed before the `or {}`, not after. With the fallback first, an empty
+    # list is falsy and became an empty dict, so `"fields": []` passed a check
+    # written to catch exactly that and reprinted a sheet with every text
+    # field blank and nothing saying why.
+    fields = data.get("fields")
+    if fields is not None and not isinstance(fields, dict):
+        raise ValueError("`fields` in this record is not an object")
+    fields = fields or {}
+    measured = data.get("measured")
+    if measured is not None and not isinstance(measured, dict):
+        raise ValueError("`measured` in this record is not an object")
+    measured = measured or {}
+
+    numeric = {}
+    for key in ("a280", "dilution", "path_cm", "volume_ul", "measured_da",
+                "mg_per_ml"):
+        value = measured.get(key)
+        if value in (None, ""):
+            numeric[key] = None
+            continue
+        try:
+            numeric[key] = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"`measured.{key}` in this record is {value!r}, which is not "
+                f"a number") from None
+    numeric["method"] = str(measured.get("method") or "")
+
+    return {
+        "name": str(data.get("name") or ""),
+        "sequence": "".join(c for c in str(data.get("sequence") or "").upper()
+                            if c.isalpha()),
+        "fields": {key: str(fields.get(key, "") or "")
+                   for key, _label, _default, _help in BATCH_FIELDS},
+        "measured": numeric,
+        "cystines": bool(data.get("cystines_formed", True)),
+        "created_with": str(data.get("created_with") or ""),
+        "rendered": data.get("rendered") or {},
     }
 
 

@@ -64,7 +64,7 @@ you are reading and a **Reference** screen, available from every screen.
 |---|---|
 | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
 | 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
-| ⚗️ **Bench** | the tube: concentration from an A280, mass identity, how much labelling reagent to add |
+| ⚗️ **Bench** | the tube: concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered |
 | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
@@ -1570,7 +1570,53 @@ accurately, and the app offers a dilution instead, exactly as the conjugation
 planner does and for the same reason.
 
 
-### 5.5 Batch sheet
+### 5.5 Purification balance
+
+What came out of each step of a preparation, how much of the previous step
+survived it, and how much per litre of culture. The other views in this
+section are about one tube; this one follows the material through the
+purification, and it is the page a platform hands to whoever asked for the
+protein.
+
+One row per step. Give each a volume in mL and a concentration, either as an
+A280, which is divided by the extinction coefficient at the top and is
+therefore **derived**, or as a reading in mg/mL from a method that does not go
+through the sequence, a BCA or a Bradford, which is **measured** and takes
+precedence on the same row. Name the method: a concentration without it cannot
+be interpreted a year later. A row with no volume or no concentration is left
+out rather than counted as zero, and rows can be added or removed.
+
+**Crude steps are the reason this is not a column of divisions.** An A280 on a
+lysate, a clarified supernatant or a flow-through is the absorbance of every
+protein in it. Divided by the target's extinction coefficient it gives a
+quantity of total protein expressed in the target's units, and a ratio between
+that and a purified pool is not a recovery of the target: it is the most
+flattering number on the page and the least true. Tick **Crude** on those
+rows. They keep their total, because it is worth writing down, and stay out of
+the recovery arithmetic. Cumulative recovery is therefore counted from the
+first step that is not crude, which is named under the table, and is recovery
+from capture onwards rather than from the culture.
+
+The app says so rather than quietly producing a number when:
+
+- a step recovers more than the one before it, which cannot happen and means
+  a volume or a dilution factor is wrong;
+- the steps being compared were not all quantified the same way, in which case
+  the recoveries still appear, with the basis beside each row, and are
+  approximate;
+- an A280 was given with no sequence loaded and no extinction coefficient
+  typed, in which case that row gets no concentration instead of a guessed
+  one.
+
+**Per litre of culture** appears once you give the culture volume. It is the
+final counted pool divided by that volume, and it is the number a platform is
+usually asked for.
+
+The table downloads as CSV. Nothing is carried from here into the batch sheet:
+retype the final row there, because a number you have not retyped is a number
+you have not checked.
+
+### 5.6 Batch sheet
 
 The page that goes with a tube when it leaves your bench. You give it a lot
 number, who prepared it, the host, the purification, the buffer and the
@@ -1617,6 +1663,31 @@ place.
 in regulated quality control: specifications, acceptance criteria, a release
 decision and a signature. There is none of that here, and the PDF says so at
 the bottom so the document cannot be mistaken for one later.
+
+**Saving the record.** Beside the PDF there is a JSON file with the same
+batch in it. The PDF is for a human and a freezer box; the JSON is for
+whatever comes next, a lab database, a spreadsheet, a script that collects a
+year of preparations. What it holds is the inputs, the text you typed and the
+readings you entered, which are the part that cannot be recomputed, together
+with the page as it was rendered so that a reprint can be compared against the
+original rather than assumed to match it.
+
+**Reuse a saved record** at the top of the view takes that file back and fills
+the form with it. The app stores nothing, so the file is the record: keep it
+with the PDF. The derived values are not restored, they are recomputed from
+the readings, which is the point of keeping the readings; if the record was
+made with an earlier version of the app the view says so, because a later
+version could compute them differently. If the record was made for a different
+sequence from the one selected at the top, it says that too, and loudly: the
+text and the readings would be the record's while everything in the fourth
+block would be the current sequence's.
+
+A record this app cannot read is refused rather than partly read. A file whose
+format number is not the one this version knows, or whose readings are not
+numbers, produces an error naming the problem, because a record half
+understood reprints a sheet with fields missing and nothing on the page saying
+so. It is not an audit trail: nothing stops the file being edited in a text
+editor, and nothing in it can tell whether it was.
 
 ---
 
