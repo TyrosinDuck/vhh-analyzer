@@ -497,3 +497,33 @@ def test_every_project_import_in_app_py_is_guarded():
     caught = ast.unparse(guards[0].handlers[0].type)
     assert "KeyError" in caught and "ImportError" in caught, \
         f"the import guard catches {caught}, it must catch KeyError and ImportError"
+
+
+def test_no_cached_function_is_cached_twice():
+    """`families_for` carried two `st.cache_data` decorators.
+
+    One of them was `_FIG_CACHE`, copied down from the figure helper above it,
+    which caps at 24 entries. The result was correct, so nothing failed: the
+    clonal families and their linkage matrix, which is the largest object this
+    module caches, were simply stored in two caches instead of one, in a
+    container that can have as little as 690 MB. Stacked caches are never
+    intentional here, so this looks for them structurally rather than for that
+    one function.
+    """
+    import ast
+
+    offenders = []
+    for path in [ROOT / "compute.py", ROOT / "shell.py",
+                 *sorted((ROOT / "sections").glob("*.py"))]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            cached = [d for d in node.decorator_list
+                      if "cache_data" in ast.unparse(d)
+                      or "cache_resource" in ast.unparse(d)]
+            if len(cached) > 1:
+                offenders.append(f"{path.name}:{node.lineno} {node.name}")
+    assert not offenders, (
+        "these functions carry more than one Streamlit cache decorator, which "
+        "stores every result twice: " + ", ".join(offenders))

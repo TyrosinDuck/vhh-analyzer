@@ -288,6 +288,81 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
     assert shell._source_fingerprint(tmp_path / "nothing-here") == "unknown"
 
 
+def test_the_fingerprint_covers_every_file_the_app_ships_in_data(tmp_path):
+    """Not three of them, named by hand, which is how five went unhashed.
+
+    `data/` used to be enumerated: `library.csv`, `aminoacids/meta.json` and
+    the SVG structures. The app also reads `ecoli_codon_usage.csv` (the CAI
+    table), `vhh_position_freq.csv` and its metadata (the germline comparison),
+    `primers.csv` and the four plasmid maps under `data/plasmids/` (the cloning
+    screen), and none of those moved the fingerprint, so a corrected usage
+    table deployed under a footer identical to the one before it.
+
+    This walks the real `data/` directory rather than a handful of invented
+    files, so that a file added to the app in a directory nobody thought of is
+    covered by the time it ships.
+    """
+    import shutil
+
+    import shell
+
+    shutil.copytree(ROOT / "data", tmp_path / "data")
+    (tmp_path / "app.py").write_text("x = 1\n")
+    baseline = shell._source_fingerprint(tmp_path)
+
+    shipped = sorted(p for p in (tmp_path / "data").rglob("*") if p.is_file())
+    assert len(shipped) >= 10, \
+        f"only {len(shipped)} files copied from data/, the fixture is wrong"
+
+    for path in shipped:
+        original = path.read_bytes()
+        try:
+            path.write_bytes(original + b"\n# changed\n")
+            assert shell._source_fingerprint(tmp_path) != baseline, (
+                f"changing data/{path.relative_to(tmp_path / 'data')} left the "
+                f"fingerprint unchanged, so it can be deployed invisibly")
+        finally:
+            path.write_bytes(original)
+
+    assert shell._source_fingerprint(tmp_path) == baseline, \
+        "restoring every file did not restore the fingerprint"
+
+
+def test_the_fingerprint_sees_a_file_that_only_moved(tmp_path):
+    """It hashed `path.name`, so a move between hashed directories was free."""
+    import shell
+
+    (tmp_path / "sections").mkdir()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "app.py").write_text("x = 1\n")
+    (tmp_path / "sections" / "home.py").write_text("y = 2\n")
+    before = shell._source_fingerprint(tmp_path)
+
+    (tmp_path / "sections" / "home.py").rename(tmp_path / "home.py")
+    assert shell._source_fingerprint(tmp_path) != before, \
+        "a file moved to another hashed directory left the fingerprint unchanged"
+
+
+def test_the_fingerprint_ignores_caches_left_inside_data(tmp_path):
+    """Two checkouts of one commit have to fingerprint the same.
+
+    `__pycache__` and `.DS_Store` appear in a working copy without being part
+    of the app, and walking `data/` would otherwise hash them.
+    """
+    import shell
+
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "library.csv").write_text("name\nx\n")
+    (tmp_path / "app.py").write_text("x = 1\n")
+    clean = shell._source_fingerprint(tmp_path)
+
+    (tmp_path / "data" / ".DS_Store").write_bytes(b"\x00\x01")
+    (tmp_path / "data" / "__pycache__").mkdir()
+    (tmp_path / "data" / "__pycache__" / "x.pyc").write_bytes(b"\x00")
+    assert shell._source_fingerprint(tmp_path) == clean, \
+        "a cache file inside data/ moved the fingerprint"
+
+
 def test_the_changelog_documents_the_current_release():
     """A changelog that stops before the current version is a stale changelog."""
     import shell

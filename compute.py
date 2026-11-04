@@ -43,7 +43,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.04b"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -211,7 +211,6 @@ def png_liability_profile(liabs):
     return fig_to_png(fig, close=True) if fig else None
 
 
-@st.cache_data(**_FIG_CACHE)
 @st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
 def families_for(seqs, anns, cutoff, linkage_method, same_length):
     """Clonal families, cached, because the pairwise alignments dominate."""

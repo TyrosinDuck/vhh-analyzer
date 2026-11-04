@@ -2313,7 +2313,9 @@ the deployment.
 **Did my change actually deploy?** The footer carries a seven-character
 fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
 It changes whenever a file the deployed app is made of changes: the code, this
-manual, the library, the amino acid structures, the Streamlit configuration and
+manual, everything in the `data` folder (the sequence library, the codon usage
+and germline position tables, the primers, the plasmid maps and the amino acid
+structures), the Streamlit configuration and
 the two dependency lists Community Cloud installs. If it still reads the same
 after a push that touched one of those, Streamlit is serving the old container,
 not your new code. Every Python package is pinned in `requirements.txt`, so a
@@ -2400,9 +2402,16 @@ single 3 911-line script before those screens were pulled out of it; the README
 lists the files and the two rules that keep it from growing back.
 
 There is a test suite: `pip install -r requirements.txt -r requirements-dev.txt`
-then `pytest`.
+then `pytest`. It also needs HMMER, which is a binary rather than a Python
+package (`apt-get install hmmer`, `brew install hmmer` or
+`conda install -c bioconda hmmer`); the run says so on its first line if it is
+missing.
 Almost
 every test in it is a bug the app actually had, frozen so it cannot return.
+GitHub Actions runs the whole suite on every push and pull request, and once a
+week, on the Python version and the pinned dependencies the deployed app uses,
+so the result on the repository's **Actions** tab is for the same combination
+that runs online.
 
 The source is at <https://github.com/TyrosinDuck/vhh-analyzer>, under the **MIT
 licence**: use it, change it, redistribute it, build on it, keep the copyright

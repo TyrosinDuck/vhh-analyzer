@@ -1,0 +1,80 @@
+# The test suite, run on GitHub's machines rather than only on mine.
+#
+# Why this file exists, beyond the obvious: JOSS asks for at least six months
+# of visible public development, and a review looks at whether the tests are
+# actually run, not only at whether they exist. A suite that passes on the
+# author's laptop is a claim; a green run on a machine that installs the
+# dependencies from scratch is evidence, and the history of those runs is
+# what accumulates between now and a submission.
+#
+# It also catches the two things a local run cannot. First, the lockfile: the
+# suite here installs requirements.txt into a clean interpreter, so a pin that
+# does not resolve fails in CI instead of on Community Cloud's next rebuild.
+# Second, HMMER: it is a binary that ANARCI shells out to, it comes from
+# packages.txt on the deployed app, and a laptop that has had it for years
+# never tests the path where it is missing.
+#
+# Not tested here: the deployed app itself. Community Cloud builds from a push,
+# with its own interpreter and its own installer, and no workflow can stand in
+# for that. The footer's fingerprint and runtime line are what answer it.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So that a month with no commits still shows whether the app would build
+  # today: the lockfile is pinned, but the system packages and the Python
+  # patch release underneath it are not.
+  schedule:
+    - cron: "37 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install HMMER
+        # Read from packages.txt rather than written out here, so that this
+        # file does not become a second list of the system packages the app
+        # needs. Community Cloud installs the same file the same way.
+        run: |
+          sudo apt-get update
+          sudo xargs -a packages.txt apt-get install -y --no-install-recommends
+          hmmscan -h | head -2
+
+      - uses: actions/setup-python@v5
+        with:
+          # The interpreter Community Cloud runs, and the one requirements.txt
+          # is compiled for. Testing on anything else tests a different app.
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install the locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip check
+
+      - name: Show what is running
+        # The same three facts the app's footer carries, so that a failed run
+        # can be read a year later without guessing which versions it had.
+        run: |
+          python -c "import sys; print(sys.version)"
+          python -c "import shell; print(shell.VERSION)"
+          python -c "import shell; print(shell.runtime_versions())"
+
+      - name: Run the suite
+        run: python -m pytest -q

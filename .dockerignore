@@ -2,6 +2,7 @@
 # project goes into the image, so a new module or data file needs no edit
 # here or there.
 .git
+.github
 __pycache__
 **/__pycache__
 .pytest_cache

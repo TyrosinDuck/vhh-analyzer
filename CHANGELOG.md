@@ -18,6 +18,33 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+- **The footer fingerprint did not cover most of `data/`.** It hashed three
+  entries written out by hand, `data/library.csv`, `data/aminoacids/meta.json`
+  and the SVG structures, while the app also reads `ecoli_codon_usage.csv`
+  (the CAI table and the usage figures on the reference screen),
+  `vhh_position_freq.csv` with its metadata (the germline comparison),
+  `primers.csv` and the four plasmid maps under `data/plasmids/` (the cloning
+  screen). A corrected codon usage table, a changed primer or a changed
+  plasmid map therefore deployed under a footer identical to the one before
+  it, which is the one thing the fingerprint exists to prevent. `data/` is now
+  walked rather than listed, so a file added to it is covered without editing
+  anything, and caches such as `__pycache__` and `.DS_Store` are skipped so
+  that two checkouts of one commit still agree. The fingerprint also hashes
+  each file's path relative to the root rather than its bare name, so moving a
+  file between two hashed directories no longer leaves it unchanged. Verified
+  by editing each of the ten files `data/` ships, one at a time, on a copy:
+  before the fix, five of them left the fingerprint at `944ee32`. A test now
+  walks the real `data/` directory and fails if any file in it can be changed
+  invisibly. The fingerprint moves once because of this change, which is
+  expected: it is the same files hashed differently, not a change to the app.
+- `families_for` in `compute.py` carried two `st.cache_data` decorators, the
+  upper one copied down from the figure helper above it, so the clonal
+  families and their linkage matrix, the largest object this module caches,
+  were stored in two caches at once on a server that can have as little as
+  690 MB. Results were correct, so nothing failed. A test now reads the
+  module with `ast` and fails if any function carries more than one cache
+  decorator. The memory this frees was not measured.
+
 - **The Docker image could not have started.** The `Dockerfile` copied
   `vhh_core.py` and `app.py` and nothing else, while `app.py` imports a dozen
   other modules and reads `sections/`, `data/`, `MANUAL.md` and
@@ -101,6 +128,28 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **Continuous integration.** A GitHub Actions workflow runs the full suite on
+  every push and pull request, and once a week on a schedule, on Python 3.14
+  and from `requirements.txt`, which is the interpreter and the dependency set
+  Community Cloud runs. HMMER comes from `packages.txt` read by the workflow
+  rather than named again in it, so the system package list stays in one
+  place. The weekly run is there because the lockfile pins the Python packages
+  and not the interpreter patch release or the apt packages under them. The
+  suite had been run only on one machine, which the 1.0.0 changelog listed as
+  a known limitation; it no longer is. Verified: the lockfile installs and all
+  158 tests pass in a clean virtual environment built from
+  `requirements.txt` and `requirements-dev.txt` alone, and `pip check` is
+  clean there. Not verified: the workflow itself, which only a push can run,
+  and Python 3.14, which was not available where this was checked (the clean
+  install and the suite were run on 3.13).
+- `pytest` now says on its first line when HMMER is missing, with the command
+  to install it. ANARCI shells out to the `hmmscan` binary, which no Python
+  requirements file can provide, and without it the smoke test failed with
+  `[Errno 2] No such file or directory: 'hmmscan'` inside an assertion about a
+  Streamlit element in the Comparison view, which is accurate and says nothing
+  about what to install. It warns rather than skips: a suite that skipped the
+  annotator tests would pass on the one machine where the app's default
+  annotator is never exercised.
 - **The footer says what the server is running**: a line under it reads, for
   example, `Running on Python 3.14.6 · Streamlit 1.66.1 · Biopython 1.88 ·
   ANARCI 2026.2.13.2`, taken from the running process. The fingerprint says

@@ -94,9 +94,18 @@ will be declined. Some things are out of scope on purpose:
    described in README.md, *Updating dependencies*.
 3. Make the change.
 4. Run the tests: `pytest`. They take about half a minute. Everything must pass.
+   The suite needs HMMER, which is a binary rather than a Python package and
+   so cannot come from `requirements-dev.txt`: install it with
+   `apt-get install hmmer`, `brew install hmmer` or
+   `conda install -c bioconda hmmer`. Without it, `pytest` says so on the
+   first line of the run, and the tests that annotate through ANARCI fail.
 5. **Add a test.** Almost every test in `tests/` is a defect that shipped once;
    a fix without a test invites the same defect back.
-6. Open a pull request describing what changed and why.
+6. Open a pull request describing what changed and why. GitHub Actions runs
+   the same suite on your branch, on Python 3.14 and from `requirements.txt`,
+   which is the combination the deployed app runs. A run that passes locally
+   and fails there usually means a dependency is installed on your machine
+   and missing from the lockfile.
 
 Two conventions hold throughout, and the code reads strangely if you miss them:
 

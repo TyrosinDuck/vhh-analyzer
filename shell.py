@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04e"
+__version__ = "2026.11.04f"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -73,6 +73,13 @@ RELEASE = "1.0.0"
 # I looking at, would get a different answer each morning.
 BUILD = "20261104"
 
+# Names that can appear inside data/ without being part of the app: caches an
+# interpreter writes, and the file macOS leaves in every folder it has looked
+# at. Hashing them would make the same commit fingerprint differently on two
+# machines, which is the one thing the fingerprint must not do.
+_FINGERPRINT_SKIP = {"__pycache__", ".DS_Store", ".ipynb_checkpoints"}
+
+
 def _source_fingerprint(root: Path | None = None) -> str:
     """Seven hex characters that change whenever any source file changes.
 
@@ -84,9 +91,24 @@ def _source_fingerprint(root: Path | None = None) -> str:
     every environment: locally, in Docker, and on Community Cloud.
 
     What is hashed is everything the app serves: the Python files, plus
-    `MANUAL.md`, `data/library.csv` and the amino acid structures, which the
-    manual, library and reference screens read at runtime. A change to any of
-    them is visible to a user, so it has to move the fingerprint.
+    `MANUAL.md` and the whole of `data/`, which the manual, library, gene
+    diagnosis, reference and cloning screens read at runtime. A change to any
+    of them is visible to a user, so it has to move the fingerprint.
+
+    `data/` is walked rather than enumerated. It used to be three entries
+    written out by hand, `library.csv`, `aminoacids/meta.json` and the SVG
+    structures, which left `ecoli_codon_usage.csv`, `vhh_position_freq.csv`,
+    `vhh_position_meta.json`, `primers.csv` and the four plasmid maps under
+    `data/plasmids/` unhashed although the app reads all of them: a corrected
+    codon usage table or a changed plasmid map went out under an unchanged
+    footer. Walking the directory is the same rule as the `Dockerfile` copying
+    the whole project instead of listing files, and for the same reason, a
+    second list of what `data/` contains goes stale the first time something
+    is added to it and says nothing when it does.
+
+    The path is hashed along with the bytes, and it is the path relative to
+    the root, not the bare file name: with the name alone, moving a file
+    between two hashed directories left the fingerprint where it was.
 
     `requirements.txt` and `packages.txt` are hashed too, because Community
     Cloud installs them: a changed dependency line changes the deployed app.
@@ -117,12 +139,18 @@ def _source_fingerprint(root: Path | None = None) -> str:
     root = Path(root) if root else Path(__file__).parent
     digest = hashlib.sha256()
     try:
+        # Everything under data/ that is a file, minus the droppings a file
+        # manager or an interpreter leaves there, which are not part of the
+        # app and would make the fingerprint differ between two checkouts of
+        # the same commit.
+        data_files = [p for p in (root / "data").rglob("*")
+                      if p.is_file()
+                      and not any(part in _FINGERPRINT_SKIP
+                                  for part in p.relative_to(root).parts)]
         files = (sorted(root.glob("*.py"))
                  + sorted((root / "sections").glob("*.py"))
-                 + sorted((root / "data" / "aminoacids").glob("*.svg"))
+                 + sorted(data_files, key=lambda p: p.relative_to(root).parts)
                  + [p for p in (root / "MANUAL.md",
-                                root / "data" / "library.csv",
-                                root / "data" / "aminoacids" / "meta.json",
                                 # Hidden, so the easiest file in the project to
                                 # leave behind when copying a folder, and it
                                 # sets the upload cap. Hashing it means a
@@ -136,7 +164,10 @@ def _source_fingerprint(root: Path | None = None) -> str:
                                 root / "packages.txt")
                     if p.exists()])
         for path in files:
-            digest.update(path.name.encode())
+            # posix() and not str(): the separator differs between Windows and
+            # Linux, and a fingerprint that depends on the operating system
+            # cannot be compared between a local checkout and the deployed app.
+            digest.update(path.relative_to(root).as_posix().encode())
             digest.update(path.read_bytes())
     except Exception:
         return "unknown"
