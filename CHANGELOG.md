@@ -31,6 +31,13 @@ ran, from its Zenodo record.
   test suite, from exactly the files the image receives. Not verified: the
   image itself, since its base image could not be pulled where this was
   checked.
+- **The footer fingerprint now covers `requirements.txt` and `packages.txt`.**
+  Community Cloud installs both, so editing either changes the deployed app,
+  and the fingerprint did not move. It still does not move when a dependency
+  releases a new version under an unchanged file, because the versions are
+  minimums, not pins. The README and the manual described the fingerprint as
+  a hash of the `.py` files only, which was already incomplete; both now list
+  what it covers and what it does not.
 - `requirements-dev.txt` was missing `pypdf`, which `tests/test_bench.py`
   needs to open the batch sheet it generates. The test passed only where
   `pypdf` happened to be installed already.

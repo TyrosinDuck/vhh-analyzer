@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04c"
+__version__ = "2026.11.04d"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -85,11 +85,23 @@ def _source_fingerprint(root: Path | None = None) -> str:
     What is hashed is everything the app serves: the Python files, plus
     `MANUAL.md`, `data/library.csv` and the amino acid structures, which the
     manual, library and reference screens read at runtime. A change to any of
-    them is visible to a user, so it has to move the fingerprint. Files that
-    only a developer reads, `README.md`, `tools/` and
-    `CONTRIBUTING.md` among them, are deliberately left out: they cannot change
-    what the app does, and including them would make the fingerprint move for
-    deploys with nothing to verify.
+    them is visible to a user, so it has to move the fingerprint.
+
+    `requirements.txt` and `packages.txt` are hashed too, because Community
+    Cloud installs them: a changed dependency line changes the deployed app.
+    This is a partial fix and should be read as one. `requirements.txt` gives
+    lower bounds, not pinned versions, so Community Cloud installs whatever is
+    current on each rebuild. Hashing the file catches an edit to the file; it
+    does not catch a new Streamlit or Biopython release being installed under
+    an unchanged file, and a footer that has not moved does not mean the
+    installed packages have not.
+
+    The test for what belongs here is whether a change to the file changes
+    what a user sees online. Files that only a developer or another host
+    reads, `README.md`, `CHANGELOG.md`, `tools/`, `Dockerfile` (Community
+    Cloud ignores it) and `requirements-dev.txt` among them, are deliberately
+    left out: including them would make the fingerprint move for deploys with
+    nothing to verify, which is the one thing it must not do.
     """
     import hashlib
 
@@ -111,7 +123,12 @@ def _source_fingerprint(root: Path | None = None) -> str:
                                 # sets the upload cap. Hashing it means a
                                 # deployment missing it reads differently in
                                 # the footer from the copy it was made of.
-                                root / ".streamlit" / "config.toml")
+                                root / ".streamlit" / "config.toml",
+                                # Installed by Community Cloud on each
+                                # rebuild. Unpinned, see the docstring for
+                                # what this does and does not catch.
+                                root / "requirements.txt",
+                                root / "packages.txt")
                     if p.exists()])
         for path in files:
             digest.update(path.name.encode())

@@ -256,6 +256,30 @@ def test_the_fingerprint_changes_when_the_source_changes(tmp_path):
     sixth = shell._source_fingerprint(tmp_path)
     assert sixth != fifth, "a missing config.toml left the fingerprint unchanged"
 
+    # Community Cloud installs both, so an edit to either changes the
+    # deployed app. (Only an edit to the file: the versions are not pinned.)
+    (tmp_path / "requirements.txt").write_text("streamlit>=1.30\n")
+    with_requirements = shell._source_fingerprint(tmp_path)
+    assert with_requirements != sixth, \
+        "a new requirements.txt left the fingerprint unchanged"
+    (tmp_path / "requirements.txt").write_text("streamlit>=1.49\n")
+    assert shell._source_fingerprint(tmp_path) != with_requirements, \
+        "a changed requirements.txt left the fingerprint unchanged"
+    (tmp_path / "requirements.txt").write_text("streamlit>=1.30\n")
+    (tmp_path / "packages.txt").write_text("hmmer\n")
+    with_packages = shell._source_fingerprint(tmp_path)
+    assert with_packages != with_requirements, \
+        "a new packages.txt left the fingerprint unchanged"
+
+    # And what Community Cloud never reads must not move it: a fingerprint
+    # that changes for a README typo can no longer say whether a deploy took.
+    for name in ("README.md", "CHANGELOG.md", "Dockerfile", ".dockerignore",
+                 "requirements-dev.txt"):
+        (tmp_path / name).write_text("anything\n")
+    assert shell._source_fingerprint(tmp_path) == with_packages, \
+        "a file Community Cloud does not use moved the fingerprint"
+    sixth = with_packages
+
     # Called with a string rather than a Path, which is what comparing two
     # checkouts does. It used to answer "unknown", indistinguishable from a
     # directory with nothing in it.

@@ -2300,8 +2300,12 @@ that and says it is updating; reload after a few seconds.
 
 **Did my change actually deploy?** The footer carries a seven-character
 fingerprint of the source files, for example `v1.0.0 (build 20261028.1aed6b5)`.
-It changes whenever any `.py` file changes, so if it still reads the same after
-a push, Streamlit is serving the old container, not your new code. **Reboot app**
+It changes whenever a file the deployed app is made of changes: the code, this
+manual, the library, the amino acid structures, the Streamlit configuration and
+the two dependency lists Community Cloud installs. If it still reads the same
+after a push that touched one of those, Streamlit is serving the old container,
+not your new code. It does not move for a new version of a dependency, since
+the versions are not pinned. **Reboot app**
 in the Community Cloud dashboard. A build date alone cannot tell you this: two
 pushes on the same day carry the same date.
 

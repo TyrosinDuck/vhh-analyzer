@@ -550,9 +550,16 @@ lives
 in `data/library.csv` in the repository rather than in a database.
 
 **To check a deploy landed**, read the fingerprint in the footer:
-`v1.0.0 (build 20261028.1aed6b5)`. The last part is a hash of every `.py` file,
-so it changes when the code changes and the build date cannot be mistaken for
-it. Same fingerprint after a push means the old container is still being served.
+`v1.0.0 (build 20261028.1aed6b5)`. The last part is a hash of what the
+deployed app is made of: the `.py` files, `MANUAL.md`, `data/library.csv`, the
+amino acid structures, `.streamlit/config.toml`, `requirements.txt` and
+`packages.txt`. It changes when any of them changes, and the build date cannot
+be mistaken for it. Same fingerprint after a push means the old container is
+still being served. Files Community Cloud does not use, this README, the
+changelog, the `Dockerfile`, are left out on purpose, so a push that touches
+only those leaves the fingerprint where it was. One limit: `requirements.txt`
+sets minimum versions, not exact ones, so a new release of a dependency
+installed on a rebuild changes the app without changing the fingerprint.
 
 **If a change does not appear**, or the app reports modules that are out of date
 after you have updated them, Streamlit is serving cached imports. **Reboot
