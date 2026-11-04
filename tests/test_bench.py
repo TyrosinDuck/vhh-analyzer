@@ -500,3 +500,244 @@ class TestBatchSheet:
         assert "not a certificate of analysis" in text, \
             "the sheet must not be mistakable for a regulated document"
         assert "theoretical" in text
+
+
+# --------------------------------------------------------------------------
+# Purification balance
+# --------------------------------------------------------------------------
+# The arithmetic is deliberately checked by hand here rather than against the
+# function's own output: a test that recomputes the implementation is a test
+# of nothing. 1.2 AU / 24075 /M/cm * 14000 Da = 0.69782 mg/mL, times 6 mL is
+# 4.1869 mg.
+
+EPS = 24075.0
+MW = 14000.0
+
+
+def test_the_balance_totals_match_a_hand_calculation():
+    out = bench.purification_balance(
+        [{"step": "IMAC eluate", "volume_ml": 6.0, "a280": 1.2},
+         {"step": "SEC pool", "volume_ml": 9.0, "a280": 0.55}],
+        ext_coeff=EPS, mw_da=MW)
+
+    imac, sec = out["rows"]
+    assert imac["concentration_mg_per_ml"] == pytest.approx(0.69782, abs=1e-4)
+    assert imac["total_mg"] == pytest.approx(4.1869, abs=1e-3)
+    assert sec["total_mg"] == pytest.approx(2.8782, abs=1e-3)
+
+    # 2.8782 / 4.1869 = 68.7%
+    assert sec["step_recovery_pct"] == pytest.approx(68.7, abs=0.1)
+    assert sec["cumulative_recovery_pct"] == pytest.approx(68.7, abs=0.1)
+    # The first counted step is the baseline, so it is 100% of itself and has
+    # nothing before it to have survived.
+    assert imac["cumulative_recovery_pct"] == 100.0
+    assert imac["step_recovery_pct"] is None
+    assert out["reference_step"] == "IMAC eluate"
+    assert out["final_total_mg"] == pytest.approx(2.8782, abs=1e-3)
+
+
+def test_a_crude_step_keeps_its_total_and_gets_no_recovery():
+    """The whole reason this is not a column of divisions.
+
+    An A280 on a lysate is every protein in it. Divided by the target's
+    extinction coefficient it gives a quantity of total protein expressed in
+    the target's units, and the ratio between that and a purified pool is not
+    a recovery of the target. Reporting one would be the most flattering
+    number on the page and the least true.
+    """
+    out = bench.purification_balance(
+        [{"step": "Clarified lysate", "volume_ml": 40.0, "a280": 2.5,
+          "crude": True},
+         {"step": "IMAC eluate", "volume_ml": 6.0, "a280": 1.2},
+         {"step": "SEC pool", "volume_ml": 9.0, "a280": 0.55}],
+        ext_coeff=EPS, mw_da=MW)
+
+    lysate, imac, sec = out["rows"]
+    assert lysate["total_mg"] is not None, \
+        "the crude total is worth recording and should still be computed"
+    assert lysate["step_recovery_pct"] is None
+    assert lysate["cumulative_recovery_pct"] is None
+    assert "crude" in lysate["comment"]
+
+    # The baseline is the first step that is not crude, so the recoveries are
+    # from capture onwards and the lysate cannot inflate them.
+    assert out["reference_step"] == "IMAC eluate"
+    assert imac["cumulative_recovery_pct"] == 100.0
+    assert sec["cumulative_recovery_pct"] == pytest.approx(68.7, abs=0.1)
+
+
+def test_recovery_above_one_hundred_percent_is_called_out():
+    """Arithmetically fine, physically not: it is a volume typed wrong."""
+    out = bench.purification_balance(
+        [{"step": "IMAC", "volume_ml": 5.0, "a280": 1.0},
+         {"step": "SEC", "volume_ml": 20.0, "a280": 0.9}],
+        ext_coeff=EPS, mw_da=MW)
+
+    assert out["rows"][1]["step_recovery_pct"] > 100.0
+    assert any("cannot recover more" in w for w in out["warnings"]), \
+        f"no warning about a gain in protein, got {out['warnings']}"
+
+
+def test_mixing_two_quantification_methods_is_flagged():
+    """A BCA against an A280 compares two methods as much as two steps."""
+    out = bench.purification_balance(
+        [{"step": "IMAC", "volume_ml": 5.0, "mg_per_ml": 0.8, "method": "BCA"},
+         {"step": "SEC", "volume_ml": 4.0, "a280": 0.5}],
+        ext_coeff=EPS, mw_da=MW)
+
+    assert {row["basis"] for row in out["rows"]} == {"measured", "derived"}
+    assert any("not all quantified the same way" in w for w in out["warnings"])
+    # Shown anyway, with the basis beside each row, rather than withheld.
+    assert out["rows"][1]["step_recovery_pct"] is not None
+
+
+def test_a_reading_takes_precedence_over_an_a280_on_the_same_row():
+    """It does not go through the sequence, so it is the better number."""
+    out = bench.purification_balance(
+        [{"step": "Pool", "volume_ml": 2.0, "a280": 1.0, "mg_per_ml": 0.5,
+          "method": "BCA"}],
+        ext_coeff=EPS, mw_da=MW)
+
+    row = out["rows"][0]
+    assert row["basis"] == "measured"
+    assert row["concentration_mg_per_ml"] == pytest.approx(0.5)
+    assert "BCA" in row["basis_detail"]
+
+
+def test_an_a280_without_a_sequence_is_refused_rather_than_guessed():
+    """No extinction coefficient means no concentration, not a default one."""
+    out = bench.purification_balance(
+        [{"step": "IMAC", "volume_ml": 5.0, "a280": 1.0}])
+
+    assert out["rows"][0]["total_mg"] is None
+    assert out["rows"][0]["basis"] == "needs the sequence"
+    assert any("no extinction coefficient" in w for w in out["warnings"])
+
+
+def test_yield_per_litre_divides_by_the_culture_volume():
+    out = bench.purification_balance(
+        [{"step": "Final", "volume_ml": 1.0, "mg_per_ml": 2.5,
+          "method": "BCA"}],
+        culture_volume_ml=500.0)
+
+    # 2.5 mg in half a litre of culture is 5 mg/L.
+    assert out["yield_mg_per_litre"] == pytest.approx(5.0)
+
+
+def test_a_step_with_nothing_in_it_is_skipped_not_counted_as_zero():
+    out = bench.purification_balance(
+        [{"step": "IMAC", "volume_ml": 6.0, "a280": 1.2},
+         {"step": "", "volume_ml": 0.0, "a280": 0.0}],
+        ext_coeff=EPS, mw_da=MW)
+
+    assert len(out["rows"]) == 1, \
+        "an empty row was counted; a zero total would read as a failed step"
+
+
+@pytest.mark.parametrize("step", [
+    {"step": "x", "volume_ml": -1.0},
+    {"step": "x", "volume_ml": 1.0, "a280": -0.5},
+    {"step": "x", "volume_ml": 1.0, "mg_per_ml": -2.0},
+])
+def test_the_balance_refuses_negative_inputs(step):
+    with pytest.raises(ValueError):
+        bench.purification_balance([step], ext_coeff=EPS, mw_da=MW)
+
+
+def test_an_empty_balance_is_empty_and_not_an_error():
+    out = bench.purification_balance([])
+    assert out["rows"] == [] and out["final_total_mg"] is None
+    assert out["reference_step"] is None
+
+
+# --------------------------------------------------------------------------
+# Batch record, the machine-readable half of a batch sheet
+# --------------------------------------------------------------------------
+
+PROPS = {"mw_da": 14000.0, "ext_coeff_cystines": 24075,
+         "ext_coeff_reduced": 23950, "pI": 7.2, "length": 117, "n_Cys": 2,
+         "n_primary_amines": 5, "A280_0.1pct": 1.72}
+SEQ = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+       "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAAGSTYYDYWGQGTQVTVSS")
+
+
+def _record(**measured):
+    readings = {"a280": 0.84, "dilution": 10.0, "path_cm": 1.0,
+                "volume_ul": 600.0}
+    readings.update(measured)
+    sheet = bench.batch_sheet("NbX", SEQ, PROPS, measured=readings,
+                              fields={"lot": "JV-2026-07",
+                                      "prepared_by": "JV"})
+    return bench.batch_record("NbX", SEQ, {"lot": "JV-2026-07",
+                                           "prepared_by": "JV"},
+                              readings, True, sheet=sheet,
+                              version="1.0.0 (build 20261104.abc1234)")
+
+
+def test_a_batch_record_round_trips_through_json():
+    """The point of the file: the same readings come back out of it."""
+    import json
+
+    back = bench.batch_record_inputs(json.loads(json.dumps(_record())))
+
+    assert back["fields"]["lot"] == "JV-2026-07"
+    assert back["measured"]["a280"] == pytest.approx(0.84)
+    assert back["measured"]["dilution"] == pytest.approx(10.0)
+    assert back["measured"]["volume_ul"] == pytest.approx(600.0)
+    assert back["cystines"] is True
+    assert back["sequence"] == SEQ
+    assert back["created_with"] == "1.0.0 (build 20261104.abc1234)"
+
+
+def test_the_record_keeps_the_inputs_not_only_the_rendered_page():
+    """A page of rendered strings cannot be recomputed or recombined.
+
+    Keeping the readings is what makes the file worth having: the derived
+    values are regenerated from them on reload, so a reprint says what this
+    version of the app makes of those readings rather than repeating a number
+    nobody can check.
+    """
+    record = _record()
+
+    assert record["measured"]["a280"] == pytest.approx(0.84)
+    assert record["schema"] == bench.BATCH_RECORD_SCHEMA
+    # And the page as it was, so a reprint can be compared against it.
+    assert record["rendered"]["derived"], "the rendered blocks were not kept"
+    assert any("Concentration" in label
+               for label, _value in record["rendered"]["derived"])
+
+
+def test_the_record_carries_every_batch_field_even_when_blank():
+    """A key that disappears when empty reads on reload as a field nobody
+    filled in, which is not the same as one that was deliberately left out."""
+    record = _record()
+    expected = {key for key, _label, _default, _help in bench.BATCH_FIELDS}
+    assert set(record["fields"]) == expected
+
+
+def test_a_mass_left_unmeasured_stays_absent_through_the_round_trip():
+    """The checkbox exists so an unmeasured mass is not reported as measured.
+    A round trip must not resurrect it as a zero."""
+    import json
+
+    back = bench.batch_record_inputs(json.loads(json.dumps(_record())))
+    assert back["measured"]["measured_da"] is None
+
+
+@pytest.mark.parametrize("data, fragment", [
+    ("not a dict", "JSON object"),
+    ({}, "no `schema` key"),
+    ({"schema": "something-else/1"}, "this app reads"),
+    ({"schema": "vhh-toolbox-batch-record/9"}, "format"),
+    ({"schema": "vhh-toolbox-batch-record/1", "fields": []}, "not an object"),
+    ({"schema": "vhh-toolbox-batch-record/1",
+      "measured": {"a280": "abc"}}, "not a number"),
+])
+def test_an_unreadable_record_is_refused_with_a_reason(data, fragment):
+    """Refused whole rather than half understood.
+
+    A record from which the unrecognised keys were quietly dropped would
+    reprint a sheet missing fields, with nothing on the page saying so.
+    """
+    with pytest.raises(ValueError, match=fragment):
+        bench.batch_record_inputs(data)

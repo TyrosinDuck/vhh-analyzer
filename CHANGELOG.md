@@ -37,6 +37,21 @@ ran, from its Zenodo record.
   walks the real `data/` directory and fails if any file in it can be changed
   invisibly. The fingerprint moves once because of this change, which is
   expected: it is the same files hashed differently, not a change to the app.
+- `batch_record_inputs` accepted `"fields": []` and `"measured": []`. The
+  type check sat after an `or {}` fallback, and an empty list is falsy, so it
+  became an empty dict and passed the check written to catch exactly that: the
+  record reprinted with every text field blank and nothing saying why. Found
+  by the test for it, which failed on the first run.
+- Three numbers were formatted with a comma as the thousands separator, among
+  them the mass difference on the batch sheet, which would have read
+  `+1,024.5 Da` for a difference past a thousand daltons. A comma means a
+  decimal point to most of the people this app is written in English for.
+- Ten calls still passed `use_container_width=True` directly although
+  `shell.FIT` exists to resolve that argument for the installed Streamlit.
+  Streamlit says it will remove the argument after 2025-12-31, which has
+  passed, and 1.66.1 logs a deprecation warning on every one of those calls.
+  They now go through `FIT` like every other call site. Verified: the warning
+  no longer appears when the app is driven through `AppTest`.
 - `families_for` in `compute.py` carried two `st.cache_data` decorators, the
   upper one copied down from the figure helper above it, so the clonal
   families and their linkage matrix, the largest object this module caches,
@@ -128,6 +143,32 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **A purification balance**, as a sixth Bench view. One row per step of a
+  preparation, with a volume and a concentration given either as an A280,
+  divided by the extinction coefficient and therefore derived, or as a reading
+  from a method that does not go through the sequence, which takes precedence
+  and is named in the table. It reports the total in mg per step, the recovery
+  against the step before it, the cumulative recovery and, given a culture
+  volume, the yield per litre. Steps marked **Crude**, a lysate or a
+  clarified supernatant, keep their total and stay out of the recovery
+  arithmetic: an A280 there is every protein in the tube, so a ratio against a
+  purified pool is not the target's recovery, which would have been the most
+  flattering number on the page. It says so rather than printing a number when
+  a step recovers more than it was given, when the steps compared were not
+  quantified the same way, and when an A280 arrives with no extinction
+  coefficient to divide it by. Nothing predicts what a step ought to recover.
+- **The batch sheet saves a machine-readable record** beside the PDF, and
+  takes it back. The JSON file holds the inputs, the text and the readings,
+  which are the part that cannot be recomputed, plus the page as it was
+  rendered so a reprint can be compared against the original. Loading one
+  refills the form; the derived values are recomputed from the readings rather
+  than restored, and the view says so when the record was made with another
+  version of the app or for another sequence. A record whose format number or
+  whose readings this version cannot read is refused with the reason, rather
+  than partly read into a sheet with fields silently missing. Still no
+  server-side storage: the file goes to whoever generated it and comes back
+  from them, it is not an audit trail, and nothing in it can tell whether it
+  has been edited.
 - **Continuous integration.** A GitHub Actions workflow runs the full suite on
   every push and pull request, and once a week on a schedule, on Python 3.14
   and from `requirements.txt`, which is the interpreter and the dependency set
