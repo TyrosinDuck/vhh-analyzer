@@ -18,7 +18,7 @@ import streamlit as st
 import reference as rf
 from shell import FIT, embed_html, go_to
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.04a"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 
@@ -60,7 +60,7 @@ def _genetic_code() -> None:
     # Tall enough for all sixteen rows: the point of this layout is reading
     # down a column and across a row, and half of it behind a scrollbar is
     # worse than no block at all.
-    st.dataframe(wheel, **FIT, height=16 * 35 + 40)
+    st.dataframe(wheel, use_container_width=True, height=16 * 35 + 40)
 
     st.divider()
     st.subheader("Codon by codon, with how *E. coli* uses it")
@@ -82,7 +82,7 @@ def _genetic_code() -> None:
     if only_rare:
         table = table[table["rare_in_ecoli"]]
 
-    st.dataframe(table, **FIT, hide_index=True,
+    st.dataframe(table, use_container_width=True, hide_index=True,
                  column_config={
                      "share": st.column_config.ProgressColumn(
                          "share", min_value=0.0, max_value=1.0,
@@ -160,7 +160,7 @@ def _aminoacids() -> None:
         "hydrophobicity profile. `charge_profile` is the approximation used in "
         "the charge profile, where histidine counts as +0.1 rather than being "
         "treated as fully protonated or fully neutral.")
-    st.dataframe(shown, **FIT, hide_index=True)
+    st.dataframe(shown, use_container_width=True, hide_index=True)
     st.caption(
         "Side-chain pKa values are Lehninger's, for the free amino acid. In a "
         "folded protein the local environment moves them, sometimes by "

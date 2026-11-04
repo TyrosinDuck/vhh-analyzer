@@ -1,9 +1,5 @@
 # VHH tool box
 
-[![tests](https://github.com/TyrosinDuck/vhh-analyzer/actions/workflows/tests.yml/badge.svg)](https://github.com/TyrosinDuck/vhh-analyzer/actions/workflows/tests.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23742269.svg)](https://doi.org/10.5281/zenodo.23742269)
-[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-
 A web front-end for sequence-level characterization of VHH / single-domain
 antibodies:
 physico-chemical descriptors, CDR/framework annotation (ANARCI or regex

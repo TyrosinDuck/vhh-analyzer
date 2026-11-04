@@ -10,8 +10,6 @@ the three has to be typed again or looked up wrong.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -24,24 +22,10 @@ import vhh_core as vc
 from compute import analyze_one
 from shell import AUTHOR, DOI, FIT, VERSION, current_sequences, footer
 
-__version__ = "2026.11.04d"
+__version__ = "2026.10.30e"
 
-# Named rather than reached by index. The dispatch below used VIEWS[0] to
-# VIEWS[3] with an else, so inserting a view in the middle silently moved every
-# screen after it to the wrong function, and the only visible symptom would
-# have been the wrong calculator under the right label.
-V_QUANTIFY = "🧮 Quantify"
-V_MASS = "⚖️ Mass check"
-V_CONJUGATE = "🏷️ Conjugate"
-V_PHAGE = "🦠 Phage titre"
-V_BALANCE = "🧫 Purification"
-V_BATCH = "📄 Batch sheet"
-
-VIEWS = [V_QUANTIFY, V_MASS, V_CONJUGATE, V_PHAGE, V_BALANCE, V_BATCH]
-
-# The views that need no sequence: asking for one would be asking a question
-# with no bearing on the answer.
-NO_SEQUENCE = {V_PHAGE}
+VIEWS = ["🧮 Quantify", "⚖️ Mass check", "🏷️ Conjugate", "🦠 Phage titre",
+         "📄 Batch sheet"]
 
 
 def render(ph: float, method: str) -> None:
@@ -50,21 +34,20 @@ def render(ph: float, method: str) -> None:
     st.markdown(
         "The arithmetic between a purified protein and the next experiment: "
         "how much is in the tube, whether it is the protein you think it is, "
-        "how much labelling reagent to add, how much survived each "
-        "purification step, and what goes on the page that "
+        "how much labelling reagent to add, and what goes on the page that "
         "leaves with the tube. They all start from the molar mass, extinction "
         "coefficient and lysine count the analysis section already derives "
         "from the sequence, so none of those has to be typed again. The "
         "exception is the phage titre, which is about the step before all of "
         "that and needs no sequence at all.")
 
-    # The view is chosen before the sequence is asked for, because one of them
-    # does not use a sequence at all and asking for one anyway would be
+    # The view is chosen before the sequence is asked for, because one of the
+    # four does not use a sequence at all and asking for one anyway would be
     # asking a question with no bearing on the answer.
     view = st.radio("View", VIEWS, horizontal=True, label_visibility="collapsed",
                     key="bench_view")
 
-    if view in NO_SEQUENCE:
+    if view == VIEWS[3]:
         st.divider()
         _phage()
         _disclaimer()
@@ -73,14 +56,12 @@ def render(ph: float, method: str) -> None:
     name, sequences, props = _sequence_source(ph, method)
     st.divider()
 
-    if view == V_QUANTIFY:
+    if view == VIEWS[0]:
         _quantify(props)
-    elif view == V_MASS:
+    elif view == VIEWS[1]:
         _mass(name, sequences, props)
-    elif view == V_CONJUGATE:
+    elif view == VIEWS[2]:
         _conjugate(name, sequences, props, method)
-    elif view == V_BALANCE:
-        _balance(props)
     else:
         _batch(name, props)
 
@@ -293,7 +274,7 @@ def _mass(name, sequences, props: dict) -> None:
     metric[0].metric("Average", f"{out['average_da']:.2f} Da")
     metric[1].metric("Monoisotopic", f"{out['monoisotopic_da']:.2f} Da")
     if out["measured_da"]:
-        metric[2].metric("Difference", f"{out['difference_da']:+.2f} Da")
+        metric[2].metric("Difference", f"{out['difference_da']:+,.2f} Da")
 
     if not measured:
         st.info("Enter a measured mass to compare.")
@@ -307,7 +288,7 @@ def _mass(name, sequences, props: dict) -> None:
             f"that sequence instead.")
         return
 
-    st.warning(f"**{out['difference_da']:+.2f} Da** from the sequence as "
+    st.warning(f"**{out['difference_da']:+,.2f} Da** from the sequence as "
                f"written.")
     frame = out["candidates"]
     if not len(frame):
@@ -659,227 +640,6 @@ actually infect.
 
 
 # --------------------------------------------------------------------------
-def _balance(props: dict) -> None:
-    st.subheader("Purification balance")
-    st.markdown(
-        "What came out of each step, how much of the previous step survived "
-        "it, and how much per litre of culture. The page a platform hands to "
-        "whoever asked for the protein. Nothing here says what a step *ought* "
-        "to recover: it is arithmetic on the volumes and absorbances you type.")
-
-    left, right = st.columns(2)
-    with left:
-        eps = st.number_input(
-            "eps 280 (/M/cm)", 0.0, 1e7,
-            float(props.get("ext_coeff_cystines") or 28000.0), 10.0,
-            key="pb_eps",
-            help="Prefilled from the sequence, with the cystines formed. Used "
-                 "for every step quantified by A280.")
-        mw = st.number_input("Molar mass (Da)", 0.0, 1e7,
-                             float(props.get("mw_da") or 14000.0), 1.0,
-                             key="pb_mw")
-    with right:
-        culture = st.number_input(
-            "Culture volume (mL), optional", 0.0, 1e6, 0.0, 100.0,
-            key="pb_culture",
-            help="Turns the final pool into mg per litre of culture, which is "
-                 "the number a platform is usually asked for.")
-        st.caption(
-            "Tick **Crude** for any step where the target is not the only "
-            "thing absorbing at 280 nm: a lysate, a clarified supernatant, a "
-            "flow-through. Those rows keep their total, because it is worth "
-            "recording, and stay out of the recovery arithmetic, because the "
-            "ratio would not be the target's.")
-
-    blank = pd.DataFrame({
-        "Step": bn.PURIFICATION_STEPS,
-        "Volume (mL)": [0.0] * len(bn.PURIFICATION_STEPS),
-        "A280": [0.0] * len(bn.PURIFICATION_STEPS),
-        "Dilution": [1.0] * len(bn.PURIFICATION_STEPS),
-        "mg/mL, other method": [0.0] * len(bn.PURIFICATION_STEPS),
-        "Method": [""] * len(bn.PURIFICATION_STEPS),
-        # Only the first of the prefilled steps is crude by default, because
-        # it is the only one of the four that always is.
-        "Crude": [i == 0 for i in range(len(bn.PURIFICATION_STEPS))],
-    })
-    table = st.data_editor(
-        blank, key="pb_steps", num_rows="dynamic", hide_index=True,
-        **FIT,
-        column_config={
-            "Step": st.column_config.TextColumn(width="medium"),
-            "Volume (mL)": st.column_config.NumberColumn(
-                min_value=0.0, step=0.1, format="%.3f"),
-            "A280": st.column_config.NumberColumn(
-                min_value=0.0, step=0.01, format="%.3f",
-                help="Divided by the extinction coefficient above, so this "
-                     "route is derived, not measured."),
-            "Dilution": st.column_config.NumberColumn(
-                min_value=1.0, step=1.0, format="%.1f"),
-            "mg/mL, other method": st.column_config.NumberColumn(
-                min_value=0.0, step=0.01, format="%.3f",
-                help="A BCA, a Bradford, a gel against a standard. Does not "
-                     "go through the sequence, so it is a reading. Takes "
-                     "precedence over the A280 on the same row."),
-            "Method": st.column_config.TextColumn(
-                width="small", help="Named in the table, because a "
-                                    "concentration without its method cannot "
-                                    "be interpreted later."),
-            "Crude": st.column_config.CheckboxColumn(width="small"),
-        })
-
-    steps = [{"step": row["Step"],
-              "volume_ml": row["Volume (mL)"],
-              "a280": row["A280"] or None,
-              "dilution": row["Dilution"] or 1.0,
-              "mg_per_ml": row["mg/mL, other method"] or None,
-              "method": row["Method"],
-              "crude": bool(row["Crude"])}
-             for _index, row in table.iterrows()]
-
-    try:
-        balance = bn.purification_balance(
-            steps, ext_coeff=eps or None, mw_da=mw or None,
-            culture_volume_ml=culture or None)
-    except ValueError as exc:
-        st.error(f"That balance could not be computed: {exc}")
-        return
-
-    if not any(row["total_mg"] for row in balance["rows"]):
-        st.info(
-            "Give at least one step a volume and a concentration. A step with "
-            "neither is left out rather than counted as zero.")
-        return
-
-    shown = pd.DataFrame([{
-        "Step": row["step"],
-        "Volume (mL)": row["volume_ml"],
-        "mg/mL": row["concentration_mg_per_ml"],
-        "Total (mg)": row["total_mg"],
-        "Step recovery (%)": row["step_recovery_pct"],
-        "Cumulative (%)": row["cumulative_recovery_pct"],
-        "Basis": row["basis_detail"] or row["basis"] or "",
-        "Note": row["comment"],
-    } for row in balance["rows"]])
-    st.dataframe(shown, **FIT, hide_index=True)
-
-    if balance["reference_step"]:
-        st.caption(
-            f"Cumulative recovery is against **{balance['reference_step']}**, "
-            f"the first step counted. The crude rows are excluded, so this is "
-            f"recovery from capture onwards and not from the culture.")
-
-    for warning in balance["warnings"]:
-        st.warning(warning)
-
-    cards = st.columns(2)
-    with cards[0]:
-        st.metric("Final pool",
-                  f"{balance['final_total_mg']:.3f} mg"
-                  if balance["final_total_mg"] else "-")
-    with cards[1]:
-        st.metric("Per litre of culture",
-                  f"{balance['yield_mg_per_litre']:.2f} mg/L"
-                  if balance["yield_mg_per_litre"] else "-",
-                  help="The final counted pool divided by the culture volume. "
-                       "Give a culture volume above to see it.")
-
-    st.caption(
-        "A total in mg from an A280 is a reading divided by an extinction "
-        "coefficient predicted from the sequence, so it is derived and not "
-        "measured, exactly as on the batch sheet. The **Basis** column says "
-        "which route each row took.")
-
-    st.download_button(
-        "⬇️ Download the balance (CSV)", shown.to_csv(index=False),
-        file_name="purification_balance.csv", mime="text/csv", key="pb_csv",
-        **FIT)
-    st.caption(
-        "Nothing is carried from here into the batch sheet. Retype the final "
-        "row there: a number you have not retyped is a number you have not "
-        "checked.")
-
-
-# The widget keys the batch form uses, and the record key each one holds. Kept
-# here so that loading a record and drawing the form cannot disagree about
-# where a value lives: a reload that filled seven of eight fields would look
-# like a sheet somebody had simply left incomplete.
-_RECORD_NUMBERS = {
-    # widget key: (record key, the widget's own minimum)
-    "b_a280": ("a280", 0.0),
-    "b_dil": ("dilution", 1.0),
-    "b_path": ("path_cm", 0.01),
-    "b_vol": ("volume_ul", 0.0),
-    "b_conc": ("mg_per_ml", 0.0),
-    "b_mass": ("measured_da", 0.0),
-}
-
-
-def _reload_record(props: dict) -> None:
-    """Load a saved batch record back into this form.
-
-    The app stores nothing, so this is the only way a sheet printed in March
-    can be reprinted in September: the record went to whoever generated it and
-    comes back from them. What is restored is the readings and the text, not
-    the derived values; those are recomputed below from the readings, which is
-    the point. If a later version of the app computes an extinction
-    coefficient differently, the reprint will differ from the original, and
-    the version each was made with is on the page.
-    """
-    with st.expander("📂 Reuse a saved record"):
-        st.caption(
-            "Takes the JSON file saved alongside a previous sheet, and fills "
-            "this form with what was typed then. Nothing was kept on the "
-            "server; the file is the record.")
-        upload = st.file_uploader("Batch record (JSON)", type=["json"],
-                                  key="b_record_in",
-                                  label_visibility="collapsed")
-        if upload is None:
-            return
-
-        raw = upload.getvalue()
-        digest = hashlib.sha256(raw).hexdigest()
-        if st.session_state.get("b_record_digest") == digest:
-            # Already applied on an earlier run. Re-applying on every rerun
-            # would overwrite whatever the user has edited since.
-            st.caption("Loaded. Edit the fields above and download again.")
-            return
-
-        try:
-            loaded = bn.batch_record_inputs(json.loads(raw.decode("utf-8")))
-        except (ValueError, UnicodeDecodeError) as exc:
-            st.error(f"That is not a batch record this app can read: {exc}")
-            return
-        except json.JSONDecodeError as exc:
-            st.error(f"That file is not valid JSON: {exc}")
-            return
-
-        for key, _label, _default, _help in bn.BATCH_FIELDS:
-            st.session_state[f"b_{key}"] = loaded["fields"].get(key, "")
-
-        clamped = []
-        for widget_key, (record_key, minimum) in _RECORD_NUMBERS.items():
-            value = loaded["measured"].get(record_key)
-            if value is None:
-                continue
-            if value < minimum:
-                clamped.append(record_key)
-                value = minimum
-            st.session_state[widget_key] = float(value)
-
-        st.session_state["b_route"] = ("Determined another way"
-                                       if loaded["measured"].get("mg_per_ml")
-                                       else "From the A280")
-        st.session_state["b_method"] = loaded["measured"].get("method") or "BCA"
-        st.session_state["b_cys"] = bool(loaded["cystines"])
-        st.session_state["b_ms"] = loaded["measured"].get("measured_da") is not None
-        st.session_state["b_record_digest"] = digest
-        st.session_state["b_record_from"] = loaded["created_with"]
-        st.session_state["b_record_sequence"] = loaded["sequence"]
-        if clamped:
-            st.session_state["b_record_clamped"] = clamped
-        st.rerun()
-
-
 def _batch(name, props: dict) -> None:
     st.subheader("Batch sheet")
     st.markdown(
@@ -899,32 +659,6 @@ def _batch(name, props: dict) -> None:
             "in the third block, and a batch sheet with only free text is a "
             "sticky label.")
         return
-
-    _reload_record(props)
-
-    # Said once, after a reload, and only where it changes what the sheet
-    # means: which version made the record, whether it was made for this
-    # protein, and whether a value had to be moved to fit its input.
-    loaded_from = st.session_state.get("b_record_from")
-    if loaded_from and loaded_from != VERSION:
-        st.caption(
-            f"These values came from a record made with {loaded_from}; this "
-            f"app is {VERSION}. The readings are what they were. Anything "
-            f"derived from them is recomputed here, so it can differ from the "
-            f"original sheet.")
-    loaded_sequence = st.session_state.get("b_record_sequence")
-    if loaded_sequence and loaded_sequence != (props.get("sequence") or ""):
-        st.warning(
-            "The loaded record was made for a different sequence from the one "
-            "selected at the top. The text and the readings are the record's; "
-            "everything in the third block is this sequence's. Check which "
-            "protein this sheet is for before printing it.")
-    clamped = st.session_state.get("b_record_clamped")
-    if clamped:
-        st.warning(
-            "These values in the record are outside what the form accepts and "
-            "were raised to its minimum: " + ", ".join(clamped) +
-            ". Check them before printing.")
 
     written = {}
     pairs = st.columns(2)
@@ -1026,7 +760,7 @@ def _batch(name, props: dict) -> None:
         st.caption("Readings. None of these uses the sequence.")
         if sheet["measured"]:
             st.dataframe(pd.DataFrame(sheet["measured"], columns=["", "value"]),
-                         **FIT, hide_index=True)
+                         use_container_width=True, hide_index=True)
         else:
             st.caption("Nothing entered yet.")
     with blocks[1]:
@@ -1034,14 +768,14 @@ def _batch(name, props: dict) -> None:
         st.caption("A reading and a prediction, combined.")
         if sheet["derived"]:
             st.dataframe(pd.DataFrame(sheet["derived"], columns=["", "value"]),
-                         **FIT, hide_index=True)
+                         use_container_width=True, hide_index=True)
         else:
             st.caption("Nothing to derive yet.")
     with blocks[2]:
         st.markdown("**From the sequence**")
         st.caption("Theoretical, all of it.")
         st.dataframe(pd.DataFrame(sheet["theoretical"], columns=["", "value"]),
-                     **FIT, hide_index=True)
+                     use_container_width=True, hide_index=True)
 
     for note in sheet["derivation_notes"]:
         st.caption(note)
@@ -1055,28 +789,7 @@ def _batch(name, props: dict) -> None:
             st.error(f"The PDF could not be built: {exc}")
             return
         stamp = (written.get("lot") or name or "batch").replace(" ", "_")
-        both = st.columns(2)
-        with both[0]:
-            st.download_button(
-                "📄 Download the batch sheet", path.read_bytes(),
-                file_name=f"batch_{stamp}.pdf", mime="application/pdf",
-                key="b_pdf", **FIT)
-        with both[1]:
-            record = bn.batch_record(
-                name, props.get("sequence", ""), written,
-                {"a280": a280 or None, "mg_per_ml": mg_per_ml or None,
-                 "method": method, "dilution": dilution, "path_cm": path_cm,
-                 "volume_ul": volume or None, "measured_da": measured_da},
-                cystines, sheet=sheet, version=VERSION)
-            st.download_button(
-                "⬇️ Download the record (JSON)",
-                json.dumps(record, indent=1, ensure_ascii=False),
-                file_name=f"batch_{stamp}.json", mime="application/json",
-                key="b_json", **FIT)
-
-    st.caption(
-        "The PDF is for a human and a freezer box. The JSON is the same batch "
-        "in a form a database or a script can read, and the file **Reuse a "
-        "saved record** above takes back. Keep them together: nothing is "
-        "stored here, so the pair of files is the whole record. It is not an "
-        "audit trail, and nothing in it can tell whether it has been edited.")
+        st.download_button(
+            "📄 Download the batch sheet", path.read_bytes(),
+            file_name=f"batch_{stamp}.pdf", mime="application/pdf",
+            key="b_pdf", **FIT)
