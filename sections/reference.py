@@ -14,17 +14,16 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 import reference as rf
-from shell import FIT, go_to
+from shell import FIT, embed_html, go_to
 
-__version__ = "2026.10.30a"
+__version__ = "2026.11.04a"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 
-# Tall enough for the drawing plus its caption, in the iframe components.html
-# puts it in. The SVGs have no intrinsic height, so this is what decides it.
+# Tall enough for the drawing plus its caption, in the iframe it is
+# put in. The SVGs have no intrinsic height, so this is what decides it.
 CARD_HEIGHT = 250
 
 
@@ -129,11 +128,11 @@ def _aminoacids() -> None:
             svg = rf.structure_svg(row.aa)
             with columns[position % 5]:
                 if svg:
-                    # components.html rather than st.markdown: Streamlit's
-                    # markdown sanitiser keeps SVG elements but strips the
-                    # attributes that position them, so an inline drawing
-                    # comes out as an empty box.
-                    components.html(
+                    # An iframe rather than st.markdown: Streamlit's markdown
+                    # sanitiser keeps SVG elements but strips the attributes
+                    # that position them, so an inline drawing comes out as an
+                    # empty box.
+                    embed_html(
                         f"<div style='font:12px system-ui;text-align:center;"
                         f"color:inherit'>"
                         f"<div style='height:200px'>{svg}</div>"

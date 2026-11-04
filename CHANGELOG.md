@@ -16,6 +16,17 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+- **File uploads on the deployed app returned 500 while working locally.**
+  `.streamlit/config.toml` turned XSRF protection on; Streamlit Community
+  Cloud runs every app it hosts with it off, and with it on the upload goes to
+  a different origin than the one that issued the token, so the upload
+  endpoint refused the request before it reached any application code. There
+  was nothing in the logs, and the only symptom was "AxiosError: Request
+  failed with status code 500" on dropping a structure, a chromatogram or a
+  FASTA into any section. A test now fails if the setting comes back.
+
 ### Added
 
 - The manual is browsed one section at a time, with a **Jump to** selector,

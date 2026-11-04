@@ -11,16 +11,15 @@ from __future__ import annotations
 import re
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 import structure as stx
 import vhh_core as vc
 from compute import (st_confidence, st_disulfides, st_exposure,
                      st_identity_map, st_interface, st_interface_summary,
                      st_load, st_patches, st_resnum_map)
-from shell import FIT, current_sequences, footer
+from shell import FIT, current_sequences, embed_html, footer
 
-__version__ = "2026.10.28c"
+__version__ = "2026.11.04a"
 
 
 def render(method: str) -> None:
@@ -597,7 +596,7 @@ behalf would mean this server making requests that look like they came from you.
                 confidence=st_confidence(raw, fname, chain)
                 if colour_by == "confidence" else None,
                 highlight=highlight or None, surface=surface)
-            components.html(html, height=540, scrolling=False)
+            embed_html(html, height=540)
         except Exception as exc:
             st.error(f"The 3D view could not be rendered: {exc}")
 

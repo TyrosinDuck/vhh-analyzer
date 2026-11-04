@@ -32,7 +32,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.10.30b"
+__version__ = "2026.11.04a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -208,6 +208,33 @@ def anarci_status() -> bool:
 def go_to(target: str) -> None:
     """Switch section on the next rerun."""
     st.session_state["section"] = target
+
+
+def embed_html(html: str, height: int) -> None:
+    """Put a self-contained HTML fragment in an iframe.
+
+    Three things in this app need a real iframe rather than ``st.markdown``:
+    the flow diagram on the home page, the amino acid structures, and the
+    3Dmol viewer. Streamlit's markdown sanitiser keeps SVG elements but
+    strips the attributes that position them, so an inline drawing comes out
+    as an empty box, and the viewer needs its own script context.
+
+    Which call does that depends on the Streamlit version. ``st.iframe``
+    replaced ``st.components.v1.html``, which Streamlit says it will remove,
+    and the deployed app installs whatever version is current while a
+    development machine may be behind. Choosing here, once, is what keeps
+    both working, and keeps the deprecation warning out of the logs on the
+    version that has the replacement.
+
+    ``height`` stays an explicit number rather than ``st.iframe``'s
+    "content": the structures and the diagram are SVG with no intrinsic
+    height, so measuring them gives a flat panel.
+    """
+    if hasattr(st, "iframe"):
+        st.iframe(html, height=height)
+    else:                                     # Streamlit older than 1.60-ish
+        import streamlit.components.v1 as components
+        components.html(html, height=height, scrolling=False)
 
 
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=2)

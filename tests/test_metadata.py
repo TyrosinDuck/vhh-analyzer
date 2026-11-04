@@ -260,3 +260,68 @@ def test_the_changelog_documents_the_current_release():
     assert f"[{shell.RELEASE}]" in text, (
         f"CHANGELOG.md has no entry for {shell.RELEASE}, bump the changelog "
         f"when you bump the release")
+
+
+# --------------------------------------------------------------------------
+# Deployment configuration
+# --------------------------------------------------------------------------
+
+def test_xsrf_protection_stays_off():
+    """It broke every upload on the deployed app, and only there.
+
+    `.streamlit/config.toml` had ``enableXsrfProtection = true``. Locally that
+    is harmless: one origin, no proxy, the token validates. On Streamlit
+    Community Cloud the app sits behind their proxy, the upload goes to a
+    different origin than the one that issued the token, and the upload
+    endpoint answers 500 before the request reaches any of this code. So
+    nothing appeared in the logs, every test here passed, and the only symptom
+    was a user dropping a PDB into the structure section and getting
+    "AxiosError: Request failed with status code 500".
+
+    Community Cloud runs every app it hosts with this off. Setting it back on
+    turns off file uploads on the deployed app, and nowhere else, which is the
+    hardest kind of breakage to find.
+    """
+    config = (ROOT / ".streamlit" / "config.toml").read_text()
+    setting = re.search(r"^\s*enableXsrfProtection\s*=\s*(\w+)", config,
+                        re.MULTILINE)
+    assert setting, "enableXsrfProtection is not set in .streamlit/config.toml"
+    assert setting.group(1) == "false", (
+        "enableXsrfProtection is on again; this disables every file upload on "
+        "Community Cloud while working perfectly on your machine")
+
+
+def test_the_upload_cap_is_what_the_manual_says():
+    """Two numbers in two files that have to agree, and nothing links them."""
+    config = (ROOT / ".streamlit" / "config.toml").read_text()
+    size = re.search(r"^\s*maxUploadSize\s*=\s*(\d+)", config, re.MULTILINE)
+    assert size, "maxUploadSize is not set in .streamlit/config.toml"
+    manual = (ROOT / "MANUAL.md").read_text()
+    assert f"{size.group(1)} MB per file" in manual, (
+        f"the config caps uploads at {size.group(1)} MB and the manual says "
+        f"something else")
+
+
+def test_nothing_calls_the_deprecated_html_component_directly():
+    """One place decides how an iframe is drawn, and it is `shell.embed_html`.
+
+    Streamlit replaced ``st.components.v1.html`` with ``st.iframe`` and says
+    it will remove the old one. The deployed app installs whatever Streamlit
+    is current, a development machine may be behind, and three screens need a
+    real iframe: the home diagram, the amino acid structures and the 3D
+    viewer. A second call site that picked the API for itself would be a
+    screen that breaks on one of the two versions, silently, because it only
+    draws when you open that panel.
+    """
+    offenders = []
+    for path in sorted(ROOT.glob("sections/*.py")) + sorted(ROOT.glob("*.py")):
+        if path.name == "shell.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), start=1):
+            code = line.split("#", 1)[0]
+            if "components.html(" in code or "components.v1" in code:
+                offenders.append(f"{path.name}:{number}")
+    assert not offenders, (
+        "these call the deprecated component directly instead of "
+        "shell.embed_html: " + ", ".join(offenders))

@@ -33,7 +33,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 import cloning as cl
 import generator as gn
@@ -106,19 +105,19 @@ REQUIRED_MODULES = {"vhh_core": "2026.10.28b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.10.28e",
-                    "shell": "2026.10.30b", "compute": "2026.10.29b",
+                    "shell": "2026.11.04a", "compute": "2026.10.29b",
                     "reference": "2026.10.30a",
                     "sections.analysis": "2026.10.28a",
                     "sections.bench": "2026.10.30e",
-                    "sections.reference": "2026.10.30a",
+                    "sections.reference": "2026.11.04a",
                     "bench": "2026.10.30e",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
-                    "sections.home": "2026.10.30a",
+                    "sections.home": "2026.11.04a",
                     "sections.library": "2026.10.28c",
                     "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
-                    "sections.structure": "2026.10.28c"}
+                    "sections.structure": "2026.11.04a"}
 # Resolved from the dict by name rather than from a second hand-written list of
 # (name, wanted, module) triples. That list was the duplication the dict was
 # supposed to avoid: adding a module meant editing both, and forgetting the

@@ -8,19 +8,18 @@ The screen only. Its computations live in `compute.py`; the chrome it uses
 from __future__ import annotations
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT,
                    ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
-                   current_sequences, footer, go_to, report_url)
+                   current_sequences, embed_html, footer, go_to, report_url)
 
-__version__ = "2026.10.30a"
+__version__ = "2026.11.04a"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
 # dependency for that would be a dependency to keep working.
 #
-# It is rendered through components.html rather than st.markdown, which was the
+# It is rendered through an iframe rather than st.markdown, which was the
 # first attempt and does not work: Streamlit's markdown sanitiser keeps the SVG
 # elements but strips their positioning attributes, so the shapes vanish and the
 # labels reflow as a paragraph of loose words. In a component the markup is
@@ -189,11 +188,11 @@ def render() -> None:
                 f"{'…' if len(staged) > 6 else ''}")
 
     with st.expander("How the sections fit together"):
-        components.html(
+        embed_html(
             "<style>body{margin:0;background:transparent;color:#31333F;"
             "font-family:system-ui,-apple-system,sans-serif}"
             "@media (prefers-color-scheme: dark){body{color:#fafafa}}</style>"
-            + FLOW_DIAGRAM, height=720, scrolling=False)
+            + FLOW_DIAGRAM, height=720)
         st.markdown("""
 Three things the diagram cannot carry:
 
