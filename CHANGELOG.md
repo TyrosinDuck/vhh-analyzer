@@ -16,6 +16,36 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The home page diagram was unreadable at night.** The diagram and the
+  amino acid drawings sit in iframes, which inherit no colour from the page,
+  and chose their text colour from `prefers-color-scheme`, the operating
+  system's setting, while the page around them follows the app's theme. The
+  app was always light (see the next entry), so on any device whose system
+  had switched to dark mode, at night for many, the text turned near-white
+  on a white page. Choosing Dark in the menu on a light system, possible
+  from this release, would have done the reverse. Both iframes now take
+  their text colour from the app instead, through
+  `shell.follow_app_theme()`: the initial colour comes from
+  `st.context.theme`, which is right on a first load but stale after a
+  switch until the next rerun, and a small script then reads the page's
+  background and follows a switch at once. Verified in a headless browser
+  with the system light and dark, crossed with the app theme light, dark
+  and following the system, on the home page diagram and on the twenty
+  amino acid drawings.
+- **The app was stuck in a light theme, and flashed dark first on a dark
+  system.** `.streamlit/config.toml` set the accent colour under a bare
+  `[theme]`, which makes Streamlit build one custom theme on the light one:
+  the System / Light / Dark choice was missing from the app menu, and with
+  the system in dark mode the page painted dark, then turned white about
+  0.3 s later. The accent colour is now set under `[theme.light]` and
+  `[theme.dark]`; the menu offers the three choices and the page loads in
+  the system's theme without the flip. Measured with Streamlit 1.66.1 in a
+  headless browser, by sampling the page background every 0.15 s during
+  the load, before and after the change. A test fails if a colour is set
+  under a bare `[theme]` again.
+
 ## [1.1.0], 2026-11-04
 
 A release built around the bench: a new Batch & QC section, which turns

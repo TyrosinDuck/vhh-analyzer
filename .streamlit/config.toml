@@ -40,5 +40,17 @@ headless = true
 [browser]
 gatherUsageStats = false
 
-[theme]
+# The accent colour is set separately for the light and the dark theme, and
+# never under a bare [theme]. A colour under [theme] defines one custom theme,
+# built on the light one, which has two visible effects, both measured with
+# Streamlit 1.66.1 in a headless browser with the system set to dark: the
+# Light/Dark/System choice disappears from the app menu, and the page first
+# paints dark (Streamlit follows the system before the custom theme arrives)
+# and then flips to white about 0.3 s later. Split as below, the menu offers
+# System, Light and Dark, and the page loads in the system theme without the
+# flip.
+[theme.light]
+primaryColor = "#4c72b0"
+
+[theme.dark]
 primaryColor = "#4c72b0"

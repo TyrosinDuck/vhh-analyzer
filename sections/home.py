@@ -14,9 +14,10 @@ import streamlit as st
 from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
                    current_sequences, embed_html, footer, go_to,
-                   group_header_html, report_url, sections_by_group)
+                   follow_app_theme, group_header_html, report_url,
+                   sections_by_group)
 
-__version__ = "2026.11.04e"
+__version__ = "2026.11.05a"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -29,8 +30,9 @@ __version__ = "2026.11.04e"
 # untouched.
 #
 # The cost of a component is an iframe, which inherits no colour from the page,
-# so the theme is handled inside it: `currentColor` follows the body colour, and
-# a prefers-color-scheme rule sets that colour to match a light or dark theme.
+# so the theme is handled inside it: `currentColor` follows the body colour,
+# and `shell.follow_app_theme` sets that colour from the app's theme (not the
+# operating system's, see there for why).
 FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;height:auto;max-width:900px" role="img"
      aria-label="How the seven sections feed each other. You supply the input
@@ -310,9 +312,9 @@ def render() -> None:
 
     with st.expander("How the sections fit together"):
         embed_html(
-            "<style>body{margin:0;background:transparent;color:#31333F;"
-            "font-family:system-ui,-apple-system,sans-serif}"
-            "@media (prefers-color-scheme: dark){body{color:#fafafa}}</style>"
+            follow_app_theme()
+            + "<style>body{font-family:system-ui,-apple-system,sans-serif}"
+              "</style>"
             + flow_diagram(), height=760)
         st.markdown("""
 Three things the diagram cannot carry:

@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.04k"
+__version__ = "2026.11.05a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -71,7 +71,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261104"
+BUILD = "20261105"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked
@@ -278,6 +278,59 @@ def anarci_status() -> bool:
 def go_to(target: str) -> None:
     """Switch section on the next rerun."""
     st.session_state["section"] = target
+
+
+# Body text colours of Streamlit's own light and dark themes, so text drawn
+# inside an iframe matches the text around it.
+THEME_TEXT = {"light": "#31333F", "dark": "#fafafa"}
+
+
+def follow_app_theme() -> str:
+    """A <style> and <script> that make an iframe's text follow the app theme.
+
+    An iframe inherits no colour from the page around it, and the app can be
+    light or dark. The iframes used to choose with
+    ``@media (prefers-color-scheme: dark)``, which follows the *operating
+    system*, not the app: with the system in dark mode and the app in light,
+    which is what every visitor got at night while the theme was forced to
+    light, the text turned near-white on a white page and the home page
+    diagram became unreadable; choosing Dark in the menu on a light system
+    does the reverse. Seen in a headless browser in both cases.
+
+    Two layers, because neither is enough alone, both measured with Streamlit
+    1.66.1:
+
+    - the initial colour comes from ``st.context.theme.type``, which is right
+      on a first load but stays at the old value after the user switches
+      theme in the menu, until something reruns the script;
+    - a script then reads the background of the page around the iframe and
+      sets the text colour from it, on load and every half second, which
+      follows a switch at once. It needs the iframe to share the page's
+      origin, as Streamlit's component iframes do; if that ever fails, the
+      initial colour stays, which is right until the next theme switch.
+
+    "Dark" means a background whose weighted RGB mean, with the Rec. 709
+    luma weights, is below half scale: a threshold for telling Streamlit's
+    two backgrounds apart (#ffffff and #0e1117), not a measure of anything.
+    """
+    try:
+        kind = st.context.theme.type
+    except Exception:       # outside a running app, e.g. in a unit test
+        kind = None
+    initial = THEME_TEXT["dark" if kind == "dark" else "light"]
+    return (
+        f"<style>body{{margin:0;background:transparent;color:{initial}}}</style>"
+        "<script>(function(){"
+        "function sync(){try{"
+        "var app=window.parent.document.querySelector('.stApp');"
+        "if(!app)return;"
+        "var c=getComputedStyle(app).backgroundColor.match(/\\d+/g).map(Number);"
+        "var dark=(0.2126*c[0]+0.7152*c[1]+0.0722*c[2])<128;"
+        f"document.body.style.color=dark?'{THEME_TEXT['dark']}':'{THEME_TEXT['light']}';"
+        "}catch(e){}}"
+        "if(document.body){sync();}else{addEventListener('DOMContentLoaded',sync);}"
+        "setInterval(sync,500);"
+        "})();</script>")
 
 
 def embed_html(html: str, height: int) -> None:

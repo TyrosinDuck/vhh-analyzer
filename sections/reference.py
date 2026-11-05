@@ -16,9 +16,9 @@ import pandas as pd
 import streamlit as st
 
 import reference as rf
-from shell import FIT, embed_html, go_to
+from shell import FIT, embed_html, follow_app_theme, go_to
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.05a"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 
@@ -138,10 +138,7 @@ def _aminoacids() -> None:
                         f"<div style='height:200px'>{svg}</div>"
                         f"<b>{row.name}</b> &middot; {row.code} ({row.aa})"
                         f"</div>"
-                        f"<style>:root{{color-scheme:light dark}}"
-                        f"body{{margin:0;color:#262730}}"
-                        f"@media (prefers-color-scheme:dark)"
-                        f"{{body{{color:#fafafa}}}}</style>",
+                        + follow_app_theme(),
                         height=CARD_HEIGHT)
                 else:
                     st.caption(f"{row.name} ({row.aa}): no drawing")

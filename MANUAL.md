@@ -81,6 +81,10 @@ always written next to it. The text on the buttons is white, and the green and
 the orange are dark enough for it to meet the WCAG 2.1 AA minimum of 4.5:1 for
 normal text.
 
+The app follows your system's light or dark setting. To choose one regardless
+of the system, open the **⋮** menu at the top right and pick **Light**,
+**Dark** or **System**; the choice is kept by your browser, not by the app.
+
 The groups say where to look, not in which order to work. Data crosses them in
 both directions: Sanger sequencing (DNA) feeds the analysis (Protein), the
 library (Protein) sends DNA straight to gene diagnosis, and the analysis feeds
