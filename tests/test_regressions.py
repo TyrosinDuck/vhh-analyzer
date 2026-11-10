@@ -670,3 +670,27 @@ def test_the_molar_mass_keeps_two_decimals_in_dalton():
     props = vc.characterize("x", seq)
     assert props["mw_da"] == round(ProteinAnalysis(seq).molecular_weight(), 2)
     assert props["mw_da"] != props["mw_kda"] * 1000
+
+
+def test_properties_table_shows_two_decimals():
+    """pI and the net charge read 8.620000 and 1.480000 in the Properties table.
+
+    A second ``Styler.format`` with a dict reset every other column to pandas'
+    six-decimal default. The table now formats in one call: two decimals by
+    default, integers for the extinction coefficients, three decimals for the
+    A280 factors, and no thousands separator.
+    """
+    from sections.analysis import properties_styler
+    seq = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+           "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYDYWGQGTQVTVSS")
+    cols = ["name", "mw_da", "pI", "net_charge", "gravy", "instability_index",
+            "ext_coeff_cystines", "ext_coeff_reduced", "A280_0.1pct"]
+    frame = pd.DataFrame([vc.characterize("vhh", seq)])[cols]
+    body = properties_styler(frame)._translate(True, True)["body"][0]
+    shown = {cols[i]: cell["display_value"]
+             for i, cell in enumerate(c for c in body if c.get("type") == "td")}
+    for col in ("pI", "net_charge", "gravy", "instability_index", "mw_da"):
+        assert re.fullmatch(r"-?\d+\.\d{2}", shown[col]), (col, shown[col])
+    assert re.fullmatch(r"\d+", shown["ext_coeff_cystines"])
+    assert re.fullmatch(r"\d\.\d{3}", shown["A280_0.1pct"])
+    assert "," not in "".join(shown.values())

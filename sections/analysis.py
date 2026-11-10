@@ -50,7 +50,7 @@ from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
                    anarci_status, current_sequences, fig_to_png, footer, go_to,
                    usage_prompt)
 
-__version__ = "2026.11.10e"
+__version__ = "2026.11.10f"
 
 
 @dataclass
@@ -175,6 +175,27 @@ def _triage(r: Run) -> None:
                            file_name="triage.csv", mime="text/csv")
 
 
+# Columns of the Properties table that do not take the two-decimal default.
+_PROPERTY_FORMATS = {"ext_coeff_cystines": "{:d}", "ext_coeff_reduced": "{:d}",
+                     "A280_0.1pct_cystines": "{:.3f}", "A280_0.1pct": "{:.3f}"}
+
+
+def properties_styler(frame: pd.DataFrame):
+    """The Properties table as displayed: two decimals unless listed above.
+
+    One ``format`` call on purpose. A second ``Styler.format`` given a dict
+    resets every column missing from that dict to pandas' default of six
+    decimals, which is how pI and the net charge came to read 8.620000.
+    No thousands separator anywhere; the mass keeps its two decimals in Da.
+    """
+    formats = {c: f for c, f in _PROPERTY_FORMATS.items() if c in frame.columns}
+    styler = frame.style.format(formats, precision=2, na_rep="")
+    shaded = [c for c in ("gravy", "instability_index") if c in frame.columns]
+    if shaded:
+        styler = styler.background_gradient(subset=shaded, cmap="RdYlGn_r")
+    return styler
+
+
 def _identity(r: Run) -> None:
     """The identity family."""
     # One line each rather than one wrapped tuple: this is the whole of
@@ -199,15 +220,8 @@ def _identity(r: Run) -> None:
                      "instability_index", "aliphatic_index", "gravy",
                      "aromaticity", "net_charge", "n_Cys", "n_Lys",
                      "n_primary_amines"]
-        # Explicit printf formats: the mass to two decimals in Da rather than
-        # rounded to kDa, the extinction coefficients as integers, and no
-        # thousands separator anywhere.
         st.dataframe(
-            df[main_cols].style.format(precision=2).format(
-                {"mw_da": "{:.2f}", "ext_coeff_cystines": "{:d}",
-                 "ext_coeff_reduced": "{:d}", "A280_0.1pct_cystines": "{:.3f}",
-                 "A280_0.1pct": "{:.3f}"}).background_gradient(
-                subset=["gravy", "instability_index"], cmap="RdYlGn_r"),
+            properties_styler(df[main_cols]),
             **FIT, hide_index=True,
             column_config={
                 "mw_da": st.column_config.NumberColumn(
@@ -226,7 +240,9 @@ def _identity(r: Run) -> None:
                     "A280 (1 mg/mL) cystines", format="%.3f"),
                 "A280_0.1pct": st.column_config.NumberColumn(
                     "A280 (1 mg/mL) reduced", format="%.3f"),
-                "net_charge": st.column_config.NumberColumn(f"Charge pH {ph}"),
+                "pI": st.column_config.NumberColumn("pI", format="%.2f"),
+                "net_charge": st.column_config.NumberColumn(f"Charge pH {ph}",
+                                                            format="%.2f"),
             })
 
         with st.expander("What these descriptors mean"):

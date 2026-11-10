@@ -53,6 +53,11 @@ ran, from its Zenodo record.
   mass is shown in Da with two decimals instead of kDa rounded to 10 Da, in
   the Properties table, the construct builder and the PDF report, which also
   carries both coefficients now. `mw_kda` is still returned.
+  The first build of this change showed pI and the net charge with six
+  decimals: a second `Styler.format` call with a dict resets the columns it
+  does not name to pandas' default. The table is now formatted in one call,
+  two decimals unless a column says otherwise, and a test reads the
+  displayed values.
 - **One identity heatmap at a time.** The Alignment tab drew the full-length
   and the CDR3 identity matrices side by side; an **Identity over** selector
   now shows one, and both stay downloadable as CSV. The caption says which
