@@ -30,9 +30,77 @@ ran, from its Zenodo record.
   The issue is pre-filled through the URL, like the existing bug report,
   rather than through an issue template, so the "Report a problem" link opens
   exactly what it opened before.
+  The home page panel is collapsed at the bottom of a page people leave as
+  soon as they have picked a section, so the request is also one line, in the
+  style of the captions around it, under the analysis downloads and under the
+  batch sheet: right after the app has given the user something to keep. The
+  links there pre-fill which screen they came from. On the home page the
+  **Tell us on GitHub** button now has the same weight as **Report a problem
+  on GitHub** next to it, rather than being made louder than the section
+  buttons.
+
+### Changed
+
+- **One identity heatmap at a time.** The Alignment tab drew the full-length
+  and the CDR3 identity matrices side by side; an **Identity over** selector
+  now shows one, and both stay downloadable as CSV. The caption says which
+  matrix answers which question: CDR3 tells whether two clones are the same
+  binder, full-length separates variants of one clone that differ only in
+  their frameworks. The PDF report still carries both.
+- **The two CDR3 identities are now explained in the app.** The Alignment
+  tab and Clonal families both compute a CDR3 identity matrix, with different
+  gap penalties (−12/−1 and −11/−1) and different denominators (alignment
+  length, and length of the longer CDR3, kept from the Sanger notebook), so
+  their CSV files could give different values for the same pair with nothing
+  in the app saying why. Both tabs now carry the same note, written by one
+  function, with the values the two definitions give for one example pair, a
+  CDR3 shifted by two residues: 73.3% against 84.6%. The values are computed
+  by the two functions when the page is drawn, and a test fails if the
+  example stops differing or if two contained CDR3s stop agreeing. On 396
+  generated pairs where one CDR3 lies within the other the two agreed every
+  time; on 1500 random pairs, in 966. Both definitions are kept.
 
 ### Fixed
 
+- **Opening Comparison with 50 sequences restarted the server.** The
+  pairwise identity heatmap grew by 1.1 inch a sequence and wrote a number in
+  every cell: at 50 sequences, the app's limit, that is a 58 x 47 inch figure
+  of about 110 million pixels at the app's 200 dpi, with 2500 labels. Driving
+  the app through `AppTest` with 50 synthetic VHHs, the Comparison family
+  alone peaked at 5671 MB of memory and took 53 s, on a Community Cloud
+  container that can have 690 MB; the server was killed and started again,
+  which in the log shows only as a fresh `Uvicorn server started` line.
+  The figure is now capped at 14 inches on its longest side, and above 20
+  sequences the cells carry no number, since they would be too small to read;
+  the full-length and CDR3 matrices can be downloaded as CSV under the
+  heatmaps instead. `png_identity` was also the only figure helper in
+  `compute.py` without a cache, so every rerun of the family redrew both
+  heatmaps; it is cached now, and a test fails if a `png_` helper is added
+  without a cache. Same measurement after the change: 646 MB peak, 23 s.
+- **The charge and hydropathy profiles drew every sequence at once.** One
+  2.4 inch panel per sequence made the figure grow with the set: rendering it
+  took about 13 MB for one sequence, 106 MB for 10 and 516 MB for 50,
+  measured, and with 50 sequences the Identity family peaked at 1089 MB. The
+  Plots tab now works like Chou–Fasman: a **Sequence** selector draws one
+  profile, and **Show all** draws one image per sequence, one after the other.
+  The PNG download keeps the single figure up to 10 sequences
+  (`compute.PROFILES_COMBINED_MAX`) and becomes a ZIP with one PNG per
+  sequence above that; the PDF report follows the same rule. Identity with
+  50 sequences, same measurement: 407 MB peak, 6 s instead of 19 s.
+- **The PDF report could not be built.** Pressing **Build PDF report** raised
+  `NameError: name 'VERSION' is not defined`, whatever the input:
+  `VERSION`, `AUTHOR` and `APP_NAME` were used in the Download tab but never
+  imported from `shell`, and with the secondary-structure plots included the
+  Chou–Fasman window was read through a variable local to the Plots tab,
+  which would have raised next. Every screen rendered, and no test pressed
+  the button. The window is now read from the session, and a smoke test
+  builds the report with and without those plots and checks that a PDF comes
+  out. With 50 sequences the report builds, in about 30 s and 7 MB, but the
+  build peaked at about 870 MB in the same `AppTest` measurement, mostly
+  from the two identity heatmaps and the alignment; that is not addressed
+  here.
+- The manual said the downloaded figures were 300 dpi PNG; they are
+  200 dpi, the resolution `shell.fig_to_png` renders every figure at.
 - **The home page diagram was unreadable at night.** The diagram and the
   amino acid drawings sit in iframes, which inherit no colour from the page,
   and chose their text colour from `prefers-color-scheme`, the operating

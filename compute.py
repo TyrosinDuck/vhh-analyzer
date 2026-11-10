@@ -43,7 +43,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.10c"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -163,6 +163,42 @@ def png_charge(frame, seqs, ph):
 @st.cache_data(**_FIG_CACHE)
 def png_profiles(seqs, anns, window):
     return fig_to_png(vc.plot_profiles(seqs, anns, window=window), close=True)
+
+
+# The profile figure stacks one 2.4 inch panel per sequence, so its cost grows
+# with the set: measured at the app's 200 dpi, about 13 MB to render for one
+# sequence, 106 MB for 10, 211 MB for 20 and 516 MB for 50, the last enough on
+# its own to exhaust a 690 MB container. Up to this many sequences the panels
+# are drawn as one figure; above it, one figure per sequence, rendered and
+# released one at a time.
+PROFILES_COMBINED_MAX = 10
+
+
+def _profile_png(name, seq, ann, window):
+    return fig_to_png(vc.plot_profiles({name: seq}, {name: ann} if ann else None,
+                                       window=window), close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_profile_one(name, seq, ann, window):
+    """Charge and hydropathy profile of a single sequence."""
+    return _profile_png(name, seq, ann, window)
+
+
+@st.cache_data(**_FIG_CACHE)
+def profiles_zip(seqs, anns, window):
+    """One profile PNG per sequence, in a ZIP, for sets too large for one figure.
+
+    Rendered directly rather than through ``png_profile_one`` so that a set of
+    50 does not push every other figure out of a cache of 24 entries.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, (name, seq) in enumerate(seqs.items(), start=1):
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "sequence"
+            zf.writestr(f"profiles/{i:02d}_{safe}.png",
+                        _profile_png(name, seq, (anns or {}).get(name), window))
+    return buf.getvalue()
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -344,9 +380,30 @@ def png_gene_diagnosis(dna, expected, cluster_window, gc_window):
     return fig_to_png(cdn.plot_diagnosis(result, gc_window), close=True)
 
 
-def png_identity(seqs, anns, region):
-    mat = vc.identity_matrix(seqs, anns, region=region) if region \
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def identity_for(seqs, anns, region):
+    """Pairwise identity matrix, full-length or restricted to one region."""
+    return vc.identity_matrix(seqs, anns, region=region) if region \
         else vc.identity_matrix(seqs)
+
+
+# Two CDR3s, the second the first shifted by two residues, for which the two
+# identity definitions in the app disagree. The note that explains the
+# difference shows the values the two functions actually return for this pair,
+# so it cannot drift from the code.
+CDR3_IDENTITY_EXAMPLE = ("AADRGYSSSWYDY", "DRGYSSSWYDYAA")
+
+
+@st.cache_data(show_spinner=False)
+def cdr3_identity_example():
+    """``(a, b, alignment_identity, family_identity)`` for the example pair."""
+    a, b = CDR3_IDENTITY_EXAMPLE
+    return a, b, vc.pairwise_identity(a, b), vc.pairwise_scores(a, b)[0]
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_identity(seqs, anns, region):
+    mat = identity_for(seqs, anns, region)
     if len(mat) < 2:
         return None
     title = f"{region} identity (%)" if region else "Full-length identity (%)"

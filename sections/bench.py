@@ -23,9 +23,9 @@ import bench as bn
 import vhh_core as vc
 from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, current_sequences,
-                   footer)
+                   footer, usage_prompt)
 
-__version__ = "2026.11.04e"
+__version__ = "2026.11.10a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -1083,3 +1083,4 @@ def _batch(name, props: dict) -> None:
         "saved record** above takes back. Keep them together: nothing is "
         "stored here, so the pair of files is the whole record. It is not an "
         "audit trail, and nothing in it can tell whether it has been edited.")
+    usage_prompt("Batch & QC, batch sheet")

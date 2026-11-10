@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.28b"
+__version__ = "2026.11.10a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -970,20 +970,40 @@ def identity_matrix(seqs: dict[str, str], annotations: dict | None = None,
     return mat
 
 
+# The heatmap used to grow by 1.1 inch a sequence with a number written in
+# every cell. At 50 sequences, the app's limit, that was a 58 x 47 inch figure,
+# about 110 million pixels at the 200 dpi the app renders at, carrying 2500
+# text labels: rendering it peaked at about 4 GB, measured, which is enough to
+# get the Community Cloud container killed. The figure is now capped, and the
+# numbers are written only while a cell stays large enough to read them; past
+# that the colour carries the figure and the exact values are in the CSV.
+IDENTITY_FIG_MAX = 14.0        # inches, longest side of the heatmap figure
+IDENTITY_LABEL_MAX = 20        # beyond this many sequences, cells carry no number
+
+
 def plot_identity(mat: pd.DataFrame, title: str = "Pairwise identity (%)"):
-    """Heatmap of an identity matrix, annotated with the values."""
+    """Heatmap of an identity matrix, annotated with the values.
+
+    Up to ``IDENTITY_LABEL_MAX`` sequences each cell carries its value; above
+    that the cells are too small to read and only the colour is drawn. The
+    figure never exceeds ``IDENTITY_FIG_MAX`` inches on its longest side.
+    """
     n = len(mat)
-    fig, ax = plt.subplots(figsize=(1.1 * n + 3, 0.9 * n + 2.4))
+    width, height = 1.1 * n + 3, 0.9 * n + 2.4
+    scale = min(1.0, IDENTITY_FIG_MAX / max(width, height))
+    fig, ax = plt.subplots(figsize=(width * scale, height * scale))
     data = mat.to_numpy(dtype=float)
     im = ax.imshow(data, cmap="viridis", vmin=min(50, np.nanmin(data)), vmax=100)
-    ax.set_xticks(range(n), mat.columns, rotation=45, ha="right", fontsize=8)
-    ax.set_yticks(range(n), mat.index, fontsize=8)
-    for i in range(n):
-        for j in range(n):
-            v = data[i, j]
-            if not np.isnan(v):
-                ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=8,
-                        color="white" if v < 85 else "black")
+    tick_size = 8 if n <= IDENTITY_LABEL_MAX else max(4, 8 * IDENTITY_LABEL_MAX / n)
+    ax.set_xticks(range(n), mat.columns, rotation=45, ha="right", fontsize=tick_size)
+    ax.set_yticks(range(n), mat.index, fontsize=tick_size)
+    if n <= IDENTITY_LABEL_MAX:
+        for i in range(n):
+            for j in range(n):
+                v = data[i, j]
+                if not np.isnan(v):
+                    ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=8,
+                            color="white" if v < 85 else "black")
     ax.set_title(title, fontsize=10)
     fig.colorbar(im, ax=ax, shrink=0.75, label="% identity")
     fig.tight_layout()

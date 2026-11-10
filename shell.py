@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.10a"
+__version__ = "2026.11.10b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -236,7 +236,7 @@ def report_url(screen: str = "") -> str:
     return f"{REPO_URL}/issues/new?title={quote('')}&body={quote(body)}"
 
 
-def usage_url() -> str:
+def usage_url(screen: str = "") -> str:
     """A GitHub "new issue" link inviting a user to say how they use the app.
 
     The app records nothing about what is done in it, so the hosting
@@ -246,13 +246,17 @@ def usage_url() -> str:
     pre-filled mechanism as `report_url`, rather than an issue template, so
     the version comes with it and a template cannot change what the existing
     bug link opens.
+
+    ``screen`` names where the link was clicked, when it was offered under a
+    result rather than on the home page, and is written into the first answer.
     """
     from urllib.parse import quote
 
     title = f"I use {APP_NAME} for ..."
     body = (
         f"**Version:** {VERSION}\n\n"
-        "**Which sections do you use?**\n\n\n"
+        "**Which sections do you use?**\n"
+        + (f"Asked from: {screen}\n" if screen else "") + "\n\n"
         "**What for?** (kind of project, how often)\n\n\n"
         "**What is missing or gets in the way?** (optional)\n\n\n"
         "This issue is public. No sequence is needed, and nothing unpublished "
@@ -261,16 +265,33 @@ def usage_url() -> str:
     return f"{REPO_URL}/issues/new?title={quote(title)}&body={quote(body)}"
 
 
-def usage_mailto() -> str:
+def usage_mailto(screen: str = "") -> str:
     """The private counterpart of `usage_url`: an e-mail with the same prompts."""
     from urllib.parse import quote
 
     subject = f"{APP_NAME}: how I use it"
     body = (f"Version: {VERSION}\n\n"
-            "Which sections do you use?\n\n\n"
+            "Which sections do you use?\n"
+            + (f"Asked from: {screen}\n" if screen else "") + "\n\n"
             "What for?\n\n\n"
             "What is missing or gets in the way? (optional)\n")
     return f"mailto:{CONTACT_EMAIL}?subject={quote(subject)}&body={quote(body)}"
+
+
+def usage_prompt(screen: str) -> None:
+    """One quiet line under a finished result, asking how the app is used.
+
+    The home page panel is collapsed at the bottom of a page people leave as
+    soon as they have picked a section, so almost nobody opens it. The moment
+    a user has a reason to answer is right after the app gave them something
+    they will keep, a report or a batch sheet, so the request is repeated
+    there, once per screen and in the same plain style as the captions around
+    it, rather than made louder on the home page.
+    """
+    st.caption(
+        "Used this in your work? A couple of lines on what for decide what "
+        f"gets improved next: [tell us on GitHub]({usage_url(screen)}), or "
+        f"[by e-mail]({usage_mailto(screen)}) to say it privately.")
 
 
 APP_NAME = "VHH tool box"

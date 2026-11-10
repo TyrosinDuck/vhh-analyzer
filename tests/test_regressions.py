@@ -527,3 +527,107 @@ def test_no_cached_function_is_cached_twice():
     assert not offenders, (
         "these functions carry more than one Streamlit cache decorator, which "
         "stores every result twice: " + ", ".join(offenders))
+
+
+def _identity_frame(n):
+    names = [f"s{i:02d}" for i in range(n)]
+    return pd.DataFrame(60.0, index=names, columns=names).where(
+        ~pd.DataFrame(False, index=names, columns=names), 100.0)
+
+
+def test_identity_heatmap_stays_bounded_at_the_sequence_limit():
+    """At 50 sequences the identity heatmap took the deployed app down.
+
+    The figure grew by 1.1 inch a sequence and wrote a number in every cell:
+    58 x 47 inches and 2500 labels at the app's limit of 50 sequences, about
+    110 million pixels at the 200 dpi the app renders at. Rendering it peaked
+    at about 4 GB, measured, on a Community Cloud container that can have
+    690 MB, so opening Comparison with 50 sequences restarted the server.
+    """
+    import matplotlib.pyplot as plt
+
+    n = vc.DEFAULTS["max_sequences"]
+    fig = vc.plot_identity(_identity_frame(n))
+    try:
+        assert max(fig.get_size_inches()) <= vc.IDENTITY_FIG_MAX + 1e-9
+        ax = fig.axes[0]
+        assert not ax.texts, "cells should carry no number past the label limit"
+    finally:
+        plt.close(fig)
+
+
+def test_identity_heatmap_keeps_its_numbers_for_small_sets():
+    """The cap must not cost the usual case its values."""
+    import matplotlib.pyplot as plt
+
+    for n in (5, vc.IDENTITY_LABEL_MAX):
+        fig = vc.plot_identity(_identity_frame(n))
+        try:
+            assert len(fig.axes[0].texts) == n * n
+        finally:
+            plt.close(fig)
+
+
+def test_every_figure_helper_is_cached():
+    """`png_identity` was the one figure helper without a cache.
+
+    Every rerun of the Comparison family, a slider moved, a checkbox ticked,
+    recomputed the pairwise identities and redrew both heatmaps, which at 50
+    sequences was also the most expensive figure in the app. Checked
+    structurally so the next `png_` helper cannot be added without one.
+    """
+    import ast
+
+    tree = ast.parse((ROOT / "compute.py").read_text(encoding="utf-8"))
+    missing = [node.name for node in tree.body
+               if isinstance(node, ast.FunctionDef)
+               and node.name.startswith("png_")
+               and not any("cache_data" in ast.unparse(d)
+                           for d in node.decorator_list)]
+    assert not missing, "figure helpers without a cache: " + ", ".join(missing)
+
+
+def test_profiles_zip_holds_one_png_per_sequence():
+    """Above PROFILES_COMBINED_MAX the profiles download is a ZIP.
+
+    One tall figure of 50 panels took 516 MB to render, measured, on a server
+    that can have 690 MB. The ZIP must carry every sequence, once, under a
+    file name that survives odd characters in the sequence name.
+    """
+    import io
+    import zipfile
+
+    import compute
+
+    frame = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+             "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYD{}WGQGTQVTVSS")
+    seqs = {"Nb 1": frame.format("Y"), "Nb/2": frame.format("F"),
+            "Nb:3": frame.format("W")}
+    data = compute.profiles_zip(seqs, {}, 7)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        names = zf.namelist()
+        assert len(names) == len(set(names)) == 3
+        assert all(n.startswith("profiles/") and n.endswith(".png") for n in names)
+        assert all(zf.read(n)[:8] == b"\x89PNG\r\n\x1a\n" for n in names)
+    assert compute.PROFILES_COMBINED_MAX < vc.DEFAULTS["max_sequences"]
+
+
+def test_the_two_cdr3_identity_definitions_note_is_true():
+    """The app says the Alignment and Clonal families tabs define CDR3
+    identity differently, and shows one pair where they disagree.
+
+    `pairwise_identity` divides by the alignment length, `pairwise_scores` by
+    the longer CDR3, with slightly different gap penalties. The note claims
+    they agree when one CDR3 lies within the other and differ when each
+    overhangs the other; if a change to either function made the example agree,
+    the note would show two equal numbers under a sentence saying they differ.
+    """
+    import compute
+
+    a, b = compute.CDR3_IDENTITY_EXAMPLE
+    assert vc.pairwise_identity(a, b) != vc.pairwise_scores(a, b)[0]
+
+    contained = [("ARDGYSSSWYDY", "ARDGYSSWYDY"),      # internal deletion
+                 ("AAGRWYTSGDYDY", "AAGRWYTSGDY")]     # truncated end
+    for x, y in contained:
+        assert vc.pairwise_identity(x, y) == vc.pairwise_scores(x, y)[0]

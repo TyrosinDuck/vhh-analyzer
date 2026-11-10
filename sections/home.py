@@ -17,7 +17,7 @@ from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    follow_app_theme, group_header_html, report_url,
                    sections_by_group, usage_mailto, usage_url)
 
-__version__ = "2026.11.10a"
+__version__ = "2026.11.10b"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -343,7 +343,7 @@ Three things the diagram cannot carry:
             "A couple of lines are enough: which sections you use, for what "
             "kind of project, and what is missing. It decides what gets "
             "improved next.")
-        st.link_button("Tell us on GitHub", usage_url(), **FIT)
+        st.link_button("Tell us on GitHub", usage_url(), type="primary", **FIT)
         st.markdown(f"No GitHub account, or would rather say it privately? "
                     f"[Send an e-mail]({usage_mailto()}).")
         st.caption("A GitHub issue is public, like any other: no sequence is "

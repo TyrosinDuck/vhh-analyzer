@@ -588,6 +588,25 @@ def test_the_app_invites_users_to_say_how_they_use_it():
     assert " " not in mail, "a mailto link with a raw space breaks in some clients"
 
 
+def test_the_usage_links_say_where_they_were_clicked():
+    """Offered under a result, the links carry the screen in the first answer.
+
+    Screen names contain "&" ("Batch & QC"): unescaped, it would end the
+    `body` parameter early and cut the issue short.
+    """
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    import shell
+
+    screen = "Batch & QC, batch sheet"
+    query = parse_qs(urlsplit(shell.usage_url(screen)).query)
+    assert sorted(query) == ["body", "title"], sorted(query)
+    assert f"Asked from: {screen}" in query["body"][0]
+    assert f"Asked from: {screen}" in unquote(shell.usage_mailto(screen))
+    assert "Asked from" not in unquote(shell.usage_url()), \
+        "the home page link should not claim to come from a screen"
+
+
 def test_the_contact_address_agrees_with_the_citation_file(citation):
     """The address is written twice, in shell.py and CITATION.cff; they must agree."""
     import shell

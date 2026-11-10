@@ -184,6 +184,89 @@ def test_analysis_renders_every_family(app):
         _no_failure(app, f"family {family}")
 
 
+def test_profiles_draw_one_sequence_unless_all_are_asked_for(app):
+    """With 50 sequences, the profile figure alone took 516 MB to draw.
+
+    The Plots tab now draws only the selected sequence, like Chou–Fasman, and
+    ``Show all`` draws one image per sequence. Both paths must render.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    identity = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+                if "Identity" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(identity).run()
+    _no_failure(app, "Identity family")
+
+    picks = [s for s in app.selectbox if s.key == "prof_pick"]
+    assert picks, "the profile sequence selector did not render"
+    picks[0].set_value(picks[0].options[-1]).run()
+    _no_failure(app, "profile of the last sequence")
+
+    [c for c in app.checkbox if c.key == "prof_all"][0].check().run()
+    _no_failure(app, "all profiles")
+    assert not [s for s in app.selectbox if s.key == "prof_pick"], \
+        "Show all should replace the selector"
+    [c for c in app.checkbox if c.key == "prof_all"][0].uncheck().run()
+
+
+def test_identity_heatmap_selector_and_cdr3_note(app):
+    """One identity heatmap at a time, and both tabs say how CDR3 identity
+    differs between them."""
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    comparison = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+                  if "Comparison" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(comparison).run()
+    _no_failure(app, "Comparison family")
+
+    view = [r for r in app.radio if r.key == "id_view"]
+    assert view and list(view[0].options) == ["Full-length", "CDR3"]
+    labels = [b.label for b in app.get("download_button")]
+    assert "Full-length identity (CSV)" in labels and "CDR3 identity (CSV)" in labels
+
+    note = "is not computed the same way here and in"
+    notes = [str(c.value) for c in app.caption if note in str(c.value)]
+    assert not any("**Clonal families**" in n for n in notes), \
+        "the Alignment tab carries the note in its CDR3 view only"
+    view[0].set_value("CDR3").run()
+    _no_failure(app, "CDR3 identity view")
+    notes = [str(c.value) for c in app.caption if note in str(c.value)]
+    assert any("**Clonal families**" in n for n in notes)
+    assert any("**Alignment**" in n for n in notes), \
+        "Clonal families should carry the same note"
+    [r for r in app.radio if r.key == "id_view"][0].set_value("Full-length").run()
+
+
+@pytest.mark.parametrize("with_cf", [False, True])
+def test_the_pdf_report_builds(app, with_cf):
+    """The PDF report raised ``NameError`` on every press of its button.
+
+    `VERSION`, `AUTHOR` and `APP_NAME` were used in the Download tab but never
+    imported from `shell`, and the Chou–Fasman window was read through a local
+    variable of the Plots tab. Every screen still rendered, so nothing but
+    pressing the button showed it.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    outputs = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+               if "Outputs" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(outputs).run()
+    app.session_state["pdf_bytes"] = None
+    box = [c for c in app.checkbox
+           if c.label.startswith("Include the per-sequence secondary")][0]
+    (box.check() if with_cf else box.uncheck()).run()
+    _click(app, "Build PDF report")
+    assert not app.exception, [str(e.value) for e in app.exception]
+    pdf = app.session_state["pdf_bytes"]
+    assert pdf and pdf[:5] == b"%PDF-", "no PDF was produced"
+
+
 def test_structure_renders_every_view(app, tmp_path):
     """A synthetic two-chain PDB: enough to reach the interface and 3D views.
 
@@ -296,6 +379,36 @@ def test_bench_renders_every_view(app):
         [r for r in app.radio if r.label == "View"][0].set_value(view).run()
         _no_failure(app, f"bench view {view}")
         assert _content_count(app) >= 6, f"bench view {view} looks empty"
+
+
+def test_finished_results_ask_how_the_app_is_used(app):
+    """The usage request is repeated under the batch sheet and the analysis
+    downloads, with a link that says where it was clicked.
+
+    On the home page it sits in a collapsed panel at the bottom of a page
+    people leave as soon as they have picked a section.
+    """
+    import shell
+    from sections import bench as bench_screen
+
+    _goto(app, "⚗️ Batch & QC")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        bench_screen.V_BATCH).run()
+    _no_failure(app, "batch sheet")
+    url = shell.usage_url("Batch & QC, batch sheet")
+    assert any(url in str(c.value) for c in app.caption), \
+        "no usage request under the batch sheet"
+
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    outputs = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+               if "Outputs" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(outputs).run()
+    url = shell.usage_url("Sequence analysis, Download")
+    assert any(url in str(c.value) for c in app.caption), \
+        "no usage request under the analysis downloads"
 
 
 def test_the_purification_balance_computes_in_the_screen(app):

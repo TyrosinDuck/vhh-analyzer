@@ -473,7 +473,9 @@ Four figures:
    theoretical pI, and the dotted line marks your working pH.
 3. **Per-residue profiles**, sliding-window charge and Kyte–Doolittle hydropathy
    along the sequence, with the CDRs shaded. This is where charged patches and
-   hydrophobic stretches become visible.
+   hydrophobic stretches become visible. With more than one sequence, only the
+   selected one is drawn; tick **Show all** to see every one, each as its own
+   image.
 4. **Predicted secondary structure (Chou–Fasman)**, helix and sheet propensity
    curves with a predicted-state track underneath.
 
@@ -487,6 +489,12 @@ getting one is not evidence that anything was predicted correctly.
 With more than one sequence, only the selected Chou–Fasman panel is drawn. Tick
 **Show all** to see every one, with many sequences this is the slowest thing the app
 does.
+
+The profiles and Chou–Fasman panels are drawn one sequence at a time because
+drawn together their cost grows with the set: the profile figure for 50
+sequences took about 516 MB to render, most of what the hosted app has. For
+the same reason the **Profiles** download (§3.15) is one figure up to 10
+sequences and a ZIP of one PNG per sequence above that.
 
 ### 3.5 CDR / Framework
 
@@ -799,13 +807,33 @@ for a
 quick look. The two sliders are independent, the alignment and the logo can be
 wrapped differently.
 
-Underneath, **two identity matrices**: full-length and CDR3-only. The second is
-the
-one that matters when triaging panning output. Two clones can share 90%+
-full-length
-identity while having unrelated CDR3s, they are the same scaffold, not the same
-binder. To turn that observation into actual groups, use **Clonal families**
+Underneath, **two identity matrices**, full-length and CDR3-only, shown one at
+a time: **Identity over** switches between them. Two clones can share 90%+
+full-length identity while having unrelated CDR3s: they are the same scaffold,
+not the same binder, and the CDR3 matrix is the one that matters when triaging
+panning output. The reverse holds for variants of one clone that differ only in
+their frameworks, humanization variants for instance: they share a CDR3, so
+the CDR3 matrix is uniformly 100% and the full-length one is where they differ.
+To turn the CDR3 observation into actual groups, use **Clonal families**
 (§3.12).
+
+Both matrices can be downloaded as CSV whichever is displayed. Above 20
+sequences the cells are too small to carry a readable number, so the heatmap
+shows the colour only and the CSV is where the values are; the figure itself
+stops growing at 14 inches on its longest side, which keeps 50 sequences within
+the memory of the hosted app.
+
+**The CDR3 identity here is not the one in Clonal families.** This tab aligns
+with BLOSUM62 and gaps −12/−1 (Biopython's `blastp` preset) and divides the
+identical residues by the alignment length, leaving out columns that are a gap
+in both. Clonal families aligns with BLOSUM62 and gaps −11/−1 and divides by
+the length of the longer CDR3, to stay identical to the Sanger screening
+notebook. The two usually agree when one CDR3 lies within the other, by an
+internal deletion or a truncated end, and differ when each overhangs the
+other: the same CDR3 shifted by two residues scores lower here than there. Both
+tabs say so and show the two values for that example, computed by the two
+functions rather than written down. Neither is more correct; compare values
+from one tab only.
 
 **Sequence logo.** Underneath, the same alignment as a logo: letter height shows
 what is conserved and what varies, which reads faster than the alignment itself
@@ -1027,6 +1055,11 @@ CDR3
 could not be annotated are left out rather than guessed at, they are listed
 explicitly when that happens.
 
+The CDR3 identities in this tab are divided by the length of the longer CDR3,
+not by the alignment length as in the Alignment tab (§3.9), so the two CSV
+files can give different values for the same pair. The tab says so under its
+downloads.
+
 ### 3.13 DNA
 
 Back-translation into *E. coli* codon-optimised DNA.
@@ -1119,7 +1152,10 @@ the DNA is translated back and compared to the construct before it is shown.
 
 ### 3.15 Download
 
-The results table as CSV, the figures as 300 dpi PNG, and a full PDF report.
+The results table as CSV, the figures as 200 dpi PNG, and a full PDF report.
+Above 10 sequences the charge and hydropathy profiles come as a ZIP with one
+PNG per sequence rather than as one figure, which would be too large for the
+server to draw (§3.4).
 
 The report is built on demand because it takes a few seconds. It contains the
 physico-chemical summary, then one section per sequence (properties,
@@ -2316,8 +2352,11 @@ footer, open a GitHub issue pre-filled with the version and three questions,
 which sections you use, for what kind of project, and what is missing. The
 issue is public, like any other, so leave sequences and anything confidential
 out of it; none is needed. Without a GitHub account, or to say it privately,
-the same panel opens an e-mail to the author with the same questions. Either
-is optional, and either decides what gets improved next.
+the same panel opens an e-mail to the author with the same questions. The
+same request appears as one line under the analysis downloads (§3.15) and
+under the batch sheet (§5.6), the two places where the app has just given you
+something to keep; there the links also say which screen they came from.
+Either is optional, and either decides what gets improved next.
 
 ---
 

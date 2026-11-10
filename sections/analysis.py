@@ -35,19 +35,22 @@ import repertoire as rep
 import triage as tg
 import vhh_core as vc
 from compute import (aggregation_for, analyze_with_progress, annotations,
+    cdr3_identity_example,
     classify_cached, comparison_for, ctm, disulfides_for, dna_for,
     families_for, generate_cached, generator_matrix, germline_data, gn,
-    hallmark_data, humanness_for, liabilities_for, pd, plt,
+    hallmark_data, humanness_for, identity_for, liabilities_for, pd, plt,
     png_aggregation, png_cdr_lengths, png_charge, png_chou_fasman,
     png_composition, png_construct, png_differences, png_family_dendrogram,
     png_identity, png_liability_map, png_liability_profile, png_logo,
-    png_msa, png_profiles, png_rarity, png_secondary_structure,
+    png_msa, png_profile_one, png_profiles, png_rarity,
+    png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
     proteases_for, rarity_tables, rep, repairs_for, repertoire_stats, st,
     tempfile, tg, triage_for, vc)
-from shell import (CACHE_TTL, EXAMPLE, FIT, anarci_status, current_sequences,
-                   fig_to_png, footer, go_to)
+from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
+                   anarci_status, current_sequences, fig_to_png, footer, go_to,
+                   usage_prompt)
 
-__version__ = "2026.10.28a"
+__version__ = "2026.11.10d"
 
 
 @dataclass
@@ -81,6 +84,26 @@ class Run:
     chosen: Any
     heavy_only_notice: Callable
     type_of: Callable
+
+
+def _cdr3_identity_note(other_tab: str) -> None:
+    """Say that the Alignment and Clonal families tabs define CDR3 identity
+    differently, with the values both definitions give for one example pair.
+
+    Shown in both tabs, from this one function, so the two cannot disagree.
+    """
+    a, b, aln_value, fam_value = cdr3_identity_example()
+    st.caption(
+        f"CDR3 identity is not computed the same way here and in **{other_tab}**. "
+        "Alignment: BLOSUM62, gaps −12/−1, identical residues over the alignment "
+        "length. Clonal families: BLOSUM62, gaps −11/−1, identical residues over "
+        "the length of the longer CDR3, as in the Sanger screening notebook. The "
+        "two usually agree when one CDR3 aligns entirely within the other and "
+        "differ when each overhangs the other at an end: "
+        f"`{a}` against `{b}` gives {aln_value:.1f}% in Alignment and "
+        f"{fam_value:.1f}% in Clonal families. Neither is more correct; they "
+        "answer slightly different questions, so compare values from one tab "
+        "only.")
 
 
 def _triage(r: Run) -> None:
@@ -260,7 +283,22 @@ def _identity(r: Run) -> None:
         st.caption("Each titration curve crosses zero at the theoretical pI of that "
                    "sequence.")
 
-        st.image(png_profiles(sequences, annotations, window), **FIT)
+        st.subheader("Charge and hydropathy profiles")
+        # One panel per sequence: drawn all at once for 50 sequences this was the
+        # most memory-hungry figure of the section, so, as for Chou–Fasman below,
+        # only the selected sequence is drawn unless every one is asked for, and
+        # then each gets its own image, rendered one after the other.
+        prof_names = list(sequences)
+        if len(prof_names) > 1:
+            show_all_prof = st.checkbox(f"Show all {len(prof_names)} sequences",
+                                        value=False, key="prof_all")
+            prof_shown = prof_names if show_all_prof else [
+                st.selectbox("Sequence", prof_names, key="prof_pick")]
+        else:
+            prof_shown = prof_names
+        for name in prof_shown:
+            st.image(png_profile_one(name, sequences[name], annotations.get(name),
+                                     window), **FIT)
         st.caption("Sliding-window charge (blue) and Kyte–Doolittle hydropathy (orange). "
                    "Shaded bands are the CDRs.")
 
@@ -833,18 +871,48 @@ def _compare(r: Run) -> None:
                                file_name="alignment.fasta", mime="text/plain")
 
             st.subheader("Pairwise identity")
-            cols_id = st.columns(2)
-            with cols_id[0]:
-                st.image(png_identity(aln_seqs, None, None), **FIT)
-            if aln_anns and any((a.get("CDR3") or {}).get("seq")
-                                for a in aln_anns.values()):
-                img_id3 = png_identity(aln_seqs, aln_anns, "CDR3")
-                if img_id3:
-                    with cols_id[1]:
-                        st.image(img_id3, **FIT)
-            st.caption("Two clones from the same panning can share 90%+ full-length "
-                       "identity while having unrelated CDR3s, the second matrix is the "
-                       "one that tells you whether they are really the same binder.")
+            has_cdr3 = bool(aln_anns) and any((a.get("CDR3") or {}).get("seq")
+                                              for a in aln_anns.values())
+            id_view = st.radio(
+                "Identity over", ["Full-length", "CDR3"] if has_cdr3
+                else ["Full-length"], horizontal=True, key="id_view",
+                help="Full-length identity is mostly the frameworks, which vary "
+                     "little between VHHs; CDR3 identity says whether two clones "
+                     "are the same binder. Variants that differ only in their "
+                     "frameworks, humanization variants for instance, share a "
+                     "CDR3 and are told apart by the full-length matrix.")
+            id_region = "CDR3" if id_view == "CDR3" else None
+            id_cols = st.columns([3, 2])
+            img_id = png_identity(aln_seqs, aln_anns if id_region else None,
+                                  id_region)
+            if img_id:
+                id_cols[0].image(img_id, **FIT)
+            else:
+                id_cols[0].info("Fewer than two sequences have a CDR3 to compare.")
+            with id_cols[1]:
+                st.caption("Two clones from the same panning can share 90%+ "
+                           "full-length identity while having unrelated CDR3s: "
+                           "the CDR3 matrix is the one that tells you whether "
+                           "they are really the same binder. The reverse holds "
+                           "for variants of one clone that differ only in their "
+                           "frameworks, which the full-length matrix separates.")
+                if len(aln_seqs) > vc.IDENTITY_LABEL_MAX:
+                    st.caption(f"Above {vc.IDENTITY_LABEL_MAX} sequences the cells "
+                               "are too small to carry a readable number, so only "
+                               "the colour is drawn; the exact values are in the "
+                               "CSV files.")
+                st.download_button(
+                    "Full-length identity (CSV)",
+                    identity_for(aln_seqs, None, None).round(1).to_csv(),
+                    file_name="identity_matrix.csv", mime="text/csv")
+                if has_cdr3:
+                    st.download_button(
+                        "CDR3 identity (CSV)",
+                        identity_for(aln_seqs, aln_anns, "CDR3").round(1).to_csv(),
+                        file_name="cdr3_identity_matrix_alignment.csv",
+                        mime="text/csv")
+            if id_region:
+                _cdr3_identity_note("Clonal families")
 
         if len(aln_seqs) >= 2:
             st.divider()
@@ -1056,6 +1124,7 @@ def _compare(r: Run) -> None:
                                   fam["identity"].round(1).to_csv(),
                                   file_name="cdr3_identity_matrix.csv",
                                   mime="text/csv")
+            _cdr3_identity_note("Alignment")
 
             with st.expander("One representative per family, as FASTA"):
                 reps = {r: heavy_sequences[r]
@@ -1448,8 +1517,17 @@ def _outputs(r: Run) -> None:
                            file_name="secondary_structure.png", mime="image/png")
         st.download_button("Charge (PNG)", png_charge(df, sequences, ph),
                            file_name="charge.png", mime="image/png")
-        st.download_button("Profiles (PNG)", png_profiles(sequences, annotations, window),
-                           file_name="profiles.png", mime="image/png")
+        if len(sequences) <= PROFILES_COMBINED_MAX:
+            st.download_button("Profiles (PNG)",
+                               png_profiles(sequences, annotations, window),
+                               file_name="profiles.png", mime="image/png")
+        else:
+            st.download_button("Profiles, one PNG per sequence (ZIP)",
+                               profiles_zip(sequences, annotations, window),
+                               file_name="profiles.zip", mime="application/zip")
+            st.caption(f"Above {PROFILES_COMBINED_MAX} sequences the profiles are "
+                       "exported one image per sequence rather than as one tall "
+                       "figure, which the server would not have the memory to draw.")
 
         st.divider()
         st.markdown("### Full PDF report")
@@ -1469,10 +1547,24 @@ def _outputs(r: Run) -> None:
             figures = {
                 "Secondary structure composition": vc.plot_secondary_structure(df),
                 "Charge": vc.plot_charge(df, sequences, ph=ph),
-                "Charge and hydropathy profiles": vc.plot_profiles(
-                    sequences, annotations, window=window),
             }
+            # Same rule as the PNG download: one tall figure for a small set,
+            # one figure per sequence above PROFILES_COMBINED_MAX.
+            if len(sequences) <= PROFILES_COMBINED_MAX:
+                figures["Charge and hydropathy profiles"] = vc.plot_profiles(
+                    sequences, annotations, window=window)
+            else:
+                for p_name, p_seq in sequences.items():
+                    figures[f"Charge and hydropathy profile, {p_name}"] = \
+                        vc.plot_profiles({p_name: p_seq},
+                                         {p_name: annotations[p_name]}
+                                         if p_name in annotations else None,
+                                         window=window)
             if include_cf:
+                # The window set by the slider in Plots, which lives in another
+                # function: read it from the session rather than by name.
+                cf_window = st.session_state.get(
+                    "cf_window", vc.DEFAULTS["chou_fasman_window"])
                 for cf_name, cf_seq in sequences.items():
                     figures[f"Predicted secondary structure, {cf_name}"] = \
                         vc.plot_chou_fasman(cf_seq, cf_name, window=cf_window,
@@ -1504,6 +1596,7 @@ def _outputs(r: Run) -> None:
             st.download_button("Download report (PDF)", st.session_state["pdf_bytes"],
                                file_name="vhh_report.pdf", mime="application/pdf",
                                type="primary")
+        usage_prompt("Sequence analysis, Download")
 
         st.divider()
         st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
