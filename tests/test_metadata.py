@@ -559,3 +559,39 @@ def test_the_footer_says_absent_when_anarci_is_not_installed(monkeypatch):
         assert shell.runtime_versions()["ANARCI"] == "absent"
     finally:
         shell.runtime_versions.cache_clear()
+
+
+def test_the_app_invites_users_to_say_how_they_use_it():
+    """The app records nothing about use, so asking is the only signal.
+
+    The GitHub link must open a new issue carrying the version and the public
+    warning, like the bug report, and must point to the private route for
+    those who have no account or would rather not post publicly.
+    """
+    from urllib.parse import unquote
+
+    import shell
+
+    url = shell.usage_url()
+    assert url.startswith(f"{shell.REPO_URL}/issues/new?"), \
+        "usage_url no longer opens a new issue on this repository"
+    body = unquote(url)
+    assert shell.VERSION in body, "the usage report no longer carries the version"
+    assert "public" in body.lower(), \
+        "the usage report no longer warns that the issue is public"
+    assert shell.CONTACT_EMAIL in body, \
+        "the usage report no longer offers the private route"
+
+    mail = shell.usage_mailto()
+    assert mail.startswith(f"mailto:{shell.CONTACT_EMAIL}?subject="), mail
+    assert shell.VERSION in unquote(mail), "the e-mail no longer carries the version"
+    assert " " not in mail, "a mailto link with a raw space breaks in some clients"
+
+
+def test_the_contact_address_agrees_with_the_citation_file(citation):
+    """The address is written twice, in shell.py and CITATION.cff; they must agree."""
+    import shell
+
+    assert citation["authors"][0].get("email") == shell.CONTACT_EMAIL, (
+        f"shell.CONTACT_EMAIL is {shell.CONTACT_EMAIL!r} but CITATION.cff "
+        f"says {citation['authors'][0].get('email')!r}")

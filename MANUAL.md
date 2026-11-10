@@ -2306,6 +2306,19 @@ costs roughly 0.6 to 1.2 kB an atom, so a file at the atom limit adds 120 to
 a thousand atoms and an antibody complex a few tens of thousands, so nothing
 this app is for comes near either limit.
 
+**The app counts nothing about how it is used either.** There is no account,
+no analytics script and no record of which screens were opened. The one usage
+figure that exists is Streamlit Community Cloud's count of visitors, which the
+platform keeps for the app's owner, not the app. A visit says nothing about
+whether anything was computed, so the home page asks instead: the **Using it
+in your work? Say so** panel, and the **using it? tell us** link in the
+footer, open a GitHub issue pre-filled with the version and three questions,
+which sections you use, for what kind of project, and what is missing. The
+issue is public, like any other, so leave sequences and anything confidential
+out of it; none is needed. Without a GitHub account, or to say it privately,
+the same panel opens an e-mail to the author with the same questions. Either
+is optional, and either decides what gets improved next.
+
 ---
 
 ## 12. Running it on your own machine

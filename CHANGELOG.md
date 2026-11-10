@@ -16,6 +16,21 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **A way to say how you use the app.** The app records nothing about what
+  is done in it, so the hosting platform's count of visitors is the only
+  usage figure there is, and a visit is not a use. A **Using it in your work?
+  Say so** panel on the home page, and a **using it? tell us** link in the
+  footer, open a GitHub issue pre-filled with the version and three short
+  questions: which sections, for what, and what is missing. For anyone
+  without a GitHub account, or who would rather not post publicly, the panel
+  also offers an e-mail with the same questions. The address is the one in
+  `CITATION.cff`, which now carries it, and a test fails if the two differ.
+  The issue is pre-filled through the URL, like the existing bug report,
+  rather than through an issue template, so the "Report a problem" link opens
+  exactly what it opened before.
+
 ### Fixed
 
 - **The home page diagram was unreadable at night.** The diagram and the

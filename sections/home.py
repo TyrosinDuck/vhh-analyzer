@@ -15,9 +15,9 @@ from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
                    current_sequences, embed_html, footer, go_to,
                    follow_app_theme, group_header_html, report_url,
-                   sections_by_group)
+                   sections_by_group, usage_mailto, usage_url)
 
-__version__ = "2026.11.05a"
+__version__ = "2026.11.10a"
 
 # Drawn as inline SVG rather than with a diagramming library: it is six boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -329,6 +329,27 @@ Three things the diagram cannot carry:
 """)
 
     st.write("")
+    # Above the bug report on purpose: a user who has something to say about
+    # how they use the app has no other prompt to say it, while a user who has
+    # hit a defect will look for the report link anyway.
+    with st.expander("🙌 Using it in your work? Say so"):
+        st.markdown(
+            "**This app counts nothing about what you do in it.** No account, "
+            "no record of your sequences or of the screens you opened. The "
+            "only figure the author sees is the hosting platform's count of "
+            "visitors, and a visit is not a use. So there is no way to know "
+            "whether a section is useful, to whom, or for what, unless "
+            "somebody says so.\n\n"
+            "A couple of lines are enough: which sections you use, for what "
+            "kind of project, and what is missing. It decides what gets "
+            "improved next.")
+        st.link_button("Tell us on GitHub", usage_url(), **FIT)
+        st.markdown(f"No GitHub account, or would rather say it privately? "
+                    f"[Send an e-mail]({usage_mailto()}).")
+        st.caption("A GitHub issue is public, like any other: no sequence is "
+                   "needed, and nothing unpublished or confidential should go "
+                   "in it. An e-mail stays between you and the author.")
+
     with st.expander("🐛 Found a problem, or something that looks wrong?"):
         st.markdown(
             "**A wrong number is the most useful thing you can report.** Most of "

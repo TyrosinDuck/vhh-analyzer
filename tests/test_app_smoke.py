@@ -443,3 +443,19 @@ def test_sections_are_grouped_on_the_home_page_and_in_the_sidebar(app):
             and b.key != "home_manual"]
     assert home == [f"home_{k}" for keys in grouped.values() for k in keys], \
         f"home card order {home}"
+
+
+def test_the_home_page_asks_how_the_app_is_used(app):
+    """The invitation is drawn on the home page and offers both routes."""
+    import shell
+
+    if EXPECTED_TITLE["🏠 Home"] not in [t.value for t in app.title]:
+        _click(app, "🏠 Home")
+    _no_failure(app, "home")
+    labels = [e.label for e in app.main.expander]
+    assert any("Using it in your work" in label for label in labels), labels
+    assert any(shell.usage_mailto() in m.value for m in app.main.markdown), \
+        "the home page no longer offers the e-mail route"
+    footer = [str(c.value) for c in app.caption if "report a problem" in str(c.value)]
+    assert len(footer) == 1 and shell.usage_url() in footer[0], \
+        "the footer no longer links to the usage report"

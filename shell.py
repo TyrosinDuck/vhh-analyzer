@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.05a"
+__version__ = "2026.11.10a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -71,7 +71,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261105"
+BUILD = "20261110"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked
@@ -189,6 +189,14 @@ AUTHOR = "Jonathan Vaneyck"
 AUTHOR_URL = "https://orcid.org/0000-0003-3095-7420"
 
 
+# Where a user can write privately. It is the address already public on the
+# author's GitHub profile, and the same one CITATION.cff carries; a test checks
+# the two agree, so the app cannot advertise an address the citation does not.
+# Offered beside the issue tracker because an issue needs a GitHub account,
+# which many of the people this app is for do not have.
+CONTACT_EMAIL = "jonathan.vaneyck@gmail.com"
+
+
 REPO_URL = "https://github.com/TyrosinDuck/vhh-analyzer"
 
 
@@ -226,6 +234,43 @@ def report_url(screen: str = "") -> str:
         "Please use a published sequence if you can - this issue is public, so "
         "nothing unpublished or confidential should go in it.\n")
     return f"{REPO_URL}/issues/new?title={quote('')}&body={quote(body)}"
+
+
+def usage_url() -> str:
+    """A GitHub "new issue" link inviting a user to say how they use the app.
+
+    The app records nothing about what is done in it, so the hosting
+    platform's count of visitors is the only usage figure there is, and a
+    visit is not a use. This is the one channel through which the author can
+    learn whether a section is used, by whom and for what. It is the same
+    pre-filled mechanism as `report_url`, rather than an issue template, so
+    the version comes with it and a template cannot change what the existing
+    bug link opens.
+    """
+    from urllib.parse import quote
+
+    title = f"I use {APP_NAME} for ..."
+    body = (
+        f"**Version:** {VERSION}\n\n"
+        "**Which sections do you use?**\n\n\n"
+        "**What for?** (kind of project, how often)\n\n\n"
+        "**What is missing or gets in the way?** (optional)\n\n\n"
+        "This issue is public. No sequence is needed, and nothing unpublished "
+        "or confidential should go in it. To say it privately instead, write "
+        f"to {CONTACT_EMAIL}.\n")
+    return f"{REPO_URL}/issues/new?title={quote(title)}&body={quote(body)}"
+
+
+def usage_mailto() -> str:
+    """The private counterpart of `usage_url`: an e-mail with the same prompts."""
+    from urllib.parse import quote
+
+    subject = f"{APP_NAME}: how I use it"
+    body = (f"Version: {VERSION}\n\n"
+            "Which sections do you use?\n\n\n"
+            "What for?\n\n\n"
+            "What is missing or gets in the way? (optional)\n")
+    return f"mailto:{CONTACT_EMAIL}?subject={quote(subject)}&body={quote(body)}"
 
 
 APP_NAME = "VHH tool box"
@@ -431,7 +476,8 @@ def footer() -> None:
     st.caption(
         f"{APP_NAME} · v{VERSION} · by [{AUTHOR}]({AUTHOR_URL}) · "
         f"{LICENCE} licence · [source]({REPO_URL}) · [doi:{DOI}]({DOI_URL}) · "
-        f"[report a problem]({ISSUES_URL})")
+        f"[report a problem]({ISSUES_URL}) · "
+        f"[using it? tell us]({usage_url()})")
     st.caption("Running on " + " · ".join(
         f"{name} {version}" for name, version in runtime_versions().items()))
 
