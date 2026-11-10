@@ -631,3 +631,42 @@ def test_the_two_cdr3_identity_definitions_note_is_true():
                  ("AAGRWYTSGDYDY", "AAGRWYTSGDY")]     # truncated end
     for x, y in contained:
         assert vc.pairwise_identity(x, y) == vc.pairwise_scores(x, y)[0]
+
+
+def test_both_extinction_coefficients_reach_the_a280_factor():
+    """Sequence analysis gave only the reduced extinction coefficient.
+
+    Batch & QC offered both, cystines formed and all reduced, and defaulted to
+    the cystine value; the Properties table showed the reduced one and the
+    A280 factor derived from it, so the two screens could convert the same
+    A280 with different coefficients and nothing said so. ``characterize`` now
+    returns the cystine A280 factor beside the reduced one, both from the same
+    average mass.
+    """
+    vhh = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+           "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYDYWGQGTQVTVSS")
+    props = vc.characterize("vhh", vhh)
+    assert props["n_Cys"] == 2
+    assert props["ext_coeff_cystines"] > props["ext_coeff_reduced"]
+    assert props["A280_0.1pct_cystines"] == pytest.approx(
+        props["ext_coeff_cystines"] / props["mw_da"], abs=1e-3)
+    assert props["A280_0.1pct"] == pytest.approx(
+        props["ext_coeff_reduced"] / props["mw_da"], abs=1e-3)
+    assert props["A280_0.1pct_cystines"] > props["A280_0.1pct"]
+
+    no_cys = vc.characterize("no_cys", vhh.replace("C", "S"))
+    assert no_cys["ext_coeff_cystines"] == no_cys["ext_coeff_reduced"]
+    assert no_cys["A280_0.1pct_cystines"] == no_cys["A280_0.1pct"]
+
+
+def test_the_molar_mass_keeps_two_decimals_in_dalton():
+    """The Properties table rounded the mass to 10 Da, as kDa with 2 decimals.
+
+    ``mw_da`` carries the average mass to 0.01 Da, which is what the table and
+    the PDF report now show.
+    """
+    from Bio.SeqUtils.ProtParam import ProteinAnalysis
+    seq = "QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+    props = vc.characterize("x", seq)
+    assert props["mw_da"] == round(ProteinAnalysis(seq).molecular_weight(), 2)
+    assert props["mw_da"] != props["mw_kda"] * 1000

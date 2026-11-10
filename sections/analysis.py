@@ -50,7 +50,7 @@ from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
                    anarci_status, current_sequences, fig_to_png, footer, go_to,
                    usage_prompt)
 
-__version__ = "2026.11.10d"
+__version__ = "2026.11.10e"
 
 
 @dataclass
@@ -193,18 +193,39 @@ def _identity(r: Run) -> None:
 
     # --- Properties ------------------------------------------------------------ #
     with tabs["Properties"]:
-        main_cols = ["name", "type", "length", "mw_kda", "pI", "ext_coeff_reduced",
-                     "A280_0.1pct", "instability_index", "aliphatic_index", "gravy",
+        main_cols = ["name", "type", "length", "mw_da", "pI",
+                     "ext_coeff_cystines", "ext_coeff_reduced",
+                     "A280_0.1pct_cystines", "A280_0.1pct",
+                     "instability_index", "aliphatic_index", "gravy",
                      "aromaticity", "net_charge", "n_Cys", "n_Lys",
                      "n_primary_amines"]
+        # Explicit printf formats: the mass to two decimals in Da rather than
+        # rounded to kDa, the extinction coefficients as integers, and no
+        # thousands separator anywhere.
         st.dataframe(
-            df[main_cols].style.format(precision=2).background_gradient(
+            df[main_cols].style.format(precision=2).format(
+                {"mw_da": "{:.2f}", "ext_coeff_cystines": "{:d}",
+                 "ext_coeff_reduced": "{:d}", "A280_0.1pct_cystines": "{:.3f}",
+                 "A280_0.1pct": "{:.3f}"}).background_gradient(
                 subset=["gravy", "instability_index"], cmap="RdYlGn_r"),
             **FIT, hide_index=True,
             column_config={
-                "mw_kda": st.column_config.NumberColumn("MW (kDa)"),
-                "ext_coeff_reduced": st.column_config.NumberColumn("ε280 (M⁻¹cm⁻¹)"),
-                "A280_0.1pct": st.column_config.NumberColumn("A280 (1 mg/mL)"),
+                "mw_da": st.column_config.NumberColumn(
+                    "MW (Da)", format="%.2f",
+                    help="Average mass from the sequence, every cysteine as a "
+                         "free thiol. Each disulfide formed removes two "
+                         "hydrogens."),
+                "ext_coeff_cystines": st.column_config.NumberColumn(
+                    "ε280 cystines (M⁻¹cm⁻¹)", format="%d",
+                    help="Cysteines paired into cystines. Usually the right "
+                         "one for a VHH with its canonical disulfide formed."),
+                "ext_coeff_reduced": st.column_config.NumberColumn(
+                    "ε280 reduced (M⁻¹cm⁻¹)", format="%d",
+                    help="Every cysteine reduced, as after DTT or TCEP."),
+                "A280_0.1pct_cystines": st.column_config.NumberColumn(
+                    "A280 (1 mg/mL) cystines", format="%.3f"),
+                "A280_0.1pct": st.column_config.NumberColumn(
+                    "A280 (1 mg/mL) reduced", format="%.3f"),
                 "net_charge": st.column_config.NumberColumn(f"Charge pH {ph}"),
             })
 
@@ -213,7 +234,8 @@ def _identity(r: Run) -> None:
     | Descriptor | Interpretation |
     |---|---|
     | **Theoretical pI** | pH of zero net charge. A pI close to the buffer pH predicts poor colloidal stability |
-    | **ε280 / A280 (1 mg/mL)** | extinction coefficient and the factor converting a measured A280 into mg/mL |
+    | **MW (Da)** | average mass, every cysteine as a free thiol; two decimals is the arithmetic, not the accuracy of the average atomic masses |
+    | **ε280 / A280 (1 mg/mL)** | extinction coefficient and the factor converting a measured A280 into mg/mL, given twice: cysteines paired into cystines, and all reduced. Both are predicted, not measured |
     | **Instability index** | Guruprasad dipeptide score; **< 40 predicts a stable protein** |
     | **Aliphatic index** | relative volume of A, V, I, L; higher correlates with thermostability |
     | **GRAVY** | mean Kyte–Doolittle hydropathy; negative = hydrophilic. Above ≈ −0.2 flags aggregation risk |
@@ -1458,8 +1480,8 @@ def _outputs(r: Run) -> None:
             pm = st.columns(4)
             pm[0].metric("Length", f"{built['length']} aa",
                          delta=f"{built['length'] - int(base['length']):+d} vs the VHH")
-            pm[1].metric("Mass", f"{props['mw_kda']:.2f} kDa",
-                         delta=f"{props['mw_kda'] - base['mw_kda']:+.2f}")
+            pm[1].metric("Mass", f"{props['mw_da']:.2f} Da",
+                         delta=f"{props['mw_da'] - base['mw_da']:+.2f} Da")
             pm[2].metric("pI", f"{props['pI']:.2f}",
                          delta=f"{props['pI'] - base['pI']:+.2f}")
             pm[3].metric("A280 (1 mg/mL)", f"{props['A280_0.1pct']:.3f}",

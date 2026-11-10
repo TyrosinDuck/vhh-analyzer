@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.10a"
+__version__ = "2026.11.10b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -337,7 +337,10 @@ def characterize(name: str, seq: str, ph: float | None = None) -> dict:
 
     All values are theoretical, derived from the sequence alone (ProtParam
     algorithms via Biopython). ``A280_0.1pct`` is the absorbance of a 1 mg/mL
-    solution, i.e. the factor to convert a measured A280 into a concentration.
+    solution, i.e. the factor to convert a measured A280 into a concentration,
+    with every cysteine reduced; ``A280_0.1pct_cystines`` is the same factor
+    with the cysteines paired into cystines, from ``ext_coeff_cystines``. Both
+    divide by ``mw_da``, the average mass with every cysteine as a free thiol.
     The secondary-structure fractions are amino-acid propensities, not a
     structure prediction.
     """
@@ -358,6 +361,7 @@ def characterize(name: str, seq: str, ph: float | None = None) -> dict:
         "ext_coeff_reduced": eps_red,
         "ext_coeff_cystines": eps_ox,
         "A280_0.1pct": round(eps_red / mw, 3),
+        "A280_0.1pct_cystines": round(eps_ox / mw, 3),
         "instability_index": round(pa.instability_index(), 2),
         "aliphatic_index": round(aliphatic_index(seq), 2),
         "gravy": round(pa.gravy(), 3),
@@ -2415,13 +2419,21 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
 
     # ---- Physico-chemical summary -----------------------------------------
     story.append(Paragraph("Physico-chemical properties", h2))
-    cols = [c for c in ["name", "length", "mw_kda", "pI", "ext_coeff_reduced",
-                        "A280_0.1pct", "instability_index", "aliphatic_index",
-                        "gravy", "aromaticity", "net_charge", "n_Cys"]
-            if c in df.columns]
-    header = ["Name", "Len", "MW kDa", "pI", "e280", "A280 1mg/mL", "Instab.",
-              "Aliph.", "GRAVY", "Arom.", f"Charge", "Cys"]
-    summary = [header[:len(cols)]] + df[cols].astype(str).values.tolist()
+    # One (column, header) list, so a header can never drift onto the wrong
+    # column when a column is missing from ``df``.
+    summary_cols = [("name", "Name"), ("length", "Len"), ("mw_da", "MW Da"),
+                    ("pI", "pI"), ("ext_coeff_cystines", "e280 cyst."),
+                    ("ext_coeff_reduced", "e280 red."),
+                    ("instability_index", "Instab."),
+                    ("aliphatic_index", "Aliph."), ("gravy", "GRAVY"),
+                    ("aromaticity", "Arom."), ("net_charge", "Charge"),
+                    ("n_Cys", "Cys")]
+    summary_cols = [(c, h) for c, h in summary_cols if c in df.columns]
+    cells = df[[c for c, _ in summary_cols]].copy()
+    if "mw_da" in cells.columns:
+        cells["mw_da"] = cells["mw_da"].map(lambda v: f"{v:.2f}")
+    summary = ([[h for _, h in summary_cols]]
+               + cells.astype(str).values.tolist())
     story += [table(summary, font=6.8), Spacer(1, 4),
               Paragraph("All values are theoretical, computed from the sequence alone "
                         "(ProtParam). Instability index below 40 predicts a stable "
@@ -2436,11 +2448,13 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
         ann = annotations.get(name)
 
         if row is not None:
-            facts = [["Length", f"{row['length']} aa", "MW",
-                      f"{row['mw_kda']} kDa"],
+            facts = [["Length", f"{row['length']} aa", "MW (average)",
+                      f"{row['mw_da']:.2f} Da"],
                      ["Theoretical pI", f"{row['pI']}", f"Net charge (pH {ph})",
                       f"{row['net_charge']:+}"],
-                     ["e280 (reduced)", f"{row['ext_coeff_reduced']} M-1cm-1",
+                     ["e280, cystines", f"{row['ext_coeff_cystines']} M-1cm-1",
+                      "A280 at 1 mg/mL", f"{row['A280_0.1pct_cystines']}"],
+                     ["e280, reduced", f"{row['ext_coeff_reduced']} M-1cm-1",
                       "A280 at 1 mg/mL", f"{row['A280_0.1pct']}"],
                      ["Instability index", f"{row['instability_index']}",
                       "Aliphatic index", f"{row['aliphatic_index']}"],

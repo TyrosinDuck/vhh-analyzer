@@ -211,6 +211,30 @@ def test_profiles_draw_one_sequence_unless_all_are_asked_for(app):
     [c for c in app.checkbox if c.key == "prof_all"][0].uncheck().run()
 
 
+def test_properties_show_both_extinction_coefficients_and_mass_in_da(app):
+    """Batch & QC had both extinction coefficients, Sequence analysis one.
+
+    The Properties table now carries the cystine and the reduced values, the
+    A280 factor for each, and the mass in Da to two decimals rather than kDa.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    identity = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+                if "Identity" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(identity).run()
+    _no_failure(app, "Identity family")
+    wanted = {"mw_da", "ext_coeff_cystines", "ext_coeff_reduced",
+              "A280_0.1pct_cystines", "A280_0.1pct"}
+    tables = [d.value for d in app.dataframe]
+    tables = [getattr(t, "data", t) for t in tables]     # a Styler or a frame
+    match = [t for t in tables if wanted <= set(t.columns)]
+    assert match, "the Properties table lost a column"
+    assert "mw_kda" not in match[0].columns
+    assert (match[0]["ext_coeff_cystines"] >= match[0]["ext_coeff_reduced"]).all()
+
+
 def test_identity_heatmap_selector_and_cdr3_note(app):
     """One identity heatmap at a time, and both tabs say how CDR3 identity
     differs between them."""

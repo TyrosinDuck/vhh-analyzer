@@ -41,6 +41,18 @@ ran, from its Zenodo record.
 
 ### Changed
 
+- **Both extinction coefficients in Sequence analysis, and the mass in Da.**
+  The Properties table showed only the extinction coefficient with every
+  cysteine reduced, and the A280 factor derived from it, while Batch & QC
+  offers both and defaults to the cystine value, so the two screens could
+  turn the same A280 into two concentrations with nothing saying why. The
+  table now shows ε280 with the cystines formed and with all cysteines
+  reduced, and the A280 (1 mg/mL) factor for each. `characterize` returns the
+  new factor as `A280_0.1pct_cystines`; `A280_0.1pct` keeps its meaning
+  (reduced), so a notebook reading it gets the same number as before. The
+  mass is shown in Da with two decimals instead of kDa rounded to 10 Da, in
+  the Properties table, the construct builder and the PDF report, which also
+  carries both coefficients now. `mw_kda` is still returned.
 - **One identity heatmap at a time.** The Alignment tab drew the full-length
   and the CDR3 identity matrices side by side; an **Identity over** selector
   now shows one, and both stay downloadable as CSV. The caption says which
@@ -62,6 +74,11 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+- **The PDF summary table could put a header over the wrong column.** It
+  cut its list of headers to the number of columns present, so a missing
+  column shifted every header after it by one. Each column now carries its
+  own header. Not seen in a real report, since `characterize` always returns
+  every column; found while adding the second extinction coefficient.
 - **Opening Comparison with 50 sequences restarted the server.** The
   pairwise identity heatmap grew by 1.1 inch a sequence and wrote a number in
   every cell: at 50 sequences, the app's limit, that is a 58 x 47 inch figure

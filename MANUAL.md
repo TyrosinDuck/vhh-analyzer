@@ -418,10 +418,11 @@ The main table, one row per sequence.
 
 | Column | Meaning |
 |---|---|
-| Length, MW | a VHH is typically 110–135 aa and 12–15 kDa |
+| Length | a VHH is typically 110–135 aa |
+| MW (Da) | average mass from the sequence, in Da with two decimals (a VHH is typically 12000–15000 Da), every cysteine counted as a free thiol. Two decimals is the arithmetic, not the accuracy of the average atomic masses behind it. Each disulfide formed removes two hydrogens; the mass check in Batch & QC lists that as a candidate |
 | Theoretical pI | pH of zero net charge, Bjellqvist pKa set. A pI close to your buffer pH predicts poor colloidal stability |
-| ε280 | molar extinction coefficient at 280 nm, reduced cysteines |
-| A280 (1 mg/mL) | ε / MW: **this is the number you divide your measured A280 by to get mg/mL** |
+| ε280 cystines, ε280 reduced | molar extinction coefficient at 280 nm, with the cysteines paired into cystines and with all of them reduced. They differ only by the cystine contribution, so a sequence without a cysteine pair gives the same value twice. A VHH from the periplasm has its canonical disulfide formed, so the cystine value is usually the right one; the reduced one applies after DTT or TCEP. Both are the same pair Batch & QC offers |
+| A280 (1 mg/mL) cystines, reduced | ε / MW for each of the two: **this is the number you divide your measured A280 by to get mg/mL**. Both are predicted from the sequence, so a concentration obtained with them is derived, not measured |
 | Instability index | Guruprasad dipeptide score; below 40 predicts a stable protein |
 | Aliphatic index | relative volume of A, V, I, L; higher correlates with thermostability |
 | GRAVY | mean Kyte–Doolittle hydropathy; negative means hydrophilic. Above about −0.2 flags an aggregation-prone candidate |
