@@ -43,7 +43,7 @@ __all__ = [
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.10.27e"
+__version__ = "2026.11.12a"
 
 # Codons whose scarcity in E. coli is well established, these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -125,7 +125,20 @@ def relative_adaptiveness() -> dict[str, float]:
 
 
 def cai(dna: str) -> dict:
-    """Codon Adaptation Index (Sharp & Li): geometric mean of the ``w`` values.
+    """Geometric mean of the ``w`` values, the Sharp & Li formula.
+
+    The formula is theirs; the reference set is not. Sharp & Li (1987) define
+    the index against a set of *highly expressed* genes, so that ``w`` measures
+    adaptation to the codons of genes the host translates hard. The ``w`` here
+    come from ``data/ecoli_codon_usage.csv``, which is a whole-organism table
+    (Kazusa, taxid 316407), so this is the Sharp & Li arithmetic over a
+    whole-genome reference set, and the two are not interchangeable: a gene
+    scoring 0.9 here is using the codons of the average E. coli gene, not the
+    codons of its most highly expressed ones. The deviation is deliberate,
+    because a reference set of highly expressed genes would have to be chosen
+    and shipped, and that choice is itself contested; it is named here, in the
+    caption on the gene diagnosis screen and in MANUAL.md §9 so that a number
+    quoted out of this app is not mistaken for a published CAI.
 
     Methionine, tryptophan and stop codons are excluded, they have no synonym,
     so they carry no information about adaptation and would only inflate the

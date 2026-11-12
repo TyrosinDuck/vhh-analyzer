@@ -30,7 +30,7 @@ __all__ = [
     "batch_record_inputs", "__version__",
 ]
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 
 # --------------------------------------------------------------------------
@@ -72,7 +72,11 @@ REAGENTS: dict[str, dict] = {
         "lambda_max": 495,
         "cf280": 0.11,
         "source": "Thermo Fisher 'Amine-Reactive Probes' protocol MP10168, "
-                  "Table 4: MW 643, eps 71,000 /M/cm at 495 nm, CF280 0.11.",
+                  "Table 4: MW 643, eps 71000 /M/cm at 495 nm, CF280 0.11. "
+                  "The A20000 product page now lists MW 643.4 and eps 73000. "
+                  "Both are Thermo's own figures; the protocol table is the "
+                  "one used here, and the 2.8% difference in eps carries "
+                  "straight into a degree of labelling.",
         "note": "The molar mass, extinction coefficient and correction factor "
                 "are the dye's published values. Your vial's certificate of "
                 "analysis is the authority for the lot you hold.",
@@ -450,12 +454,20 @@ def mass_check(seq: str, measured_da: float | None = None,
 # phage preparation and one instrument, not a physical constant.
 PHAGE_EMPIRICAL_PER_A260 = 3.0e10
 
-# The optical route: Day's relation for filamentous phage,
-#   virions/mL = A269 x 6e16 / (number of bases in the genome)
+# The optical route for filamentous phage,
+#   virions/mL = (A269 - A320) x 6e16 / (number of bases in the genome)
 # which is the ssDNA absorbance of the particle worked out from its genome
 # length. Reading at 260 rather than 269 nm, and against a blank rather than
 # with the A320 scatter correction, costs some accuracy but not an order of
 # magnitude.
+#
+# Attribution, honestly: this was carried here as "Day's relation", and that
+# attribution has not been confirmed against any primary source. The formula
+# in exactly this form is in wide circulation (MIT 20.109 course protocols,
+# published filamentous-phage methods, vendor calculators), always without a
+# citation of its own. So: the arithmetic is standard and reproducible, the
+# constant's provenance is not established, and that is why the empirical
+# route below is shown beside it rather than behind it.
 PHAGE_OPTICAL_CONSTANT = 6.0e16
 
 # M13mp18 and its phagemid derivatives. A phagemid carrying an insert is

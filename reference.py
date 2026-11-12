@@ -36,7 +36,7 @@ import pandas as pd
 import codons as cdn
 import vhh_core as vc
 
-__version__ = "2026.10.30a"
+__version__ = "2026.11.12a"
 
 STRUCTURE_DIR = Path(__file__).parent / "data" / "aminoacids"
 META_FILE = STRUCTURE_DIR / "meta.json"
@@ -56,7 +56,17 @@ FAMILY = {
 # Side-chain pKa, for the three residues whose ionisation state changes over
 # the range the app's pH slider covers. These are the values behind the pH
 # 7.4 forms the structures are drawn in, and the reason histidine is drawn
-# neutral. Nelson & Cox, Lehninger, 7th ed.
+# neutral.
+#
+# Attribution, honestly: these were entered as Nelson & Cox, Lehninger, 7th
+# ed., and that edition has not been consulted to confirm them. All seven are
+# the values of the standard free-amino-acid tables, and six of them (D 3.65,
+# E 4.25, Y 10.07, H 6.00, K 10.53, R 12.48) agree across every table checked.
+# Cysteine at 8.18 agrees with those tables too, but at least one teaching
+# table gives 8.08, so the second decimal is not something to lean on.
+# Display only: `side_chain_pka` is read on the amino-acid screen and nothing
+# computes with it. The pI the app reports comes from Biopython's ProtParam,
+# which carries its own constants, so these cannot silently change a result.
 SIDE_CHAIN_PKA = {"D": 3.65, "E": 4.25, "C": 8.18, "Y": 10.07, "H": 6.00,
                   "K": 10.53, "R": 12.48}
 

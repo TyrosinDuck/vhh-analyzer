@@ -694,3 +694,160 @@ def test_properties_table_shows_two_decimals():
     assert re.fullmatch(r"\d+", shown["ext_coeff_cystines"])
     assert re.fullmatch(r"\d\.\d{3}", shown["A280_0.1pct"])
     assert "," not in "".join(shown.values())
+
+
+# --------------------------------------------------------------------------- #
+# The November 2026 independent audit. Each of these was a claim the app made
+# to its user that the code next to it did not support.
+# --------------------------------------------------------------------------- #
+
+def test_the_rare_codon_caption_counts_the_tRNAs_it_promises():
+    """The Reference screen said all eight rare codons name a limiting tRNA.
+
+    CGA and CGG carry ``"trna": None``, so two rows of the table showed an
+    empty tRNA column under a caption asserting every row had one. The caption
+    now says six, and this test fails if the table and the sentence drift
+    apart again, in either direction.
+    """
+    named = [c for c, info in cdn.RARE_CODONS.items() if info["trna"]]
+    unnamed = [c for c, info in cdn.RARE_CODONS.items() if not info["trna"]]
+    assert len(cdn.RARE_CODONS) == 8
+    assert len(named) == 6
+    assert sorted(unnamed) == ["CGA", "CGG"]
+
+    source = (ROOT / "sections" / "reference.py").read_text(encoding="utf-8")
+    assert "Six of them carry the name of the tRNA" in source
+    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
+    assert "Six of them carry the" in manual
+
+
+def test_the_cai_never_claims_the_sharp_and_li_reference_set():
+    """``cai`` was documented as Sharp & Li, over a whole-organism table.
+
+    Sharp & Li define the index against highly expressed genes. The shipped
+    table is Kazusa's whole-organism one, so the arithmetic is theirs and the
+    reference set is not. Every place that names the index has to say so, and
+    the reverse-translation comment must stop claiming a highly-expressed set
+    it never used.
+    """
+    doc = cdn.cai.__doc__
+    assert "whole-genome reference set" in doc
+    assert "highly expressed" in doc
+
+    caption = (ROOT / "sections" / "genes.py").read_text(encoding="utf-8")
+    assert "not against a reference set of highly expressed" in caption
+
+    core = (ROOT / "vhh_core.py").read_text(encoding="utf-8")
+    block = core[core.index("# Relative synonymous codon usage"):
+                 core.index("ECOLI_CODONS = {")]
+    assert "whole-organism table" in block
+    # The claim that started it survives only as the note saying it used to be
+    # there and was wrong, in quotation marks.
+    assert block.count("highly expressed") == 1
+    assert '"highly expressed genes", which contradicted' in block
+
+
+def test_the_bench_screen_prefills_no_extinction_coefficient_or_mass():
+    """28000 /M/cm and 14000 Da were prefilled, with no source.
+
+    Typing an A280 with no sequence loaded produced an mg/mL indistinguishable
+    from one computed from a real sequence. The fields are empty now, and the
+    three views refuse to compute until both are given.
+    """
+    source = (ROOT / "sections" / "bench.py").read_text(encoding="utf-8")
+    assert "28000" not in source
+    assert "14000.0" not in source
+    # Each of the three views that needs them has to stop, not assume.
+    assert source.count("from a sequence, or type it") == 5
+    assert source.lower().count("nothing is assumed for you") == 3
+
+
+def test_the_concentration_is_labelled_derived_not_measured():
+    """mg/mL and uM rested on a predicted extinction coefficient, unlabelled.
+
+    The A280 is the measurement; the concentration is Beer-Lambert run on it
+    with a ProtParam prediction, so the metric labels and the caption have to
+    say which of the two the user is looking at.
+    """
+    source = (ROOT / "sections" / "bench.py").read_text(encoding="utf-8")
+    assert '"mg/mL (derived)"' in source
+    assert '"Molar (derived)"' in source
+    assert "**Derived, not measured.**" in source
+    assert "predicted from the sequence by " in source
+
+
+def test_the_cystine_gap_is_125_per_disulfide_not_about_one_percent():
+    """The help text said the two extinction coefficients differ by about 1%.
+
+    True for a VHH with the single canonical disulfide, wrong by a factor of
+    six for a cysteine-rich protein: the gap is a fixed 125 /M/cm per pair, so
+    the relative gap falls as the rest of the coefficient grows. Measured over
+    the shipped library it runs from 0.0% to 6.6%.
+    """
+    for seq, pairs in [("CCWY", 1), ("CCCCWY", 2), ("WY", 0)]:
+        props = vc.characterize("x", seq)
+        gap = props["ext_coeff_cystines"] - props["ext_coeff_reduced"]
+        assert gap == 125 * pairs, (seq, gap)
+
+    table, _warnings = lib.load_library()
+    entries = [e for e in table.to_dict("records") if e["protein"]]
+    gaps = []
+    for entry in entries:
+        props = vc.characterize(entry["name"], entry["protein"])
+        gaps.append(100.0 * (props["ext_coeff_cystines"]
+                             - props["ext_coeff_reduced"])
+                    / props["ext_coeff_reduced"])
+    assert max(gaps) > 6.0, max(gaps)
+
+    source = (ROOT / "sections" / "bench.py").read_text(encoding="utf-8")
+    assert "differ by about 1%" not in source
+    assert "adds exactly 125 /M/cm" in source
+
+
+def test_the_chou_fasman_lysine_matches_its_own_citation():
+    """The lysine helix propensity read 114 against a citation giving 1.16.
+
+    Expasy ProtScale, the MATLAB Bioinformatics Toolbox and the Chou-Fasman
+    teaching tables all publish 1.16 citing Adv. Enzymol. 47:45-148 (1978);
+    only one web table gives 114. Every other value in the pair table agrees
+    across all of them.
+    """
+    assert vc.CHOU_FASMAN["K"] == (116, 74)
+    assert len(vc.CHOU_FASMAN) == 20
+    assert all(isinstance(v, tuple) and len(v) == 2
+               for v in vc.CHOU_FASMAN.values())
+
+
+def test_the_analysis_tab_count_in_the_manual_matches_the_code():
+    """The manual said fifteen views; the code builds fourteen.
+
+    The families are the single source of truth for how many there are, so
+    the manual is checked against them rather than against a second list.
+    """
+    from sections.analysis import view_count
+    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
+    assert view_count() == 14
+    assert "fourteen different views" in manual
+    assert "fifteen different views" not in manual
+
+
+def test_no_constant_claims_a_source_the_repository_cannot_show():
+    """Three constants cited sources that could not be confirmed.
+
+    They are kept, because the values are standard and the arithmetic around
+    them is shown both ways, but the citation now says what was and was not
+    checked. This test is here so the hedge is not quietly deleted later.
+    """
+    bench_src = (ROOT / "bench.py").read_text(encoding="utf-8")
+    # The name survives once, inside the note saying it was never confirmed.
+    assert bench_src.count("Day's relation") == 1
+    assert 'carried here as "Day\'s relation"' in bench_src
+    assert "has not been confirmed against any primary source" in bench_src
+
+    ref_src = (ROOT / "reference.py").read_text(encoding="utf-8")
+    assert "that edition has not been consulted" in ref_src
+
+    manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
+    assert manual.count("Day's relation") == 1
+    assert 'called it "Day\'s relation"' in manual
+    assert "the standard filamentous-phage relation" in manual

@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.10b"
+__version__ = "2026.11.12a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -2601,10 +2601,25 @@ def build_pdf_report(path: str | Path, df: pd.DataFrame, seqs: dict[str, str],
 # Chou & Fasman (1978) conformational parameters: helix and sheet propensities.
 # A value above 100 means the residue is found in that conformation more often
 # than expected by chance.
+#
+# Source: Expasy ProtScale, which publishes both scales citing Chou & Fasman,
+# Adv. Enzymol. 47:45-148 (1978), scaled here by 100 so the 100 threshold above
+# reads as an integer.
+#   https://web.expasy.org/protscale/pscale/alpha-helixFasman.html
+#   https://web.expasy.org/protscale/pscale/beta-sheetFasman.html
+# The 1978 chapter itself has not been read. Nineteen of the twenty helix
+# values and all twenty sheet values are identical across every source checked.
+# Lysine's helix value is the exception: it was 114 here, taken from the
+# thegpm.org table, against 1.16 at Expasy, 1.160 in the MATLAB Bioinformatics
+# Toolbox and 1.16 in the Chou-Fasman teaching tables, all three citing the
+# same 1978 chapter. Three sources against one, with every other value in
+# agreement, is why it now reads 116. On a five-residue smoothed profile the
+# difference moves nothing visible; it is corrected because a constant that
+# disagrees with its own citation is wrong whether or not it shows.
 CHOU_FASMAN = {
     "A": (142, 83), "R": (98, 93), "N": (67, 89), "D": (101, 54), "C": (70, 119),
     "Q": (111, 110), "E": (151, 37), "G": (57, 75), "H": (100, 87), "I": (108, 160),
-    "L": (121, 130), "K": (114, 74), "M": (145, 105), "F": (113, 138), "P": (57, 55),
+    "L": (121, 130), "K": (116, 74), "M": (145, 105), "F": (113, 138), "P": (57, 55),
     "S": (77, 75), "T": (83, 119), "W": (108, 137), "Y": (69, 147), "V": (106, 170),
 }
 
@@ -2692,12 +2707,16 @@ def plot_chou_fasman(seq: str, name: str = "", window: int = 5,
 # Reverse translation (E. coli codon optimisation)
 # --------------------------------------------------------------------------- #
 
-# Relative synonymous codon usage in E. coli K-12, highly expressed genes,
-# ordered from most to least preferred. Rare codons (AGG/AGA, CTA, ATA, CGA)
-# are kept at the end of their list so they are only used as a last resort when
-# a forbidden site has to be broken.
+# Relative synonymous codon usage in E. coli, ordered from most to least
+# preferred. Rare codons (AGG/AGA, CTA, ATA, CGA) are kept at the end of their
+# list so they are only used as a last resort when a forbidden site has to be
+# broken.
 # Ordered by measured relative frequency in E. coli, from
-# data/ecoli_codon_usage.csv (Kazusa, CC0) rather than from recollection.
+# data/ecoli_codon_usage.csv (Kazusa, CC0) rather than from recollection. That
+# file is a whole-organism table, not a highly-expressed-gene set: an earlier
+# version of this comment said "highly expressed genes", which contradicted the
+# data file named on the next line and is the reference-set confusion that
+# codons.cai() now spells out.
 # This replaced a hand-written ordering that was right for 18 of 20 top
 # codons but wrong in the minor ranks of I, L, R and S.
 ECOLI_CODONS = {

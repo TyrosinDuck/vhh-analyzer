@@ -25,7 +25,7 @@ from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, usage_prompt)
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -169,7 +169,9 @@ def _quantify(props: dict) -> None:
     st.markdown(
         "Beer-Lambert, with the extinction coefficient computed from the "
         "sequence rather than guessed from a generic 1 mg/mL = 1 AU. For a VHH "
-        "that assumption is usually wrong by a third.")
+        "that assumption is usually wrong by a third. Computed is not "
+        "measured: the result below is derived from your A280 and a predicted "
+        "coefficient, and it is labelled as such.")
 
     left, right = st.columns(2)
     with left:
@@ -184,22 +186,42 @@ def _quantify(props: dict) -> None:
                                help="1 cm for a cuvette. A NanoDrop pedestal "
                                     "already reports a 1 cm equivalent.")
     with right:
-        default_eps = float(props.get("ext_coeff_cystines") or 28000)
         cys_state = st.radio(
             "Cysteines", ["Cystines formed", "All reduced"], horizontal=True,
             key="q_cys",
             help="The canonical VHH disulfide is formed in material from the "
-                 "periplasm. The two values differ by about 1%, which is the "
-                 "choice nobody makes explicitly.")
+                 "periplasm. Pairing two cysteines adds exactly 125 /M/cm, so "
+                 "the gap is 125 times the number of disulfides: about 0.5% "
+                 "for a VHH with the one canonical pair, and 6.6% for the "
+                 "most cysteine-rich sequence in this app's own library. It "
+                 "is the choice nobody makes explicitly.")
+        # No fallback value here. A prefilled eps or molar mass would be
+        # arbitrary: it has no source, and the mg/mL it produces looks exactly
+        # like one computed from a real sequence. Empty until the user either
+        # loads a sequence or types their own.
+        default_eps = None
         if props:
             default_eps = float(props["ext_coeff_cystines"]
                                 if cys_state == "Cystines formed"
                                 else props["ext_coeff_reduced"])
         eps = st.number_input("eps 280 (/M/cm)", 0.0, 1e7, default_eps, 10.0,
-                              key="q_eps")
+                              key="q_eps",
+                              placeholder="from a sequence, or type it")
+        # Whether the coefficient is a ProtParam prediction or the user's own
+        # number decides what the result below may be called.
+        _eps_from_sequence = (default_eps is not None
+                              and eps == default_eps)
         mw = st.number_input("Molar mass (Da)", 0.0, 1e7,
-                             float(props.get("mw_da") or 14000.0), 1.0,
-                             key="q_mw")
+                             float(props["mw_da"]) if props else None, 1.0,
+                             key="q_mw",
+                             placeholder="from a sequence, or type it")
+
+    if not eps or not mw:
+        st.info(
+            "Give an extinction coefficient and a molar mass, by loading a "
+            "sequence above or by typing both. Nothing is assumed for you: a "
+            "prefilled value would make this read like a result.")
+        return
 
     more = st.columns(2)
     with more[0]:
@@ -220,12 +242,26 @@ def _quantify(props: dict) -> None:
         return
 
     cols = st.columns(4)
-    cols[0].metric("mg/mL", f"{out['mg_per_ml']:.3f}")
-    cols[1].metric("Molar", f"{out['molar_uM']:.1f} uM")
+    cols[0].metric("mg/mL (derived)", f"{out['mg_per_ml']:.3f}")
+    cols[1].metric("Molar (derived)", f"{out['molar_uM']:.1f} uM")
     cols[2].metric("Total protein",
                    f"{out['total_ug']:.1f} ug" if out["total_ug"] else "-")
     cols[3].metric("Total", f"{out['total_nmol']:.2f} nmol"
                    if out["total_nmol"] else "-")
+
+    # The A280 is measured; the concentration is not. It is Beer-Lambert run
+    # on that reading with an extinction coefficient that is predicted from the
+    # sequence unless the user typed their own, so the label has to say which.
+    st.caption(
+        "**Derived, not measured.** The A280 is your measurement. The "
+        + ("extinction coefficient above is predicted from the sequence by "
+           "ProtParam, so these two values inherit that prediction's error "
+           "and are not a measured concentration."
+           if _eps_from_sequence else
+           "concentration follows from the extinction coefficient you "
+           "supplied, and is only as right as that value.")
+        + " An amino-acid analysis or a measured A280 of a known standard is "
+          "what makes a concentration a measurement.")
 
     if out["nucleic_acid_warning"]:
         st.warning(out["nucleic_acid_warning"])
@@ -438,11 +474,20 @@ def _conjugate(name, sequences, props: dict, method: str) -> None:
                                       "The excess that gives the labelling you "
                                       "want is something you titrate.")
 
-    mw = float(props.get("mw_da") or 14000.0)
     amines = props.get("n_primary_amines")
-    if not props:
-        mw = st.number_input("Protein molar mass (Da)", 1.0, 1e7, 14000.0, 1.0,
-                             key="c_pmw")
+    if props:
+        mw = float(props["mw_da"])
+    else:
+        # No fallback: an arbitrary 14000 Da would silently set the molar
+        # excess of reagent, which is the one number this view exists to give.
+        mw = st.number_input("Protein molar mass (Da)", 1.0, 1e7, None, 1.0,
+                             key="c_pmw",
+                             placeholder="from a sequence, or type it")
+        if not mw:
+            st.info(
+                "Give a molar mass, by loading a sequence above or by typing "
+                "it. Nothing is assumed for you.")
+            return
 
     try:
         plan = bn.conjugation_plan(volume, concentration, mw, excess, stock_mM,
@@ -508,15 +553,20 @@ def _balance(props: dict) -> None:
 
     left, right = st.columns(2)
     with left:
+        # No fallback here either: every row of the balance below is scaled by
+        # these two, so an arbitrary default would produce a whole table of
+        # plausible-looking yields resting on nothing.
         eps = st.number_input(
             "eps 280 (/M/cm)", 0.0, 1e7,
-            float(props.get("ext_coeff_cystines") or 28000.0), 10.0,
+            float(props["ext_coeff_cystines"]) if props else None, 10.0,
             key="pb_eps",
+            placeholder="from a sequence, or type it",
             help="Prefilled from the sequence, with the cystines formed. Used "
                  "for every step quantified by A280.")
         mw = st.number_input("Molar mass (Da)", 0.0, 1e7,
-                             float(props.get("mw_da") or 14000.0), 1.0,
-                             key="pb_mw")
+                             float(props["mw_da"]) if props else None, 1.0,
+                             key="pb_mw",
+                             placeholder="from a sequence, or type it")
     with right:
         culture = st.number_input(
             "Culture volume (mL), optional", 0.0, 1e6, 0.0, 100.0,
@@ -529,6 +579,13 @@ def _balance(props: dict) -> None:
             "flow-through. Those rows keep their total, because it is worth "
             "recording, and stay out of the recovery arithmetic, because the "
             "ratio would not be the target's.")
+
+    if not eps or not mw:
+        st.info(
+            "Give an extinction coefficient and a molar mass, by loading a "
+            "sequence above or by typing both. Every row below is scaled by "
+            "them, so nothing is assumed for you.")
+        return
 
     blank = pd.DataFrame({
         "Step": bn.PURIFICATION_STEPS,

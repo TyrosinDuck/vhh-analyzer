@@ -14,7 +14,7 @@ import vhh_core as vc
 from compute import diagnose_gene, gc_fix_for, gene_summary, png_gc_comparison, png_gene_diagnosis
 from shell import EXAMPLE, FIT, Settings, go_to
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 
 def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
@@ -31,10 +31,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
     cai_now = cdn.cai(gene_dna).get("cai")
     if cai_now is not None:
         st.caption(
-            f"**CAI {cai_now:.3f}**, Codon Adaptation Index against the measured "
-            "*E. coli* usage table (Kazusa, CC0). 1.0 would mean the preferred "
-            "codon everywhere. It describes codon choice; it does not predict "
-            "expression level.")
+            f"**CAI {cai_now:.3f}**, the Sharp & Li geometric mean computed "
+            "against the measured whole-organism *E. coli* usage table "
+            "(Kazusa, CC0), not against a reference set of highly expressed "
+            "genes as the published index is. 1.0 would mean the codons of "
+            "the average *E. coli* gene throughout. It describes codon "
+            "choice; it does not predict expression level, and it is not "
+            "comparable with a CAI quoted from elsewhere.")
 
     st.subheader("Findings")
     renderers = {"error": st.error, "warning": st.warning,

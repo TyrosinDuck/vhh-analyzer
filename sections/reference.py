@@ -18,7 +18,7 @@ import streamlit as st
 import reference as rf
 from shell import FIT, Settings, embed_html, follow_app_theme, go_to
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 
@@ -74,7 +74,10 @@ def _genetic_code() -> None:
         "that share divided by the best synonym's, which is the quantity CAI "
         "is the geometric mean of, so a codon with `w` near 1 is the one the "
         "host prefers. `rare_in_ecoli` marks the eight codons the gene "
-        "diagnosis screen flags, with the tRNA that is limiting for each.")
+        "diagnosis screen flags. Six of them carry the name of the tRNA that "
+        "is limiting for them; CGA and CGG have an empty tRNA column, because "
+        "they are flagged for the strains that supplement them rather than "
+        "for one documented bottleneck tRNA.")
 
     table = rf.genetic_code()
     picked = st.multiselect(

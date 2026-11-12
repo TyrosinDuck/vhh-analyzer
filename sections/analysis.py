@@ -50,7 +50,7 @@ from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
                    Settings, anarci_requirement, anarci_status,
                    current_sequences, fig_to_png, footer, go_to, usage_prompt)
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 
 @dataclass
@@ -84,6 +84,59 @@ class Run:
     chosen: Any
     heavy_only_notice: Callable
     type_of: Callable
+
+
+# Named rather than indexed: inserting a tab in the middle of an indexed list
+# silently reassigns every panel after it.
+# Fourteen tabs are not fourteen subjects, they are four questions plus the
+# decision view. Grouping them does two things at once: a newcomer reads five
+# labels instead of scanning fourteen, and Streamlit only executes the family
+# that is open. Nested tabs would have fixed the first problem and not the
+# second, because every tab body runs whether or not its tab is selected.
+#
+# Module level rather than local to `render`, so that `view_count` below can
+# derive the number of views from it. MANUAL.md §3.0 quotes that number, and a
+# second list of views written out by hand is exactly the kind of duplicate
+# that goes stale without saying so.
+_FAMILIES = {
+    "🎯 Triage": ("triage", [],
+                  "Every flag in one table, the view for deciding which "
+                  "sequences to carry forward."),
+    "🔍 Identity": ("identity",
+                    ["Properties", "Plots", "CDR / Framework",
+                     "Hallmarks & germline"],
+                    "What each sequence is: physico-chemical descriptors, "
+                    "profiles, CDR and framework annotation, hallmarks and "
+                    "humanness."),
+    "⚠️ Developability": ("risk", ["Liabilities", "Aggregation"],
+                          "Whether it will behave: chemical liabilities, "
+                          "cysteines and disulfides, suggested repairs, "
+                          "aggregation-prone regions."),
+    "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
+                                  "Clonal families"],
+                      "How your sequences compare with each other: alignment "
+                      "and sequence logo, differences from a reference, clonal "
+                      "families."),
+    "🌍 Repertoire": ("repertoire", ["Repertoire"],
+                      "How they compare with the natural VHH repertoire: "
+                      "unusual framework residues, CDR lengths and composition "
+                      "against 1958 real VHHs."),
+    "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download"],
+                   "What you make from them: codon-optimised DNA, fusion "
+                   "constructs, CSV, figures and the PDF report."),
+}
+
+
+def view_count() -> int:
+    """How many distinct views the analysis offers.
+
+    A family with no tab labels is one view drawn straight into the family's
+    container; a family with labels is one view per label. Derived from
+    ``_FAMILIES`` so the figure quoted in MANUAL.md §3.0 cannot drift from the
+    screen, which is how it came to say fifteen against the code's fourteen.
+    """
+    return sum(len(labels) or 1 for _family, labels, _blurb in
+               _FAMILIES.values())
 
 
 def _cdr3_identity_note(other_tab: str) -> None:
@@ -1887,40 +1940,7 @@ def render(settings: Settings) -> None:
         """Short label for a sequence's kind, for the per-sequence tables."""
         return "VHH" if kinds[name]["is_vhh"] else kinds[name]["kind"]
 
-    # Named rather than indexed: inserting a tab in the middle of an indexed list
-    # silently reassigns every panel after it.
-    # Fourteen tabs are not fourteen subjects, they are four questions plus the
-    # decision view. Grouping them does two things at once: a newcomer reads five
-    # labels instead of scanning fourteen, and Streamlit only executes the family
-    # that is open. Nested tabs would have fixed the first problem and not the
-    # second, because every tab body runs whether or not its tab is selected.
-    FAMILIES = {
-        "🎯 Triage": ("triage", [],
-                      "Every flag in one table, the view for deciding which "
-                      "sequences to carry forward."),
-        "🔍 Identity": ("identity",
-                        ["Properties", "Plots", "CDR / Framework",
-                         "Hallmarks & germline"],
-                        "What each sequence is: physico-chemical descriptors, "
-                        "profiles, CDR and framework annotation, hallmarks and "
-                        "humanness."),
-        "⚠️ Developability": ("risk", ["Liabilities", "Aggregation"],
-                              "Whether it will behave: chemical liabilities, "
-                              "cysteines and disulfides, suggested repairs, "
-                              "aggregation-prone regions."),
-        "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
-                                      "Clonal families"],
-                          "How your sequences compare with each other: alignment "
-                          "and sequence logo, differences from a reference, clonal "
-                          "families."),
-        "🌍 Repertoire": ("repertoire", ["Repertoire"],
-                          "How they compare with the natural VHH repertoire: "
-                          "unusual framework residues, CDR lengths and composition "
-                          "against 1958 real VHHs."),
-        "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download"],
-                       "What you make from them: codon-optimised DNA, fusion "
-                       "constructs, CSV, figures and the PDF report."),
-    }
+    FAMILIES = _FAMILIES
 
     chosen = st.radio("Section", list(FAMILIES), horizontal=True,
                       label_visibility="collapsed", key="analysis_family")

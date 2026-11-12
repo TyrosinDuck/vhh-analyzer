@@ -16,6 +16,106 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+These all come from one independent audit of the repository, run in November
+2026 by a reviewer that had not seen the code being written. Every item is a
+claim the app or the manual made that the code beside it did not support.
+Nothing here changes a result the app computes, with one exception noted
+below; what changes is what the app says about its own numbers.
+
+- **The Reference screen promised a limiting tRNA for all eight rare codons,
+  and two of them have none.** `CGA` and `CGG` carry no tRNA name, so two
+  rows of the codon table showed an empty column under a caption asserting
+  every row had one. They are flagged because the Rosetta and CodonPlus
+  strains supplement them, which is not the same as one tRNA being the
+  documented bottleneck, and the caption and MANUAL.md §12.1 now say six. A
+  test counts the named tRNAs against the sentence so the two cannot drift
+  apart again in either direction.
+
+- **The CAI was presented as Sharp & Li while using a whole-organism table.**
+  Sharp & Li (1987) define the index against a reference set of *highly
+  expressed* genes. The shipped table, `data/ecoli_codon_usage.csv`, is
+  Kazusa's whole-organism one. The arithmetic is theirs and the reference set
+  is not, which makes a number from this app not comparable with a CAI quoted
+  from elsewhere: a gene scoring 0.9 here uses the codons of the average
+  *E. coli* gene, not of its most highly expressed ones. The deviation stays,
+  because a highly-expressed reference set would have to be chosen and
+  shipped and that choice is itself contested, but it is now named in the
+  caption on screen, in the `codons.cai()` docstring and in MANUAL.md §9.
+  Related and worse: the comment above `ECOLI_CODONS` in `vhh_core.py` said
+  the ordering came from highly expressed genes, four lines above naming the
+  whole-organism file it actually reads. The ordering itself was verified
+  correct against that file, all twenty amino acids.
+
+- **28000 /M/cm and 14000 Da were prefilled in Batch & QC, with no source.**
+  Typing an A280 with no sequence loaded produced an mg/mL that looked
+  exactly like one computed from a real sequence. The values are plausible
+  for a VHH, which is what made them dangerous: on the shipped library the
+  medians are 26372 /M/cm and 13836 Da, so they were neither wrong enough to
+  notice nor right enough to defend. The fields in Quantify, Conjugate and
+  Purification balance are empty now, and each view says what it needs rather
+  than assuming it. The same prefill would have set a reagent molar excess in
+  Conjugate and scaled every row of the purification table.
+
+- **The concentration from an A280 was not labelled derived.** The A280 is a
+  measurement; the mg/mL and uM that follow from it are Beer-Lambert run on
+  that reading with an extinction coefficient ProtParam predicts from the
+  sequence. The metrics now read "mg/mL (derived)" and "Molar (derived)", and
+  the caption underneath says which of the two the number rests on, and says
+  it differently when the coefficient was typed by the user rather than
+  predicted. Only the high-A260 branch declined to call this a measurement
+  before.
+
+- **"The two extinction coefficients differ by about 1%" was true for a VHH
+  and wrong by a factor of six elsewhere.** Pairing two cysteines adds
+  exactly 125 /M/cm, so the gap is 125 times the number of disulfides and the
+  *relative* gap shrinks as the rest of the coefficient grows. Measured
+  across the shipped library: 0.5% to 0.9% for the single-disulfide VHHs,
+  1.3% for hen lysozyme, 6.6% for human serum albumin with its seventeen
+  pairs. The help text and MANUAL.md §5.1 now state the rule rather than one
+  sample of it.
+
+- **The Chou-Fasman lysine helix propensity disagreed with its own citation.**
+  It read 114, taken from the thegpm.org table, where Expasy ProtScale, the
+  MATLAB Bioinformatics Toolbox and the Chou-Fasman teaching tables all
+  publish 1.16 citing the same Adv. Enzymol. 47:45-148 (1978) chapter. Every
+  other value in the pair table, nineteen helix and twenty sheet, agrees
+  across all of them. It now reads 116. This is the one change that moves a
+  computed value: on the five-residue smoothed profile the app draws, the
+  difference is not visible, but a constant that contradicts its own citation
+  is wrong whether or not it shows. The 1978 chapter itself was not read, and
+  the comment in `vhh_core.py` says so.
+
+- **Three constants cited sources that could not be confirmed, and now say
+  so.** The filamentous-phage optical constant was attributed to "Day's
+  relation"; that attribution could not be traced to any primary source, so
+  it is dropped in favour of naming the formula and stating plainly that the
+  constant's provenance is not established. It circulates widely in exactly
+  this form, in course protocols, published methods and vendor calculators,
+  always uncited. The side-chain pKa table was attributed to Lehninger 7th
+  ed., which was not consulted; the values are the standard ones, six of the
+  seven agree across every table checked, and the comment now records that
+  cysteine at 8.18 has at least one published table giving 8.08. Neither
+  changes a computed result: the pKa table is display-only, and the phage
+  screen already shows both titre routes side by side. The Alexa Fluor 488
+  figures match the Thermo protocol table they cite, but the A20000 product
+  page now lists MW 643.4 and eps 73000; the source string says so, since a
+  user comparing the two would otherwise think the app stale.
+
+- **MANUAL.md §3.0 said fifteen analysis views where the code builds
+  fourteen.** The families dictionary moved to module scope in
+  `sections/analysis.py` and a `view_count()` derives the number from it, so
+  the manual is now checked against the screen rather than against a second
+  list typed by hand.
+
+Not fixed, and deliberately: the audit could verify only three of the ten
+`paper.bib` entries field by field, because the container it ran in cannot
+reach Crossref, doi.org, PubMed or PMC. The other seven were checked in the
+preceding entry below, by a different route; neither pass is a substitute for
+the other, and the bibliography should be re-checked once a route to those
+services exists.
+
 ### Changed
 
 - **The JOSS manuscript's bibliography is verified rather than provisional.**

@@ -115,9 +115,8 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces about fifteen different views of a set of sequences.
-Showing
-them as fifteen tabs made two problems at once: nobody could find anything, and
+The analysis produces fourteen different views of a set of sequences. Showing
+them as fourteen tabs made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
 
@@ -1484,8 +1483,31 @@ Inputs: the A280, the dilution factor (1 for a neat sample, 10 if you measured
 pedestal already reports a 1 cm equivalent). Outputs: mg/mL and uM, plus the
 total in ug and nmol if you give a volume.
 
-**Cystines formed or all reduced.** The extinction coefficient differs by about
-1% between the two, and this is the choice nobody makes explicitly. A VHH from
+**The A280 is measured; the concentration is not.** The two concentration
+figures are labelled *derived* on screen, and the caption underneath says what
+they rest on: Beer-Lambert run on your reading with an extinction coefficient
+that ProtParam predicts from the sequence, unless you typed your own. A
+predicted coefficient carries its own error into every mg/mL downstream of it,
+including the batch sheet, so the label stays with the number. What makes a
+concentration a measurement is an amino-acid analysis, or an A280 read against
+a standard of known concentration.
+
+**Nothing is prefilled.** The extinction coefficient and the molar mass start
+empty unless a sequence fills them. An earlier version seeded them with
+28000 /M/cm and 14000 Da, which are plausible for a VHH and have no source:
+typing an A280 with no sequence loaded then produced an mg/mL that looked
+exactly like one computed from a real sequence. The same applies to the
+conjugation and purification views, where an arbitrary molar mass would have
+set a reagent excess or scaled a whole table of yields.
+
+**Cystines formed or all reduced.** Pairing two cysteines adds exactly
+125 /M/cm, so the gap between the two values is 125 times the number of
+disulfides, and the *relative* gap depends entirely on how many cysteines the
+sequence has. Measured across this app's own sequence library: 0.5% to 0.9%
+for the single-disulfide VHHs, 1.3% for hen lysozyme, and 6.6% for human serum
+albumin with its seventeen pairs. An earlier version of this manual said "about
+1%", which held for a typical VHH and was wrong by a factor of six for a
+cysteine-rich construct. This is the choice nobody makes explicitly. A VHH from
 the periplasm has its canonical disulfide formed, so the cystine value is
 usually the right one.
 
@@ -1884,12 +1906,18 @@ in which an A260 of 1 corresponded to 3 x 10^10 particles per millilitre. That
 is a correspondence observed for a particular preparation on a particular
 instrument, which is why the app lets you edit it rather than burying it.
 
-The **optical** route is Day's relation for filamentous phage,
+The **optical** route is the standard filamentous-phage relation,
 
-    virions/mL = A269 x 6e16 / (bases in the genome)
+    virions/mL = (A269 - A320) x 6e16 / (bases in the genome)
 
 which works the absorbance out from the single-stranded DNA the particle
-carries. The genome length is an input because a phagemid carrying an insert is
+carries. An earlier version of this manual called it "Day's relation". That
+attribution has not been confirmed against any primary source, so it has been
+dropped: the formula circulates widely in this exact form, in course protocols,
+published methods and vendor calculators, always without a citation of its own.
+The arithmetic is standard and reproducible; where the constant comes from is
+not established here, and that is the reason the empirical route is shown
+beside it rather than behind it. The genome length is an input because a phagemid carrying an insert is
 not the length of the helper phage; M13mp18 is 7249 bases. Reading at 260 nm
 rather than 269, and without subtracting the A320 scatter, costs some accuracy
 but not an order of magnitude.
@@ -2119,6 +2147,18 @@ than relaxed: the app now ships the measured table,
 from the Kazusa Codon Usage Database (taxid 316407), released under CC0 and
 redistributed via the `python-codon-tables` package. Every usage figure and the
 CAI come from it.
+
+**It is the Sharp & Li formula over a different reference set, and that
+matters.** Sharp & Li (1987) define the index against a set of *highly
+expressed* genes, so their `w` measures adaptation to the codons of genes the
+host translates hard. The Kazusa table shipped here is a whole-organism table.
+The arithmetic is the published one, the reference set is not, and the two are
+not interchangeable: a gene scoring 0.9 here uses the codons of the average
+*E. coli* gene, not the codons of its most highly expressed ones. The
+deviation is deliberate, because a reference set of highly expressed genes
+would have to be chosen and shipped, and that choice is itself contested. It
+is named here, in the caption on screen and in the `codons.cai()` docstring so
+that a number taken out of this app is not quoted as a published CAI.
 
 A CAI near 1 means the gene uses the host's preferred codons throughout.
 Methionine, tryptophan and stop codons are excluded, having no synonym to
@@ -2484,8 +2524,10 @@ Then all 64 codons, filterable by amino acid or down to the rare ones:
 - **w** is that share divided by the best synonym's, the relative
   adaptiveness; CAI is the geometric mean of these. A codon with w near 1 is
   the one the host prefers.
-- **rare_in_ecoli** marks the eight codons §9 flags, each with the tRNA that
-  is limiting for it.
+- **rare_in_ecoli** marks the eight codons §9 flags. Six of them carry the
+  name of the tRNA that is limiting for them. CGA and CGG have an empty tRNA
+  column: they are flagged because the supplementing strains carry extra
+  copies of their tRNAs, not because one tRNA is the documented bottleneck.
 
 Stop codons have no share, because they do not compete with a synonym for an
 amino acid, so a share would be a number about nothing.
