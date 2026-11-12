@@ -300,3 +300,59 @@ def test_amounts_are_shown_in_a_unit_a_balance_reads():
     assert bf.format_amount(0.0004, "g") == "400.0 ug"
     assert bf.format_amount(10, "mL") == "10.00 mL"
     assert bf.format_amount(0.002, "mL") == "2.0 uL"
+
+
+# --------------------------------------------------------------------------
+# Composing a buffer in the app
+# --------------------------------------------------------------------------
+
+def test_a_composed_buffer_goes_through_the_same_arithmetic():
+    """In 500 mL: 50 mM Tris is 0.025 mol, 0.025 x 121.136 = 3.0284 g, and
+    150 mM NaCl is 0.075 mol, 0.075 x 58.44 = 4.383 g. The same numbers a
+    recipe file would give, because `custom_recipe` builds the shape
+    `prepare` already takes."""
+    book, _ = bf.load()
+    recipe = bf.custom_recipe(
+        [{"compound": "Tris base", "amount": 50, "unit": "mM"},
+         {"compound": "Sodium chloride", "amount": 150, "unit": "mM"}],
+        ph=8.0, ph_adjust_with="HCl", sterilization="filter")
+    plan = bf.prepare(recipe, book["compounds"], 500)
+    got = {row["compound"]: row["amount"] for row in plan["rows"]}
+    assert got == pytest.approx({"Tris base": 0.025 * 121.136,
+                                 "Sodium chloride": 0.075 * 58.44})
+    assert "Adjust the pH to 8 with HCl." in plan["steps"]
+    assert "Filter-sterilize." in plan["steps"]
+
+
+def test_a_composed_buffer_with_no_ph_is_never_told_to_adjust_one():
+    book, _ = bf.load()
+    recipe = bf.custom_recipe(
+        [{"compound": "Sodium chloride", "amount": 1, "unit": "M"}])
+    steps = bf.prepare(recipe, book["compounds"], 100)["steps"]
+    assert not any("pH" in step for step in steps)
+    assert recipe["ph"] is None and recipe["ph_mode"] == ""
+
+
+def test_a_composed_buffer_picks_the_hydrate_it_is_given():
+    """The whole point of the form selector: the same 50 mM of phosphate is
+    4.146 g/L as Na2HPO4 and 5.198 g/L as Na2HPO4.2H2O, in one litre."""
+    book, _ = bf.load()
+    recipe = bf.custom_recipe(
+        [{"compound": "Disodium hydrogen phosphate", "amount": 29.21,
+          "unit": "mM"}])
+    anhydrous = bf.prepare(recipe, book["compounds"], 1000, 1,
+                           {"Disodium hydrogen phosphate": "anhydrous"})
+    hydrate = bf.prepare(recipe, book["compounds"], 1000, 1,
+                         {"Disodium hydrogen phosphate": "dihydrate"})
+    assert anhydrous["rows"][0]["amount"] == pytest.approx(0.02921 * 141.958)
+    assert hydrate["rows"][0]["amount"] == pytest.approx(0.02921 * 177.988)
+
+
+def test_a_composed_buffer_is_not_written_anywhere():
+    """It carries a source saying where it came from, and the files on disk
+    are untouched: the recipe book is edited in the repository, not here."""
+    before = (bf.DATA_DIR / "recipes.csv").read_text()
+    recipe = bf.custom_recipe(
+        [{"compound": "Sodium chloride", "amount": 1, "unit": "M"}])
+    assert recipe["source"] == "composed in the app"
+    assert (bf.DATA_DIR / "recipes.csv").read_text() == before

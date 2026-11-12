@@ -30,7 +30,7 @@ __all__ = [
     "batch_record_inputs", "__version__",
 ]
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.12a"
 
 
 # --------------------------------------------------------------------------
@@ -529,6 +529,66 @@ def phage_aliquot(titre_per_ml: float, target_particles: float) -> dict:
         note = ("more than a millilitre of stock; either the titre is low for "
                 "this target or the target is high for this stock")
     return {"volume_ul": volume_ul, "note": note}
+
+
+# --------------------------------------------------------------------------
+# Panning enrichment
+# --------------------------------------------------------------------------
+# After a round, the eluted phage are titrated on two plates: the output of
+# the panning on the antigen (+) and on the negative control without it (-).
+# Each plate is counted at the dilution that gave countable colonies, so the
+# count times the dilution factor is the output per volume plated, and the
+# ratio of the two outputs is the enrichment. Nothing here is a constant: it
+# is the laboratory's own counts and dilutions, multiplied and divided.
+#
+# The only thing added is the counting uncertainty. A colony count is a
+# Poisson count, so its relative standard error is 1/sqrt(N), and a ratio of
+# two independent counts has a relative error of sqrt(1/N+ + 1/N-). That is
+# the floor set by counting alone; pipetting and the dilution series add to
+# it, and nothing here knows by how much.
+
+
+def panning_enrichment(plus_colonies: float, plus_dilution: float,
+                       minus_colonies: float, minus_dilution: float,
+                       plated_ul: float | None = None) -> dict:
+    """Output of the + and - plates of one round, and their ratio.
+
+    ``*_dilution`` is the dilution factor of the plate counted, 1000 for a
+    10^-3 dilution. ``plated_ul`` is the volume spread on each plate, the same
+    on both; without it the outputs are colonies times dilution, which is
+    enough for the ratio, and with it they are colony-forming units per mL.
+
+    The enrichment is None when the - plate has no colony: a ratio to zero is
+    not a large number, it is a plate that was not diluted little enough to
+    say anything, and the note says so.
+    """
+    for name, value in [("colony count", plus_colonies),
+                        ("colony count", minus_colonies)]:
+        if value is None or value < 0 or float(value) != int(value):
+            raise ValueError(f"a {name} is a whole number of zero or more")
+    for value in (plus_dilution, minus_dilution):
+        if value is None or value < 1:
+            raise ValueError("a dilution factor is 1 or more (1000 for a "
+                             "10^-3 dilution)")
+    if plated_ul is not None and plated_ul <= 0:
+        raise ValueError("the plated volume must be above zero")
+
+    per_ml = 1000.0 / plated_ul if plated_ul else 1.0
+    plus = plus_colonies * plus_dilution * per_ml
+    minus = minus_colonies * minus_dilution * per_ml
+    enrichment, uncertainty, note = None, None, ""
+    if minus_colonies == 0:
+        note = ("no colony on the - plate: the enrichment cannot be "
+                "computed; count a less diluted - plate")
+    else:
+        enrichment = plus / minus
+        if plus_colonies > 0:
+            uncertainty = (1 / plus_colonies + 1 / minus_colonies) ** 0.5
+        else:
+            note = "no colony on the + plate"
+    return {"plus_output": plus, "minus_output": minus,
+            "per_ml": plated_ul is not None, "enrichment": enrichment,
+            "relative_uncertainty": uncertainty, "note": note}
 
 
 # --------------------------------------------------------------------------

@@ -1699,7 +1699,10 @@ What to weigh, or pipette, for a buffer or a medium, at the volume and the
 concentration factor you need, with the form of each salt that is actually on
 your shelf. Nothing here needs a sequence.
 
-### 6.1 Using it
+The screen has two views: **From a recipe**, one of the laboratory's own,
+and **Compose one**, a buffer assembled from the compounds on the spot.
+
+### 6.1 Using a recipe
 
 Pick a recipe, give the final volume in mL and the concentration factor: 1
 for the buffer as used, 20 for a 20X stock. The factor starts at the one the
@@ -1713,6 +1716,29 @@ weigh, or a volume to pipette when it is a % v/v or comes from a stock
 solution. Under it, the steps, written from what the recipe declares: how to
 handle the pH, the volume to make up to, sterilization, storage, and the
 dilution to use a stock. The table downloads as CSV.
+
+### 6.1b Composing a buffer
+
+For a buffer that is not in the files: a one-off, a gradient step, a
+variation on a recipe. Pick the compounds, give each a concentration and a
+unit, pick the form you weigh, and say how much you are making. The table
+and the steps are the ones §6.1 describes, and the arithmetic is the same
+one, because a composed buffer is turned into a recipe of the same shape
+before anything is computed.
+
+Only compounds listed in `compounds.csv` are offered, since a molar mass is
+only as good as the formula behind it; anything missing is added to that
+file (§6.6). A compound with no formula (tryptone, Tween 20) offers only the
+mass and percentage units.
+
+The pH field is a pH **you** set, with the reagent you name beside it, and
+it defaults to none. The app never computes a pH, here or anywhere else
+(§6.4).
+
+**Nothing composed here is saved.** The app writes nothing, so a buffer you
+will make again belongs in the files with its source, where it is versioned
+and where the other view reads it. The composer is for the buffer you make
+once.
 
 ### 6.2 Hydrates: choosing the form you weigh
 
@@ -1815,6 +1841,9 @@ did not change.
 reading you supply, a constant that cites its source and can be edited, or
 arithmetic on those two.
 
+The screen has two views: the **titre** of a stock before a round, and the
+**enrichment** that comes out of one.
+
 ### 7.1 Phage titre
 
 An absorbance at 260 nm turns into particles per millilitre, and that is what
@@ -1871,6 +1900,48 @@ change the target. A round of panning is usually run with 10^11 to 10^13
 particles. If a volume comes out below two microlitres it cannot be pipetted
 accurately, and the app offers a dilution instead, exactly as the conjugation
 planner does and for the same reason.
+
+### 7.2 Enrichment
+
+What came back out of a round. After each round the eluted phage are
+titrated on two plates: the panning on the antigen (**+**) and the negative
+control without it (**-**). One row per round, four numbers each: the
+colonies counted on each plate, and the dilution factor of the plate they
+were counted on, 1000 for a 10^-3 dilution. The output of a plate is the
+count times its dilution, and the enrichment is the + output over the -
+output. Give the volume plated, the same on both plates, and the outputs are
+also shown as cfu/mL; the enrichment is a ratio and does not change.
+
+The two plates are usually counted at different dilutions, which is the
+reason this is not simply one count divided by another: at the end of a
+successful campaign the + plate may need a 10^-5 dilution while the - plate
+is counted neat, and dividing the raw counts would then understate the
+enrichment by five orders of magnitude.
+
+**An empty row is not a zero.** A plate with no colony is a result and is
+entered as 0; a plate that was not counted is left empty, and the round is
+left out, with a line saying how many were. The two are different things and
+the table does not mix them.
+
+**A - plate with no colony gives no enrichment**, and the app says so rather
+than dividing by zero or quietly showing a very large number. It is not an
+infinite enrichment: it is a plate that was not diluted little enough to
+measure anything, and the answer is to count a less diluted one.
+
+**The counting error** beside each ratio is the Poisson floor of the two
+counts alone, sqrt(1/N+ + 1/N-), which for 120 and 3 colonies is about 60%.
+Pipetting and the dilution series add to that, and nothing here knows by how
+much, so it is a floor and not an error bar. Below about 30 colonies on a
+plate, the count itself is the dominant uncertainty.
+
+When more than one round has an enrichment, a line under the table compares
+the last with the first. That is a comparison of two ratios and nothing
+more. **A rising enrichment is not a selection having worked**: a clone that
+binds the plastic, or simply grows faster than the rest of the library,
+enriches exactly the same way. Sequencing the output is what distinguishes
+them, which is what the Sanger sequencing section is for.
+
+The table downloads as CSV.
 
 ---
 
@@ -2544,6 +2615,9 @@ somewhere other than Community Cloud.
 - Buffer molar masses are derived from formulas, not measured, and only as right as
   the formula typed for each form. The recipes are one laboratory's, and nothing in
   the app knows solubilities.
+- A panning enrichment is a ratio of two colony counts. It says the output grew,
+  not that the selection worked: a background binder and a faster-growing clone
+  enrich alike. Its stated error is the counting floor, not the total error.
 
 ---
 

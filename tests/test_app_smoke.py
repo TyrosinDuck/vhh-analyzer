@@ -442,6 +442,65 @@ def test_the_buffers_section_prepares_pbs_at_its_usual_stock(app):
     assert "Do not adjust the pH" in steps
 
 
+def test_composing_a_buffer_weighs_the_hydrate_chosen(app):
+    """The other view of Buffers & media: compounds picked by hand rather
+    than read from a recipe. 29.21 mM of phosphate in 1 L is 4.146 g of the
+    anhydrous salt and 5.198 g of the dihydrate, the same moles either way.
+    29.21 mM of the anhydrous salt is 0.02921 x 141.958 = 4.147 g, and of
+    the dihydrate 0.02921 x 177.988 = 5.199 g. `AppTest` has no accessor for
+    `st.multiselect`, so the selection is injected through its session-state
+    entry, as the purification balance test does for the data editor.
+    """
+    _goto(app, "🧂 Buffers & media")
+    app.radio(key="buf_view").set_value("🧪 Compose one").run()
+    _no_failure(app, "buffers, compose")
+    assert any("Pick at least one compound" in info.value
+               for info in app.info), "the empty state said nothing"
+
+    app.session_state["cus_compounds"] = ["Disodium hydrogen phosphate"]
+    app.run()
+    app.number_input(key="cus_amount_Disodium hydrogen phosphate").set_value(
+        29.21).run()
+    _no_failure(app, "buffers, composed buffer")
+    amounts = dict(zip(app.dataframe[0].value["Component"],
+                       app.dataframe[0].value["Amount"]))
+    assert amounts["Disodium hydrogen phosphate"] == "4.147 g"
+
+    app.selectbox(key="cus_form_Disodium hydrogen phosphate").set_value(
+        "dihydrate").run()
+    _no_failure(app, "buffers, composed buffer, dihydrate")
+    amounts = dict(zip(app.dataframe[0].value["Component"],
+                       app.dataframe[0].value["Amount"]))
+    assert amounts["Disodium hydrogen phosphate"] == "5.199 g"
+
+
+def test_the_enrichment_view_counts_a_round(app):
+    """The second view of Phage & panning. 120 colonies at 10^-3 against 3
+    at 10^-1 is an enrichment of 4000. The counts go in through the data
+    editor's session-state entry, as the purification balance does.
+    """
+    from sections import phage as phage_screen
+
+    _goto(app, "🦠 Phage & panning")
+    app.radio(key="phage_view").set_value(phage_screen.V_ENRICHMENT).run()
+    _no_failure(app, "phage, enrichment, empty")
+    assert any("four numbers" in info.value for info in app.info), \
+        "the empty state did not say what it needs"
+
+    app.session_state["en_rounds"] = {
+        "edited_rows": {0: {phage_screen.C_PLUS: 120,
+                            phage_screen.C_PLUS_DIL: 1000,
+                            phage_screen.C_MINUS: 3,
+                            phage_screen.C_MINUS_DIL: 10}},
+        "added_rows": [], "deleted_rows": []}
+    app.run()
+    _no_failure(app, "phage, enrichment, one round")
+    # The last dataframe on the page: the first is the editor itself.
+    table = app.dataframe[-1].value
+    assert list(table["Enrichment (+/-)"]) == ["4 000"]
+    assert list(table["+ output (cfu/mL)"]) == ["1.20e+06"]
+
+
 def test_batch_and_qc_no_longer_offers_the_phage_titre(app):
     from sections import bench as bench_screen
 

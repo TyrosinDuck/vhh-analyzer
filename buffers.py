@@ -20,7 +20,7 @@ import csv
 import re
 from pathlib import Path
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 DATA_DIR = Path(__file__).parent / "data" / "buffers"
 
@@ -382,6 +382,33 @@ def forms_offered(compounds: dict, component: dict) -> list[str]:
 
 # --------------------------------------------------------------------------
 # Preparing
+def custom_recipe(components: list[dict], name: str = "Custom",
+                  ph: float | None = None, ph_adjust_with: str = "",
+                  sterilization: str = "none") -> dict:
+    """A recipe assembled in the app rather than read from the files.
+
+    Returns the same shape `load` builds, so `prepare` and `steps` work on it
+    unchanged: a buffer composed on the screen and one read from the files
+    must go through the same arithmetic, or the two could drift apart and
+    only one of them would have tests.
+
+    Each component is ``{"compound", "amount", "unit"}`` and may carry
+    ``"form"``, ``"stock"`` and ``"note"``. Nothing is written anywhere: a
+    custom buffer lives as long as the screen does.
+    """
+    return {
+        "recipe": name, "kind": "buffer", "ph": ph,
+        "ph_mode": "adjust" if ph is not None else "",
+        "ph_adjust_with": ph_adjust_with if ph is not None else "",
+        "sterilization": sterilization, "storage": "", "usual_stock": 1.0,
+        "source": "composed in the app", "notes": "",
+        "components": [{"compound": c["compound"], "amount": c["amount"],
+                        "unit": c["unit"], "form": c.get("form", ""),
+                        "stock": c.get("stock"), "note": c.get("note", ""),
+                        "line": 0} for c in components],
+    }
+
+
 def prepare(recipe: dict, compounds: dict, volume_ml: float,
             factor: float = 1.0, forms: dict[str, str] | None = None) -> dict:
     """What to weigh or pipette for ``volume_ml`` of the recipe at ``factor``X.

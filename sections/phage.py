@@ -9,12 +9,27 @@ sources, live in `bench.py`, unchanged by the move. The widget keys keep their
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 import bench as bn
-from shell import SECTIONS
+from shell import FIT, SECTIONS
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
+
+V_TITRE = "🧪 Titre"
+V_ENRICHMENT = "📈 Enrichment"
+VIEWS = [V_TITRE, V_ENRICHMENT]
+
+# The columns of the rounds table, named once: the screen writes them into the
+# editor and reads the edited table back by them, and a literal in both places
+# is the same string kept in two lists.
+C_ROUND = "Round"
+C_PLUS = "Colonies +"
+C_PLUS_DIL = "Dilution +"
+C_MINUS = "Colonies -"
+C_MINUS_DIL = "Dilution -"
+COLUMNS = [C_ROUND, C_PLUS, C_PLUS_DIL, C_MINUS, C_MINUS_DIL]
 
 
 def render() -> None:
@@ -22,16 +37,22 @@ def render() -> None:
     icon, label, *_ = SECTIONS["phage"]
     st.title(f"{icon} {label}")
     st.markdown(
-        "The phage stocks that go into each round of panning. Nothing here "
-        "needs a sequence: the purified protein that comes out at the end of "
-        "a campaign is the business of Batch & QC.")
+        "The phage stocks that go into each round of panning, and what comes "
+        "back out of a round. Nothing here needs a sequence: the purified "
+        "protein at the end of a campaign is the business of Batch & QC.")
+
+    view = st.radio("View", VIEWS, horizontal=True,
+                    label_visibility="collapsed", key="phage_view")
     st.divider()
-    _titre()
+    if view == V_ENRICHMENT:
+        _enrichment()
+    else:
+        _titre()
     st.divider()
     st.caption(
-        "Arithmetic on readings you supply, with constants that cite their "
-        "source and can be edited. Nothing here predicts how many phage "
-        "infect, bind or come back from a round.")
+        "Arithmetic on the readings and counts you supply. Constants that "
+        "have a source cite it and can be edited. Nothing here predicts how "
+        "many phage infect, bind or come back from a round.")
 
 
 def _titre() -> None:
@@ -189,3 +210,117 @@ actually infect.
         f"Liquid phase is {bn.LIQUID_PANNING_FACTOR:g}x the solid-phase input, "
         f"which is a protocol convention and not something this app derives. "
         f"Change the target above if yours differs.")
+
+
+# --------------------------------------------------------------------------
+def _enrichment() -> None:
+    st.subheader("Enrichment, round by round")
+    st.markdown(
+        "After a round, the eluted phage are titrated on the plate panned on "
+        "the antigen (**+**) and on the negative control without it (**-**). "
+        "For each plate give the colonies counted and the dilution factor of "
+        "the plate they were counted on: 1000 for a 10^-3 dilution. The "
+        "enrichment is the + output divided by the - output.")
+
+    plated = st.number_input(
+        "Volume plated per plate (uL)", 0.0, 1e4, 100.0, 10.0,
+        key="en_plated",
+        help="The same volume on the + and the - plate. The enrichment is a "
+             "ratio and does not need it; given, the outputs are also shown "
+             "as cfu/mL. Set it to 0 to leave it out.")
+
+    # The number columns are float rather than object: a column of None
+    # objects is drawn with "None" written in every empty cell, which reads
+    # as a value rather than as a cell waiting for one.
+    empty = pd.Series([float("nan")] * 3, dtype="float64")
+    blank = pd.DataFrame({
+        C_ROUND: [f"R{i}" for i in (1, 2, 3)],
+        C_PLUS: empty, C_PLUS_DIL: empty,
+        C_MINUS: empty, C_MINUS_DIL: empty,
+    })
+    counts = st.column_config.NumberColumn(
+        min_value=0, step=1, format="%d",
+        help="Colonies counted on that plate.")
+    dilutions = st.column_config.NumberColumn(
+        min_value=1.0, step=10.0, format="%.0f",
+        help="Dilution factor of the plate counted: 1000 for 10^-3.")
+    edited = st.data_editor(
+        blank, key="en_rounds", num_rows="dynamic", hide_index=True, **FIT,
+        column_config={
+            C_ROUND: st.column_config.TextColumn(width="small"),
+            C_PLUS: counts, C_PLUS_DIL: dilutions,
+            C_MINUS: counts, C_MINUS_DIL: dilutions,
+        })
+
+    rows, skipped = [], 0
+    for _index, row in edited.iterrows():
+        values = [row[C_PLUS], row[C_PLUS_DIL], row[C_MINUS], row[C_MINUS_DIL]]
+        if any(pd.isna(value) for value in values):
+            # A row left half-filled is not a round with zeros in it: an
+            # uncounted plate and a plate with no colony are different
+            # results, and only the second is a number.
+            if not all(pd.isna(value) for value in values):
+                skipped += 1
+            continue
+        try:
+            out = bn.panning_enrichment(
+                float(row[C_PLUS]), float(row[C_PLUS_DIL]),
+                float(row[C_MINUS]), float(row[C_MINUS_DIL]),
+                plated or None)
+        except ValueError as exc:
+            st.error(f"**{row[C_ROUND]}**: {exc}.")
+            continue
+        rows.append((str(row[C_ROUND]), out))
+
+    if skipped:
+        st.caption(f"{skipped} row(s) left out: a round needs all four "
+                   f"numbers. A plate with no colony counted is 0; a plate "
+                   f"not counted is empty, and the two are not the same.")
+    if not rows:
+        st.info("Give a round its four numbers to see its enrichment.")
+        return
+
+    unit = "cfu/mL" if plated else "colonies x dilution"
+    table = pd.DataFrame([{
+        C_ROUND: name,
+        f"+ output ({unit})": f"{out['plus_output']:.2e}",
+        f"- output ({unit})": f"{out['minus_output']:.2e}",
+        "Enrichment (+/-)": ("not defined" if out["enrichment"] is None
+                             else f"{out['enrichment']:,.0f}".replace(",", " ")
+                             if out["enrichment"] >= 10
+                             else f"{out['enrichment']:.2f}"),
+        "Counting error": ("" if out["relative_uncertainty"] is None
+                           else f"±{out['relative_uncertainty'] * 100:.0f}%"),
+    } for name, out in rows])
+    st.dataframe(table, hide_index=True, **FIT)
+
+    for name, out in rows:
+        if out["note"]:
+            st.warning(f"**{name}**: {out['note']}.")
+
+    defined = [(name, out) for name, out in rows
+               if out["enrichment"] is not None]
+    if len(defined) > 1:
+        first, last = defined[0], defined[-1]
+        if first[1]["enrichment"] > 0:
+            change = last[1]["enrichment"] / first[1]["enrichment"]
+            st.caption(
+                f"{last[0]} over {first[0]}: the enrichment "
+                f"{'rose' if change >= 1 else 'fell'} "
+                f"{max(change, 1 / change) if change else 0:.1f}-fold. That "
+                f"is a comparison of two ratios, not a selection having "
+                f"worked: a clone that grows better also enriches.")
+
+    st.download_button("Download the table (CSV)",
+                       table.to_csv(index=False).encode(), mime="text/csv",
+                       file_name="panning_enrichment.csv", key="en_csv")
+
+    st.caption(
+        "The ratio is arithmetic on your counts. The counting error is the "
+        "Poisson floor of the two counts alone, sqrt(1/N+ + 1/N-): pipetting "
+        "and the dilution series add to it, and nothing here knows by how "
+        "much. A ratio from plates counted at very different dilutions, or "
+        "with fewer than about 30 colonies, carries more error than the "
+        "figure shown. What the number cannot say is *why* the output grew: "
+        "a background binder of the plastic, and a clone that simply grows "
+        "faster, both enrich. Sequencing the output is what settles it.")

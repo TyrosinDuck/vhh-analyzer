@@ -18,6 +18,34 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **An enrichment calculator**, as the second view of Phage & panning. One
+  row per round, four numbers each: the colonies counted on the plate panned
+  on the antigen and on the negative control, and the dilution factor of the
+  plate each count came from. The output of a plate is the count times its
+  dilution, and the enrichment is the ratio of the two, which is why the
+  dilutions are asked for separately: the two plates are rarely counted at
+  the same dilution, and dividing raw counts would be wrong by whatever they
+  differ by. Giving the volume plated adds cfu/mL; the ratio is unchanged.
+  A plate with no colony counted is 0 and a plate not counted is empty: a
+  half-filled row is left out with a line saying so, rather than read as
+  zeros. A negative plate with no colony gives no enrichment at all, with a
+  note to count a less diluted one, rather than a division by zero or a very
+  large number. Each ratio carries the Poisson floor of its two counts,
+  sqrt(1/N+ + 1/N-), stated as a floor and not as the total error. A line
+  compares the last round with the first, saying in the same breath that a
+  rising ratio is not a selection having worked, since a background binder
+  and a faster-growing clone enrich alike.
+
+- **Composing a buffer in Buffers & media**, as a second view beside the
+  recipes. Pick compounds from `compounds.csv`, give each a concentration, a
+  unit and the form you weigh, and get the same table and the same steps as
+  a recipe gives. It goes through the same arithmetic rather than a second
+  one: `buffers.custom_recipe` builds a recipe of the shape `prepare`
+  already takes. The pH is one you set yourself with the reagent you name,
+  defaulting to none, and nothing composed is written anywhere: a buffer
+  worth keeping belongs in `data/buffers/` with its source. Compounds with
+  no formula offer only the mass and percentage units.
+
 - **A Buffers & media section**, in the Bench group: what to weigh or
   pipette for a buffer or a medium, at any final volume and concentration
   factor, with the form of each salt that is actually on the shelf. A

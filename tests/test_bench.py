@@ -741,3 +741,64 @@ def test_an_unreadable_record_is_refused_with_a_reason(data, fragment):
     """
     with pytest.raises(ValueError, match=fragment):
         bench.batch_record_inputs(data)
+
+
+# --------------------------------------------------------------------------
+# Panning enrichment
+# --------------------------------------------------------------------------
+
+def test_enrichment_is_the_ratio_of_the_two_outputs():
+    """120 colonies at 10^-3 is 1.2e5 per plate; 3 at 10^-1 is 3e1. The
+    ratio is 4000. With 100 uL plated, both outputs are x10 for a mL, and
+    the ratio is unchanged, which is the point of it being a ratio."""
+    bare = bench.panning_enrichment(120, 1000, 3, 10)
+    assert bare["plus_output"] == pytest.approx(1.2e5)
+    assert bare["minus_output"] == pytest.approx(30.0)
+    assert bare["enrichment"] == pytest.approx(4000.0)
+    assert bare["per_ml"] is False
+
+    per_ml = bench.panning_enrichment(120, 1000, 3, 10, plated_ul=100)
+    assert per_ml["plus_output"] == pytest.approx(1.2e6)
+    assert per_ml["minus_output"] == pytest.approx(300.0)
+    assert per_ml["enrichment"] == pytest.approx(4000.0)
+    assert per_ml["per_ml"] is True
+
+
+def test_the_counting_error_is_the_poisson_floor_of_the_two_counts():
+    """sqrt(1/100 + 1/25) = sqrt(0.05) = 0.2236, so about 22%, driven by
+    the smaller count. It is the floor from counting alone."""
+    out = bench.panning_enrichment(100, 1000, 25, 1000)
+    assert out["relative_uncertainty"] == pytest.approx(0.05 ** 0.5)
+
+
+def test_an_empty_negative_plate_gives_no_enrichment_rather_than_a_big_one():
+    """Dividing by zero colonies is not a large enrichment, it is a plate
+    that cannot answer. The output of the + plate is still reported."""
+    out = bench.panning_enrichment(85, 10000, 0, 100)
+    assert out["enrichment"] is None
+    assert out["relative_uncertainty"] is None
+    assert out["plus_output"] == pytest.approx(8.5e5)
+    assert "no colony on the - plate" in out["note"]
+
+
+def test_an_empty_positive_plate_is_an_enrichment_of_zero_and_says_so():
+    out = bench.panning_enrichment(0, 100, 40, 100)
+    assert out["enrichment"] == 0.0
+    assert out["relative_uncertainty"] is None
+    assert "no colony on the + plate" in out["note"]
+
+
+@pytest.mark.parametrize("args", [
+    (-1, 100, 10, 100),      # a negative count
+    (12.5, 100, 10, 100),    # half a colony
+    (10, 0.5, 10, 100),      # a dilution factor below 1
+    (10, 100, 10, 0),
+])
+def test_a_count_that_cannot_be_one_is_refused(args):
+    with pytest.raises(ValueError):
+        bench.panning_enrichment(*args)
+
+
+def test_a_plated_volume_of_zero_is_refused_rather_than_dividing_by_it():
+    with pytest.raises(ValueError):
+        bench.panning_enrichment(10, 100, 10, 100, plated_ul=0)
