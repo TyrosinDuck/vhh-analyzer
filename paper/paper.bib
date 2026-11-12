@@ -1,17 +1,29 @@
 % ---------------------------------------------------------------------------
-% VERIFY EVERY ENTRY BEFORE SUBMITTING.
+% Every entry below was checked on 2026-11-12, field by field: journal,
+% volume, issue, pages, year and DOI. The nine entries that already carried a
+% DOI were correct; none of them resolved to the wrong paper. What was missing
+% was issue numbers, added here, and the tenth entry, which had no identifier
+% at all and now has one.
 %
-% These were written from the author/year/title level, which is the level at
-% which they are reliable. Volume, issue, page and DOI fields are the ones that
-% go wrong, and a wrong DOI in a reference list is worse than a missing one:
-% it resolves to something, just not to what you cited.
+% How they were checked: Crossref's API is not reachable from the machine this
+% was done on, so each entry was confirmed against at least two independent
+% records, normally PubMed or PMC plus a publisher or indexer page, and kept
+% only where the two agreed. Where a field could not be confirmed it was left
+% out rather than guessed; the comments on individual entries say which.
 %
-% The fast way to check each one: paste the title into Crossref
-% (search.crossref.org) or Google Scholar, take the BibTeX it gives you, and
-% replace the entry wholesale. Entries below with a DOI marked TODO are ones
-% whose identifier was deliberately left out rather than guessed.
+% Two things in here look like mistakes and are not. Read the comments above
+% `tien2013` and `hamers-casterman1993` before correcting either.
+%
+% Re-check before submitting if a year has passed: an advance-access article
+% acquires a volume and pages later, and this file has one entry that was in
+% that state until recently.
 % ---------------------------------------------------------------------------
 
+% Nature's own web page for this paper spells two of the authors "Hammers",
+% with a double m. It is a typesetting error on Nature's side: the name is
+% Hamers (Raymond Hamers ran the Brussels laboratory, and Hamers-Casterman is
+% the first author). PubMed, the DOI record and the patent filings from the
+% same group all spell it Hamers. Do not "fix" this to match the Nature page.
 @article{hamers-casterman1993,
   author  = {Hamers-Casterman, C. and Atarhouch, T. and Muyldermans, S. and
              Robinson, G. and Hamers, C. and Songa, E. Bajyana and Bendahman, N.
@@ -20,6 +32,7 @@
   journal = {Nature},
   year    = {1993},
   volume  = {363},
+  number  = {6428},
   pages   = {446--448},
   doi     = {10.1038/363446a0}
 }
@@ -30,6 +43,7 @@
   journal = {Annual Review of Biochemistry},
   year    = {2013},
   volume  = {82},
+  number  = {1},
   pages   = {775--797},
   doi     = {10.1146/annurev-biochem-063011-092449}
 }
@@ -43,10 +57,13 @@
   journal = {Developmental and Comparative Immunology},
   year    = {2003},
   volume  = {27},
+  number  = {1},
   pages   = {55--77},
   doi     = {10.1016/S0145-305X(02)00039-3}
 }
 
+% Published online 30 September 2015, in the issue dated 2016. The year here
+% is the issue's, which is how ANARCI itself and the OPIG pages cite it.
 @article{dunbar2016,
   author  = {Dunbar, James and Deane, Charlotte M.},
   title   = {{ANARCI}: antigen receptor numbering and receptor classification},
@@ -73,6 +90,7 @@
   doi     = {10.1093/bioinformatics/btp163}
 }
 
+% An article-number journal: 33964 is the article number, not a page range.
 @article{deorowicz2016,
   author  = {Deorowicz, Sebastian and Debudaj-Grabysz, Agnieszka and
              Gudy{\'s}, Adam},
@@ -81,10 +99,12 @@
   journal = {Scientific Reports},
   year    = {2016},
   volume  = {6},
+  number  = {1},
   pages   = {33964},
   doi     = {10.1038/srep33964}
 }
 
+% Published online 7 December 2019, in the issue dated 1 April 2020.
 @article{tareen2020,
   author  = {Tareen, Ammar and Kinney, Justin B.},
   title   = {Logomaker: beautiful sequence logos in {Python}},
@@ -96,6 +116,10 @@
   doi     = {10.1093/bioinformatics/btz921}
 }
 
+% "accessibilites" is spelled that way in the published title, with one i
+% missing from "accessibilities". It is the journal's typo, it is what the DOI
+% record carries, and a reference list that silently corrects it no longer
+% matches the article. Leave it.
 @article{tien2013,
   author  = {Tien, Matthew Z. and Meyer, Austin G. and Sydykova, Dariya K. and
              Spielman, Stephanie J. and Wilke, Claus O.},
@@ -120,15 +144,26 @@
   doi     = {10.1093/nar/15.3.1281}
 }
 
-% PLAbDab-nano: the exact citation is quoted in the app's generator section and
-% on the OPIG web page. Copy it from there rather than from here - this entry is
-% a placeholder for the fields, not a verified record.
-% TODO: replace wholesale from https://opig.stats.ox.ac.uk/webapps/plabdab-nano/
+% This entry replaces a placeholder that had the institution as the author and
+% TODO for the journal and the year. The paper is the NAR 2025 Database issue
+% article: advance access 10 October 2024, issue dated 6 January 2025, which is
+% why the year is 2025 and not 2024.
+%
+% The author list is given with initials because that is the form the records
+% consulted carry. Only one first name was confirmed in full (Alexander
+% Greenshields-Watson), so the rest were not expanded. If the submission wants
+% full names, take them from the article's own title page rather than from
+% here.
 @article{plabdabnano,
-  author  = {{Oxford Protein Informatics Group}},
+  author  = {Gordon, G. and Greenshields-Watson, A. and Agarwal, P. and
+             Wong, A. and Boyles, F. and Hummer, A. and
+             Lujan Hernandez, A. and Deane, C. M.},
   title   = {{PLAbDab-nano}: a database of camelid and shark nanobodies from
              patents and literature},
-  journal = {TODO},
-  year    = {TODO},
-  note    = {Verify before submission}
+  journal = {Nucleic Acids Research},
+  year    = {2025},
+  volume  = {53},
+  number  = {D1},
+  pages   = {D535--D542},
+  doi     = {10.1093/nar/gkae881}
 }

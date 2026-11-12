@@ -16,6 +16,35 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Changed
+
+- **The JOSS manuscript's bibliography is verified rather than provisional.**
+  Its ten entries were written at the author/title/year level and carried a
+  header saying to check every one before submitting. All ten were checked
+  field by field: journal, volume, issue, pages, year and DOI. The nine that
+  already had a DOI were right, and none resolved to the wrong paper; what
+  was missing was four issue numbers, now added. The tenth, PLAbDab-nano, had
+  the institution as its author and `TODO` for the journal and the year; it is
+  the Nucleic Acids Research 2025 Database issue article (volume 53, D1,
+  D535 to D542, doi 10.1093/nar/gkae881), with the year taken from the issue
+  rather than from the advance-access date of October 2024.
+  Each entry was confirmed against at least two independent records, normally
+  PubMed or PMC plus a publisher or indexer page, and anything the two did not
+  agree on was left out rather than guessed: the authors of that tenth entry
+  keep their initials, because only one first name could be confirmed in full.
+  Two oddities that look like errors are now commented as deliberate in the
+  file, since a careful reader would otherwise correct them and make the
+  references wrong: the published title of Tien et al. spells
+  "accessibilites" with an i missing, and Nature's own web page spells two of
+  the Hamers-Casterman authors "Hammers".
+  Three tests guard what a compiler cannot: that every key cited in
+  `paper.md` has an entry and that no entry is uncited, that no field is still
+  a placeholder, and that every entry carries enough to be followed. They are
+  derived from `paper.md` rather than from a list of keys typed into the test,
+  and they parse the file with a regex rather than adding a dependency for ten
+  entries. Not verified: whether each paper is the right one to cite at the
+  place it is cited, which no test can answer.
+
 ### Added
 
 - **An enrichment calculator**, as the second view of Phage & panning. One

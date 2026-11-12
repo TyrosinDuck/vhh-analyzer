@@ -718,3 +718,75 @@ def test_the_readme_section_table_is_generated_and_current():
     assert tool.current(text) == tool.block(), (
         "the README section table is stale, regenerate it with "
         "`python tools/readme_sections.py`")
+
+
+# --------------------------------------------------------------------------
+# The JOSS manuscript's bibliography
+# --------------------------------------------------------------------------
+# Checked field by field on 2026-11-12. These tests do not re-check the
+# references against the literature, which no test can do offline; they guard
+# the two failures that do not announce themselves. A citation in `paper.md`
+# with no entry behind it renders as a bare key in the compiled PDF, and a
+# placeholder left in a field compiles happily and reaches a reviewer as a
+# reference with "TODO" in it.
+#
+# Parsed with a regex rather than with `bibtexparser`, deliberately: ten
+# entries do not justify a dependency in `requirements-dev.txt`, and the
+# fields this looks at are one per line in this file.
+
+BIB_PATH = ROOT / "paper" / "paper.bib"
+PAPER_PATH = ROOT / "paper" / "paper.md"
+
+# Fields without which a reference cannot be followed. `number` is not here:
+# some journals have no issue numbers, and demanding one would invite a guess.
+REQUIRED_BIB_FIELDS = ("author", "title", "journal", "year", "doi")
+
+
+def _bib_entries() -> dict[str, dict[str, str]]:
+    """Key -> field dict, ignoring comment lines."""
+    text = "\n".join(line for line in BIB_PATH.read_text(encoding="utf-8").splitlines()
+                     if not line.lstrip().startswith("%"))
+    entries = {}
+    for block in re.finditer(r"@\w+\{([^,]+),(.*?)\n\}", text, re.S):
+        key, body = block.group(1).strip(), block.group(2)
+        fields = {}
+        for field in re.finditer(r"(\w+)\s*=\s*\{(.*?)\}\s*(?:,|$)", body, re.S):
+            fields[field.group(1).lower()] = " ".join(field.group(2).split())
+        entries[key] = fields
+    return entries
+
+
+def test_every_citation_in_the_paper_has_an_entry():
+    """A missing entry is a bare key in the compiled PDF, not an error."""
+    cited = set(re.findall(r"@([A-Za-z][\w-]*)", PAPER_PATH.read_text(encoding="utf-8")))
+    defined = set(_bib_entries())
+
+    assert cited, "no citations found in paper.md, the pattern is wrong"
+    assert cited <= defined, (
+        f"paper.md cites keys that paper.bib does not define: "
+        f"{sorted(cited - defined)}")
+    assert defined <= cited, (
+        f"paper.bib defines entries nothing cites: {sorted(defined - cited)}")
+
+
+def test_no_bibliography_entry_is_still_a_placeholder():
+    """`journal = {TODO}` compiles, and reaches the reviewer as written."""
+    offenders = []
+    for key, fields in _bib_entries().items():
+        for name, value in fields.items():
+            if "TODO" in value or "Verify before submission" in value:
+                offenders.append(f"{key}.{name}")
+    assert not offenders, (
+        "these fields are still placeholders rather than verified values: "
+        + ", ".join(offenders))
+
+
+def test_every_bibliography_entry_can_be_followed():
+    """Author, title, journal, year and a DOI: enough to find the paper."""
+    incomplete = []
+    for key, fields in _bib_entries().items():
+        missing = [f for f in REQUIRED_BIB_FIELDS if not fields.get(f)]
+        if missing:
+            incomplete.append(f"{key} (no {', '.join(missing)})")
+    assert not incomplete, \
+        "these entries cannot be followed to the paper: " + "; ".join(incomplete)
