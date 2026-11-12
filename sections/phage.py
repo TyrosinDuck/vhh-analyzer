@@ -15,7 +15,7 @@ import streamlit as st
 import bench as bn
 from shell import FIT, SECTIONS
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 V_TITRE = "🧪 Titre"
 V_ENRICHMENT = "📈 Enrichment"
@@ -30,6 +30,13 @@ C_PLUS_DIL = "Dilution +"
 C_MINUS = "Colonies -"
 C_MINUS_DIL = "Dilution -"
 COLUMNS = [C_ROUND, C_PLUS, C_PLUS_DIL, C_MINUS, C_MINUS_DIL]
+
+# How the dilution column is read. The exponent is first and is the default:
+# it is what is written on the plate, and the factor is what the arithmetic
+# needs, so defaulting to the factor invites the exponent to be typed into it.
+D_POWER = "n of 10^-n (3 = 10^-3)"
+D_FACTOR = "the factor (1000 = 10^-3)"
+DILUTION_MODES = [D_POWER, D_FACTOR]
 
 
 def render() -> None:
@@ -218,16 +225,25 @@ def _enrichment() -> None:
     st.markdown(
         "After a round, the eluted phage are titrated on the plate panned on "
         "the antigen (**+**) and on the negative control without it (**-**). "
-        "For each plate give the colonies counted and the dilution factor of "
-        "the plate they were counted on: 1000 for a 10^-3 dilution. The "
-        "enrichment is the + output divided by the - output.")
+        "For each plate give the colonies counted and the dilution it was "
+        "counted at. The enrichment is the + output divided by the - output.")
 
-    plated = st.number_input(
-        "Volume plated per plate (uL)", 0.0, 1e4, 100.0, 10.0,
-        key="en_plated",
-        help="The same volume on the + and the - plate. The enrichment is a "
-             "ratio and does not need it; given, the outputs are also shown "
-             "as cfu/mL. Set it to 0 to leave it out.")
+    # Asked for rather than fixed in a help text. A plate is labelled with
+    # its exponent and the arithmetic needs the factor, so typing 3 where
+    # 1000 was meant is the natural mistake, and it does not fail: it
+    # silently answers with the wrong order of magnitude.
+    head = st.columns([3, 2])
+    with head[0]:
+        as_power = st.radio(
+            "The dilution column holds", DILUTION_MODES, horizontal=True,
+            key="en_dilution_mode") == D_POWER
+    with head[1]:
+        plated = st.number_input(
+            "Volume plated per plate (uL)", 0.0, 1e4, 100.0, 10.0,
+            key="en_plated",
+            help="The same volume on the + and the - plate. The enrichment "
+                 "is a ratio and does not need it; given, the outputs are "
+                 "also shown as cfu/mL. Set it to 0 to leave it out.")
 
     # The number columns are float rather than object: a column of None
     # objects is drawn with "None" written in every empty cell, which reads
@@ -241,9 +257,16 @@ def _enrichment() -> None:
     counts = st.column_config.NumberColumn(
         min_value=0, step=1, format="%d",
         help="Colonies counted on that plate.")
-    dilutions = st.column_config.NumberColumn(
-        min_value=1.0, step=10.0, format="%.0f",
-        help="Dilution factor of the plate counted: 1000 for 10^-3.")
+    dilutions = (
+        st.column_config.NumberColumn(
+            min_value=0.0, step=1.0, format="%.0f",
+            help="n of the 10^-n the plate was counted at: 3 for 10^-3, "
+                 "0 for neat.")
+        if as_power else
+        st.column_config.NumberColumn(
+            min_value=1.0, step=10.0, format="%.0f",
+            help="How many times the eluate was diluted: 1000 for 10^-3, "
+                 "1 for neat."))
     edited = st.data_editor(
         blank, key="en_rounds", num_rows="dynamic", hide_index=True, **FIT,
         column_config={
@@ -252,7 +275,7 @@ def _enrichment() -> None:
             C_MINUS: counts, C_MINUS_DIL: dilutions,
         })
 
-    rows, skipped = [], 0
+    rows, skipped, suspicious = [], 0, []
     for _index, row in edited.iterrows():
         values = [row[C_PLUS], row[C_PLUS_DIL], row[C_MINUS], row[C_MINUS_DIL]]
         if any(pd.isna(value) for value in values):
@@ -264,14 +287,28 @@ def _enrichment() -> None:
             continue
         try:
             out = bn.panning_enrichment(
-                float(row[C_PLUS]), float(row[C_PLUS_DIL]),
-                float(row[C_MINUS]), float(row[C_MINUS_DIL]),
+                float(row[C_PLUS]),
+                bn.dilution_factor(float(row[C_PLUS_DIL]), as_power),
+                float(row[C_MINUS]),
+                bn.dilution_factor(float(row[C_MINUS_DIL]), as_power),
                 plated or None)
         except ValueError as exc:
             st.error(f"**{row[C_ROUND]}**: {exc}.")
             continue
+        if not as_power:
+            suspicious += [float(row[column]) for column in
+                           (C_PLUS_DIL, C_MINUS_DIL)
+                           if 1 < float(row[column])
+                           < bn.DILUTION_LOOKS_LIKE_EXPONENT]
         rows.append((str(row[C_ROUND]), out))
 
+    if suspicious:
+        st.warning(
+            f"A dilution of {min(suspicious):g} is being read as "
+            f"{min(suspicious):g}-fold, not as 10^-{min(suspicious):g}. If "
+            f"you are writing the exponent from the plate, switch the choice "
+            f"above to **{D_POWER}**. A 1:{min(suspicious):g} dilution is a "
+            f"real thing, so this is only a warning.", icon="⚠️")
     if skipped:
         st.caption(f"{skipped} row(s) left out: a round needs all four "
                    f"numbers. A plate with no colony counted is 0; a plate "

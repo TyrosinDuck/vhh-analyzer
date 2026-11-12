@@ -1906,11 +1906,26 @@ planner does and for the same reason.
 What came back out of a round. After each round the eluted phage are
 titrated on two plates: the panning on the antigen (**+**) and the negative
 control without it (**-**). One row per round, four numbers each: the
-colonies counted on each plate, and the dilution factor of the plate they
-were counted on, 1000 for a 10^-3 dilution. The output of a plate is the
-count times its dilution, and the enrichment is the + output over the -
-output. Give the volume plated, the same on both plates, and the outputs are
-also shown as cfu/mL; the enrichment is a ratio and does not change.
+colonies counted on each plate, and the dilution it was counted at. The
+output of a plate is the count times its dilution factor, and the enrichment
+is the + output over the - output. Give the volume plated, the same on both
+plates, and the outputs are also shown as cfu/mL; the enrichment is a ratio
+and does not change.
+
+**Say which dilution you are writing.** A plate is labelled with its
+exponent and the arithmetic needs the factor, so the choice above the table
+asks which the column holds: **n of 10^-n**, where 3 means a 10^-3 dilution,
+or **the factor**, where 1000 means the same thing. The exponent is the
+default, because it is what is written on the plate. The factor is there for
+a serial dilution that is not a power of ten, a 1:2 or a 1:5.
+
+The reason this is asked rather than stated in a help text is that getting
+it wrong does not fail. Thirty colonies at 10^-3 against thirty at 10^-2 is
+an enrichment of 10; typing the exponents 3 and 2 into a column that reads
+factors gives 1.5, which is a perfectly plausible number and the wrong
+answer. In factor mode a dilution between 1 and 10 now raises a warning
+pointing at the other convention, without refusing it, since a 1:2 dilution
+is a real thing.
 
 The two plates are usually counted at different dilutions, which is the
 reason this is not simply one count divided by another: at the end of a

@@ -475,9 +475,12 @@ def test_composing_a_buffer_weighs_the_hydrate_chosen(app):
 
 
 def test_the_enrichment_view_counts_a_round(app):
-    """The second view of Phage & panning. 120 colonies at 10^-3 against 3
-    at 10^-1 is an enrichment of 4000. The counts go in through the data
-    editor's session-state entry, as the purification balance does.
+    """The second view of Phage & panning, in both dilution conventions.
+
+    120 colonies at 10^-3 against 3 at 10^-1 is an enrichment of 4000,
+    whether the dilutions are written as exponents (3 and 1, the default) or
+    as factors (1000 and 10). The counts go in through the data editor's
+    session-state entry, as the purification balance does.
     """
     from sections import phage as phage_screen
 
@@ -486,7 +489,23 @@ def test_the_enrichment_view_counts_a_round(app):
     _no_failure(app, "phage, enrichment, empty")
     assert any("four numbers" in info.value for info in app.info), \
         "the empty state did not say what it needs"
+    assert app.radio(key="en_dilution_mode").value == phage_screen.D_POWER, \
+        "the exponent is what is written on the plate; it is the default"
 
+    app.session_state["en_rounds"] = {
+        "edited_rows": {0: {phage_screen.C_PLUS: 120,
+                            phage_screen.C_PLUS_DIL: 3,
+                            phage_screen.C_MINUS: 3,
+                            phage_screen.C_MINUS_DIL: 1}},
+        "added_rows": [], "deleted_rows": []}
+    app.run()
+    _no_failure(app, "phage, enrichment, exponents")
+    # The last dataframe on the page: the first is the editor itself.
+    table = app.dataframe[-1].value
+    assert list(table["Enrichment (+/-)"]) == ["4 000"]
+    assert list(table["+ output (cfu/mL)"]) == ["1.20e+06"]
+
+    app.radio(key="en_dilution_mode").set_value(phage_screen.D_FACTOR).run()
     app.session_state["en_rounds"] = {
         "edited_rows": {0: {phage_screen.C_PLUS: 120,
                             phage_screen.C_PLUS_DIL: 1000,
@@ -494,11 +513,31 @@ def test_the_enrichment_view_counts_a_round(app):
                             phage_screen.C_MINUS_DIL: 10}},
         "added_rows": [], "deleted_rows": []}
     app.run()
-    _no_failure(app, "phage, enrichment, one round")
-    # The last dataframe on the page: the first is the editor itself.
-    table = app.dataframe[-1].value
-    assert list(table["Enrichment (+/-)"]) == ["4 000"]
-    assert list(table["+ output (cfu/mL)"]) == ["1.20e+06"]
+    _no_failure(app, "phage, enrichment, factors")
+    assert list(app.dataframe[-1].value["Enrichment (+/-)"]) == ["4 000"]
+
+
+def test_an_exponent_typed_into_the_factor_column_is_flagged(app):
+    """The silent wrong answer: 30 colonies at "3" against 30 at "2" reads
+    as an enrichment of 1.5 where 10 was meant. The number is still shown,
+    because a 1:2 dilution is a real thing, with a warning beside it."""
+    from sections import phage as phage_screen
+
+    _goto(app, "🦠 Phage & panning")
+    app.radio(key="phage_view").set_value(phage_screen.V_ENRICHMENT).run()
+    app.radio(key="en_dilution_mode").set_value(phage_screen.D_FACTOR).run()
+    app.session_state["en_rounds"] = {
+        "edited_rows": {0: {phage_screen.C_PLUS: 30,
+                            phage_screen.C_PLUS_DIL: 3,
+                            phage_screen.C_MINUS: 30,
+                            phage_screen.C_MINUS_DIL: 2}},
+        "added_rows": [], "deleted_rows": []}
+    app.run()
+    _no_failure(app, "phage, enrichment, exponent in the factor column")
+    assert list(app.dataframe[-1].value["Enrichment (+/-)"]) == ["1.50"]
+    assert any(phage_screen.D_POWER in warning.value
+               for warning in app.warning), \
+        "nothing pointed at the other convention"
 
 
 def test_batch_and_qc_no_longer_offers_the_phage_titre(app):

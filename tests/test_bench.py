@@ -802,3 +802,28 @@ def test_a_count_that_cannot_be_one_is_refused(args):
 def test_a_plated_volume_of_zero_is_refused_rather_than_dividing_by_it():
     with pytest.raises(ValueError):
         bench.panning_enrichment(10, 100, 10, 100, plated_ul=0)
+
+
+def test_a_dilution_can_be_given_as_an_exponent_or_as_a_factor():
+    assert bench.dilution_factor(3, as_power_of_ten=True) == 1000.0
+    assert bench.dilution_factor(0, as_power_of_ten=True) == 1.0
+    assert bench.dilution_factor(1000, as_power_of_ten=False) == 1000.0
+    assert bench.dilution_factor(2, as_power_of_ten=False) == 2.0
+    with pytest.raises(ValueError):
+        bench.dilution_factor(-1, as_power_of_ten=True)
+    with pytest.raises(ValueError):
+        bench.dilution_factor(0.5, as_power_of_ten=False)
+
+
+def test_exponents_typed_as_factors_were_wrong_by_the_difference():
+    """The defect this guards. 30 colonies at 10^-3 against 30 at 10^-2 is
+    an enrichment of 10. Typing the exponents 3 and 2 into a column that
+    reads factors gives 1.5: not an error, just the wrong answer, which is
+    why the screen asks which convention is in use."""
+    power = bench.panning_enrichment(
+        30, bench.dilution_factor(3, True),
+        30, bench.dilution_factor(2, True))
+    assert power["enrichment"] == pytest.approx(10.0)
+
+    raw = bench.panning_enrichment(30, 3, 30, 2)
+    assert raw["enrichment"] == pytest.approx(1.5)

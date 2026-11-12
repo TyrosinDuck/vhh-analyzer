@@ -30,7 +30,7 @@ __all__ = [
     "batch_record_inputs", "__version__",
 ]
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 
 # --------------------------------------------------------------------------
@@ -546,6 +546,35 @@ def phage_aliquot(titre_per_ml: float, target_particles: float) -> dict:
 # two independent counts has a relative error of sqrt(1/N+ + 1/N-). That is
 # the floor set by counting alone; pipetting and the dilution series add to
 # it, and nothing here knows by how much.
+#
+# The dilution is the part that is easy to get wrong, because a plate is
+# labelled with the exponent ("-3") while the arithmetic needs the factor
+# (1000). Typing 3 where 1000 was meant does not fail: it gives an answer
+# that is wrong by whatever the two exponents differ by, and 30 colonies at
+# "3" against 30 at "2" reads as an enrichment of 1.5 instead of 10. The
+# screen therefore asks which of the two conventions is being used instead
+# of naming one in a help text, and the conversion lives here.
+
+# A dilution written as a power of ten this small is almost certainly an
+# exponent typed where a factor was asked for: a real 1:2 or 1:5 dilution is
+# possible, so this is a warning and not a refusal.
+DILUTION_LOOKS_LIKE_EXPONENT = 10.0
+
+
+def dilution_factor(value: float, as_power_of_ten: bool) -> float:
+    """The dilution factor, from either convention.
+
+    ``as_power_of_ten``: 3 means a 10^-3 dilution, so a factor of 1000.
+    Otherwise the value is the factor itself, which is what a serial
+    dilution that is not a power of ten (1:2, 1:5) needs.
+    """
+    if as_power_of_ten:
+        if value < 0:
+            raise ValueError("a dilution is 10^-n with n of zero or more")
+        return 10.0 ** float(value)
+    if value < 1:
+        raise ValueError("a dilution factor is 1 or more (1 for neat)")
+    return float(value)
 
 
 def panning_enrichment(plus_colonies: float, plus_dilution: float,

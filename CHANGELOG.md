@@ -26,6 +26,15 @@ ran, from its Zenodo record.
   dilutions are asked for separately: the two plates are rarely counted at
   the same dilution, and dividing raw counts would be wrong by whatever they
   differ by. Giving the volume plated adds cfu/mL; the ratio is unchanged.
+  A choice above the table says whether that column holds the exponent
+  written on the plate (3 for a 10^-3 dilution, the default) or the factor
+  (1000 for the same), with the factor kept for serial dilutions that are
+  not powers of ten. The first version of this view asked for the factor and
+  named it only in a help text, which is not enough: an exponent typed into
+  it does not fail, it answers with the wrong order of magnitude, and 30
+  colonies at "3" against 30 at "2" read as an enrichment of 1.5 where 10
+  was meant. In factor mode a dilution between 1 and 10 now also raises a
+  warning pointing at the other convention, without refusing it.
   A plate with no colony counted is 0 and a plate not counted is empty: a
   half-filled row is left out with a line saying so, rather than read as
   zeros. A negative plate with no colony gives no enrichment at all, with a
