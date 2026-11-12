@@ -71,6 +71,13 @@ Database, taxid 316407), redistributed from the `python-codon-tables` package
 under **CC0-1.0**, a public-domain dedication. Used for the CAI, the usage
 floor on codon substitutions, and the back-translation preference order.
 
+`data/sabdab/`, a snapshot of the single-domain entries of **SAbDab2**
+(Oxford Protein Informatics Group), redistributed under **CC-BY 4.0**; see
+`data/sabdab/LICENSE`. It drives the closest-structure search. Derived from
+SAbDab2's own export by `tools/sabdab/build_index.py`, never edited by hand,
+and carrying the extraction date the app displays. Rebuild it by downloading
+a fresh export and rerunning that script.
+
 ## Files
 
 | File | What it is |
@@ -462,6 +469,11 @@ which is **GPL-3.0-or-later**. Anyone redistributing the whole application with
 the alignment in place has to honour GPL-3.0 for that component. It is imported
 in exactly one function (`vhh_core.build_alignment`) so a derivative that does
 not need FAMSA can drop the dependency and is then free of it.
+
+Two bundled data files are not MIT either and keep their own terms:
+`data/sabdab/` is **CC-BY 4.0** (SAbDab2, attribution required, see
+`data/sabdab/LICENSE`) and `data/ecoli_codon_usage.csv` is **CC0-1.0**.
+Neither affects the licence of the code.
 
 ## If this project is no longer maintained
 

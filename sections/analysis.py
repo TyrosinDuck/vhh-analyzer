@@ -34,6 +34,7 @@ import codons as cdn
 import constructs as ctm
 import generator as gn
 import repertoire as rep
+import sabdab
 import tnp
 import triage as tg
 import vhh_core as vc
@@ -47,7 +48,8 @@ from compute import (aggregation_for, analyze_with_progress, annotation_for,
     png_identity, png_liability_map, png_liability_profile, png_logo,
     png_msa, png_profile_one, png_profiles, png_rarity,
     png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
-    proteases_for, rarity_tables, rep, repairs_for, repertoire_stats, st,
+    proteases_for, rarity_tables, rep, repairs_for, repertoire_stats,
+    sabdab_closest, st,
     tempfile, tg, tnp_profile_for, triage_for, vc)
 import session as ses
 from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
@@ -55,7 +57,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    anarci_requirement, anarci_status, current_sequences,
                    fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.12e"
 
 
 @dataclass
@@ -125,10 +127,11 @@ _FAMILIES = {
                       "How your sequences compare with each other: alignment "
                       "and sequence logo, differences from a reference, clonal "
                       "families."),
-    "🌍 Repertoire": ("repertoire", ["Repertoire"],
-                      "How they compare with the natural VHH repertoire: "
-                      "unusual framework residues, CDR lengths and composition "
-                      "against 1958 real VHHs."),
+    "🌍 Repertoire": ("repertoire", ["Repertoire", "Closest structure"],
+                      "How they compare with what is already known: unusual "
+                      "framework residues, CDR lengths and composition "
+                      "against 1958 real VHHs, and the nearest solved "
+                      "structures."),
     "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download", "Session"],
                    "What you make from them: codon-optimised DNA, fusion "
                    "constructs, CSV, figures, the PDF report, and the session "
@@ -1492,6 +1495,112 @@ def _repertoire(r: Run) -> None:
                                            file_name="composition_vs_repertoire.csv",
                                            mime="text/csv")
         plt.close("all")
+
+    # --- Closest structure ------------------------------------------------- #
+    with tabs["Closest structure"]:
+        _closest_structure(r)
+
+
+def _closest_structure(r: Run) -> None:
+    """The nearest solved single domains, from the shipped SAbDab2 snapshot.
+
+    Split out of `_repertoire` for the same reason `_clinical_context` is
+    split out of `_risk`: its data comes from outside this app, and keeping
+    the snapshot's date, its licence and the table that uses them in one
+    function is what stops the caption drifting from the file.
+    """
+    heavy_sequences = r.heavy_sequences
+    heavy_annotations = r.heavy_annotations
+    heavy_only_notice = r.heavy_only_notice
+
+    st.markdown(
+        "Has anything like this already been solved? Each sequence is "
+        "compared against a snapshot of **SAbDab2**, Oxford's structural "
+        "antibody database, restricted to its single-domain entries. A hit "
+        "gives you a template, and where the entry is a complex, an epitope "
+        "somebody has already seen.")
+
+    if not heavy_only_notice("The structure search"):
+        return
+
+    state = sabdab.staleness()
+    (st.warning if state["stale"] else st.caption)(state["message"])
+
+    controls = st.columns(3)
+    top = controls[0].slider("Hits per sequence", 1, 20, sabdab.DEFAULT_TOP,
+                             key="sabdab_top")
+    include_vnar = controls[1].checkbox(
+        "Include shark VNAR entries", value=False, key="sabdab_vnar",
+        help="VNARs are single domains but not VHHs. Off by default: a VNAR "
+             "hit answers a question about a different molecule.")
+    minimum = controls[2].slider("Minimum identity (%)", 0, 100, 0,
+                                 key="sabdab_min",
+                                 help="Hide hits below this. Left at zero so "
+                                      "that a sequence with no close relative "
+                                      "shows its nearest anyway, which is "
+                                      "itself the answer.")
+
+    for name, seq in heavy_sequences.items():
+        try:
+            hits = sabdab_closest(seq, int(top), bool(include_vnar),
+                                  heavy_annotations.get(name))
+        except Exception as exc:                          # noqa: BLE001
+            st.warning(f"**{name}**: the structure search failed: {exc}")
+            continue
+
+        if minimum:
+            hits = hits[hits["identity"] >= float(minimum)]
+        found = sabdab.summary(hits)
+
+        if not len(hits):
+            st.markdown(f"**{name}**")
+            st.info("Nothing in the snapshot reaches that identity. Lower the "
+                    "threshold to see the nearest entries anyway.")
+            continue
+
+        header = (f"**{name}**, closest {found['best']:.1f}% identity"
+                  + (f", next {found['second']:.1f}%"
+                     if found.get("second") is not None else ""))
+        with st.expander(header, expanded=len(heavy_sequences) <= 3):
+            shown = hits[["identity", "cdr3_identity", "type", "structures",
+                          "n_structures", "best_resolution", "methods",
+                          "species", "antigen_names", "antigen_types"]]
+            st.dataframe(
+                shown, hide_index=True, **FIT,
+                column_config={
+                    "identity": st.column_config.NumberColumn(
+                        "Identity (%)", format="%.1f"),
+                    "cdr3_identity": st.column_config.NumberColumn(
+                        "CDR3 identity (%)", format="%.1f"),
+                    "structures": st.column_config.TextColumn(
+                        "PDB:chain", help="Best resolution first."),
+                    "n_structures": st.column_config.NumberColumn("Entries"),
+                    "best_resolution": st.column_config.NumberColumn(
+                        "Resolution (A)", format="%.2f"),
+                    "antigen_names": "Bound to"})
+
+            st.caption(
+                "**Read the CDR3 column first.** Two VHHs can sit at 90% over "
+                "the framework and have CDR3 loops with nothing in common, "
+                "which is exactly where a high overall identity misleads. The "
+                "CDR3 column is empty when the query could not be annotated."
+                + (f" The best hit is {found['spread']:.1f} points clear of "
+                   f"the next one."
+                   if found.get("spread") is not None else ""))
+
+            st.download_button(
+                "Hits (CSV)", hits.to_csv(index=False),
+                file_name=f"closest_structures_{name}.csv", mime="text/csv",
+                key=f"sabdab_dl_{name}")
+
+    info = sabdab.meta()
+    st.caption(
+        f"Snapshot of {info.get('sequences', '?')} distinct single-domain "
+        f"sequences, derived from SAbDab2's own export by "
+        f"`tools/sabdab/build_index.py`. "
+        f"**{info.get('licence', '')}** The live database, which is updated "
+        f"weekly and has a sequence search of its own, is at "
+        f"{info.get('source', '')}")
 
 
 def _outputs(r: Run) -> None:

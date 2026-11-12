@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 __all__ = ["TOOLS", "KINDS", "table", "for_question", "__version__"]
 
@@ -167,11 +167,15 @@ TOOLS = (
     },
     {
         "question": "Has a structure of something like this been solved?",
-        "tool": "SAbDab-nano",
+        "tool": "SAbDab2, single-domain entries",
         "determines": "Every nanobody structure in the PDB, annotated and "
-                      "numbered, tracked as new ones are deposited.",
-        "here": "The sequence library on the Library screen is this project's "
-                "own small set, not a survey of the PDB.",
+                      "numbered, updated weekly as new ones are deposited. "
+                      "Data under CC-BY 4.0.",
+        "here": "A snapshot of its single-domain entries ships with the app "
+                "and drives the closest-structure search (Analysis, "
+                "Repertoire, Closest structure). The snapshot is static and "
+                "carries its extraction date; the live database is updated "
+                "weekly and has a sequence search of its own.",
         "kind": "data",
         "citation": "Schneider C, Raybould MIJ, Deane CM. Nucleic Acids Res "
                     "50(D1):D1368-D1372 (2022).",

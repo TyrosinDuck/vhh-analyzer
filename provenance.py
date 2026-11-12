@@ -35,7 +35,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 __all__ = [
     "BASES", "Constant", "entries", "resolve", "value_text", "by_basis",
@@ -203,6 +203,24 @@ _REGISTRY = (
              "are not computed anywhere in this app. Their thresholds are "
              "carried anyway, so the screen can show what it is not "
              "answering.",
+    ),
+    Constant(
+        key="sabdab_stale_days",
+        label="When the structure snapshot is called old",
+        where=("sabdab", "STALE_DAYS"),
+        unit="days",
+        basis="convention",
+        source="Hand set. SAbDab2 adds entries weekly, so this many days is "
+               "roughly thirteen updates missed, which was judged enough "
+               "that somebody deciding whether to crystallise a candidate "
+               "should check the live database rather than trust the shipped "
+               "file. Nothing fixes it here rather than at sixty or a "
+               "hundred and twenty days.",
+        used_for="Sequence analysis: whether the closest-structure search "
+                 "warns that its snapshot is out of date.",
+        note="The extraction date it is measured against is read from "
+             "data/sabdab/meta.json, which the build script writes from the "
+             "export's own update dates rather than from the clock.",
     ),
     Constant(
         key="apr_threshold",

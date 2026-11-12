@@ -116,7 +116,7 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces sixteen different views of a set of sequences. Showing
+The analysis produces seventeen different views of a set of sequences. Showing
 them as one tab each made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
@@ -131,7 +131,7 @@ top. Each family answers one question:
 | 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
 | ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b) |
 | 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
-| 🌍 **Repertoire** | How do they compare with real VHHs? (§3.11) |
+| 🌍 **Repertoire** | How do they compare with what is known? (§3.11, 3.11b) |
 | 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
 
 Only the selected family executes. That is the whole point of a selector rather
@@ -1047,6 +1047,65 @@ is
 the difference between a VH and a VHH, not a defect in your sequence. The app
 warns
 when VH sequences are present.
+
+### 3.11b Closest structure
+
+Has anything like this already been solved? Each sequence is compared against
+a snapshot of **SAbDab2**, Oxford's structural antibody database, restricted
+to its single-domain entries. A close hit gives you a modelling template and,
+where the entry is a complex, an epitope somebody has already looked at. A
+distant one tells you the scaffold is unusual, which is worth knowing for a
+different reason.
+
+**Read the CDR3 column first.** Two VHHs can sit at 90% identity over the
+framework and have CDR3 loops with nothing in common, which is exactly the
+case where the overall number misleads. The two are reported separately and
+never combined into one score. The CDR3 column is empty, not guessed at, when
+the query could not be annotated.
+
+Each hit carries every structure containing that sequence, best resolution
+first, with the method, the species, and what it was bound to. The gap between
+the best hit and the next is stated: a top hit several points clear of the
+field is a single close relative, a flat list is a family, and the two mean
+different things for what you do next.
+
+**Shark VNAR entries are excluded by default.** They are single domains but
+not VHHs, so a VNAR hit answers a question about a different molecule. They
+are kept in the index and labelled rather than dropped at build time: if your
+closest relative really is a VNAR, you should be told that rather than handed
+a more distant VHH with nothing saying otherwise.
+
+**This is a snapshot, and the screen always says when it was taken.** SAbDab2
+is updated weekly from the PDB; the file shipped here is not. The extraction
+date is read from `data/sabdab/meta.json`, written by the build script from
+the export's own update dates rather than from the clock, and the screen turns
+it into a sentence every time it draws results. Past
+`sabdab.STALE_DAYS` the sentence becomes a warning that names how many weekly
+updates have been missed and points at the live database. So a structure
+solved last month cannot appear here, and the app says so rather than letting
+an empty result read as "nothing like this exists".
+
+**The data is CC-BY 4.0, not MIT.** The rest of this repository is MIT; the
+contents of `data/sabdab/` are not, and `data/sabdab/LICENSE` says so. If a
+result from this screen reaches a paper, cite SAbDab2: Schneider C, Raybould
+MIJ, Deane CM, *SAbDab in the age of biotherapeutics*, Nucleic Acids Res
+50(D1):D1368-D1372 (2022),
+doi:[10.1093/nar/gkab1050](https://doi.org/10.1093/nar/gkab1050).
+
+**Rebuilding it.** Download the single-domain summary from SAbDab2 and run
+`python tools/sabdab/build_index.py <export.csv>`. The script derives the
+shipped index: one row per distinct VH sequence, every structure that
+contains it, and only the columns the app reads. It refuses an export whose
+columns it does not recognise rather than producing an index with a silently
+empty field, and it drops rows with no VH (single-domain light chains) and
+sequences carrying `X`, counting both in the metadata. Nothing in
+`data/sabdab/` is edited by hand.
+
+One thing was checked rather than assumed: SAbDab2's CDR columns are the same
+IMGT windows this app annotates with. Twenty-five entries were compared
+residue for residue and all three CDRs agreed on every one, and a test keeps
+checking a sample, because the CDR3 identity column would otherwise be
+comparing two different substrings.
 
 ### 3.12 Clonal families
 

@@ -39,3 +39,19 @@ imported, so a derivative work that does not need FAMSA can drop the dependency
 and is then unencumbered by it.
 
 This note is a statement of what the dependency licences say, not legal advice.
+
+---
+
+Two bundled data files are not MIT either, and keep the terms they came with:
+
+  data/sabdab/        a snapshot of SAbDab2's single-domain entries, from the
+                      Oxford Protein Informatics Group, under CC-BY 4.0. See
+                      data/sabdab/LICENSE. Redistribution is permitted with
+                      attribution, which is what that file and the app's own
+                      screen provide.
+
+  data/ecoli_codon_usage.csv
+                      E. coli codon usage from the Kazusa database, under
+                      CC0-1.0, a public-domain dedication.
+
+Neither affects the licence of the code.

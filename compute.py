@@ -35,6 +35,7 @@ import constructs as ctm
 import generator as gn
 import library as lib
 import repertoire as rep
+import sabdab
 import sanger as sg
 import af3
 import buffers as bf
@@ -45,7 +46,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -247,6 +248,18 @@ def liabilities_for(seq, ann, include_added):
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
 def proteases_for(seq, ann):
     return vc.find_protease_sites(seq, ann)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def sabdab_closest(seq, top, include_vnar, ann):
+    """The closest solved single domains to one sequence.
+
+    A full scan is about 1400 pairwise alignments, roughly two seconds, so
+    this is cached per sequence like the rest: the screen has three widgets
+    on it and every one of them reruns the script.
+    """
+    return sabdab.closest(seq, top=top, include_vnar=include_vnar,
+                          annotation=ann)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)

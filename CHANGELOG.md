@@ -18,6 +18,47 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **Closest structure: has anything like this already been solved?** A new tab
+  in the Repertoire family compares each sequence against a snapshot of
+  SAbDab2's single-domain entries and reports the nearest solved structures,
+  with the PDB codes, resolution, method, species and what each one was bound
+  to. A close hit is a modelling template and, where the entry is a complex,
+  an epitope somebody has already looked at. cAbLys3 finds its own crystal
+  structure, 1MEL, at 100% identity, which is the end-to-end check the test
+  suite now runs.
+
+  Framework and CDR3 identity are reported **separately and never combined**:
+  two VHHs at 90% over the framework can have CDR3 loops with nothing in
+  common, which is exactly where one number misleads. Shark VNAR entries are
+  kept in the index, labelled, and left out of the search by default.
+
+  **The snapshot carries its own date and the app says it out loud.** SAbDab2
+  is updated weekly from the PDB and the shipped file is not, so the
+  extraction date is read from the data, turned into a number of days, and
+  printed as a sentence every time results are drawn. Past `STALE_DAYS` that
+  sentence becomes a warning naming how many weekly updates have been missed
+  and pointing at the live database, so an empty result can never read as
+  "nothing like this exists". A missing or unparseable date counts as old,
+  not as fresh. MANUAL.md §3.11b.
+
+  **The data is CC-BY 4.0, not MIT.** `data/sabdab/LICENSE`, the root
+  `LICENSE` and the README now say so, and the screen carries the attribution
+  and the citation.
+
+  `tools/sabdab/build_index.py` derives the shipped index from SAbDab2's own
+  export: one row per distinct VH sequence, every structure containing it,
+  and only the columns the app reads, 4759 export rows down to 1381
+  sequences. It refuses an export whose columns it does not recognise rather
+  than writing an index with a silently empty field, and it drops rows with
+  no VH and sequences carrying `X`, counting both in the metadata. Nothing in
+  that directory is edited by hand.
+
+  One thing was checked rather than assumed before any of this was built:
+  SAbDab2's CDR columns are the same IMGT windows this app annotates with.
+  Twenty-five entries were compared residue for residue, all three CDRs
+  agreed on every one, and a test keeps checking a sample. The CDR3 identity
+  column would otherwise be comparing two different substrings.
+
 - **Clinical context: where a sequence sits against nanobodies that reached
   the clinic.** A new tab in the Developability family applies the
   Therapeutic Nanobody Profiler guidelines (Gordon et al., Commun Biol 9:344,

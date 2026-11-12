@@ -1,0 +1,14 @@
+{
+  "source": "https://sabdab.opig.stats.ox.ac.uk/",
+  "licence": "SAbDab2 data, Oxford Protein Informatics Group, CC-BY 4.0. Cite Schneider C, Raybould MIJ, Deane CM, Nucleic Acids Res 50(D1):D1368-D1372 (2022), doi 10.1093/nar/gkab1050.",
+  "extracted": "2026-11-12",
+  "export_rows": 4759,
+  "sequences": 1381,
+  "dropped_no_vh": 88,
+  "dropped_nonstandard": 9,
+  "types": {
+    "SD-H": 1354,
+    "VNAR": 27
+  },
+  "built_by": "tools/sabdab/build_index.py"
+}
