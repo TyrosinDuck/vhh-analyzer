@@ -34,6 +34,7 @@ import codons as cdn
 import constructs as ctm
 import generator as gn
 import repertoire as rep
+import tnp
 import triage as tg
 import vhh_core as vc
 from compute import (aggregation_for, analyze_with_progress, annotation_for,
@@ -47,14 +48,14 @@ from compute import (aggregation_for, analyze_with_progress, annotation_for,
     png_msa, png_profile_one, png_profiles, png_rarity,
     png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
     proteases_for, rarity_tables, rep, repairs_for, repertoire_stats, st,
-    tempfile, tg, triage_for, vc)
+    tempfile, tg, tnp_profile_for, triage_for, vc)
 import session as ses
 from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    FIT, RELEASE, REPO_URL, VERSION, Settings,
                    anarci_requirement, anarci_status, current_sequences,
                    fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 
 @dataclass
@@ -112,10 +113,13 @@ _FAMILIES = {
                     "What each sequence is: physico-chemical descriptors, "
                     "profiles, CDR and framework annotation, hallmarks and "
                     "humanness."),
-    "⚠️ Developability": ("risk", ["Liabilities", "Aggregation"],
+    "⚠️ Developability": ("risk", ["Liabilities", "Aggregation",
+                                    "Clinical context"],
                           "Whether it will behave: chemical liabilities, "
                           "cysteines and disulfides, suggested repairs, "
-                          "aggregation-prone regions."),
+                          "aggregation-prone regions, and where the CDR "
+                          "lengths sit relative to clinical-stage "
+                          "nanobodies."),
     "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
                                   "Clonal families"],
                       "How your sequences compare with each other: alignment "
@@ -780,12 +784,15 @@ def _risk(r: Run) -> None:
             # cysteine can go to S or to A). Selecting both by default would make
             # every one of them collide, so the default keeps the first, the
             # preferred, option per position.
+            # Named `suggestion`, not `r`: this function's own argument is
+            # `r`, the Run, and a loop variable of the same name leaves it
+            # rebound to a pandas row for everything further down.
             _seen_pos, _default = set(), []
-            for _, r in doable.iterrows():
-                if r["in_CDR"] or r["position"] in _seen_pos:
+            for _, suggestion in doable.iterrows():
+                if suggestion["in_CDR"] or suggestion["position"] in _seen_pos:
                     continue
-                _seen_pos.add(r["position"])
-                _default.append(r["substitution"])
+                _seen_pos.add(suggestion["position"])
+                _default.append(suggestion["substitution"])
             picked = st.multiselect(
                 "Apply substitutions", list(doable["substitution"]),
                 default=_default,
@@ -906,6 +913,88 @@ def _risk(r: Run) -> None:
             file_name="aggregation_regions.csv", mime="text/csv",
             disabled=not agg_regions_all)
         plt.close("all")
+
+    # --- Clinical context -------------------------------------------------- #
+    with tabs["Clinical context"]:
+        _clinical_context(r)
+
+
+def _clinical_context(r: Run) -> None:
+    """The TNP view: where these sequences sit against clinical-stage nanobodies.
+
+    Split out of `_risk` rather than written inline because it is the one tab
+    in that family whose numbers come from outside this app, and keeping the
+    citation, the thresholds and the table that uses them in one function is
+    what stops the caption and the flags drifting apart.
+    """
+    sequences = r.sequences
+    df = r.df
+    annotations = r.annotations
+
+    st.markdown(
+        "Where each sequence falls relative to the **36 nanobodies that have "
+        "reached clinical trials**. This is a different question from the rest "
+        "of this family: not whether a sequence carries a known problem, but "
+        "whether anything like it has ever been taken into a clinic.")
+
+    methods = {}
+    if "annotation_method" in df:
+        methods = dict(zip(df["name"], df["annotation_method"]))
+
+    rows = [tnp_profile_for(name, seq, annotations.get(name),
+                            methods.get(name), None)
+            for name, seq in sequences.items()]
+    table = pd.DataFrame(rows)
+
+    off_scheme = [row["name"] for row in rows if not row.get("scheme_ok")]
+    if off_scheme:
+        st.warning(
+            "TNP counts CDR residues in IMGT numbering, and these sequences "
+            "were annotated with the regex anchors, whose boundaries are not "
+            "the same: **" + ", ".join(off_scheme) + "**. Their lengths are "
+            "shown and deliberately not flagged. "
+            + anarci_requirement())
+
+    shown = table[["name", "total_cdr_length", "cdr3_length"]].copy()
+    shown.insert(1, "Total CDR", [
+        f"{tnp.symbol(row.get('total_cdr_length_flag'))} "
+        f"{row.get('total_cdr_length')}".strip() for row in rows])
+    shown.insert(2, "CDR3", [
+        f"{tnp.symbol(row.get('cdr3_length_flag'))} "
+        f"{row.get('cdr3_length')}".strip() for row in rows])
+    shown = shown[["name", "Total CDR", "CDR3"]]
+    shown["CDR1"] = [row.get("cdr1_length") for row in rows]
+    shown["CDR2"] = [row.get("cdr2_length") for row in rows]
+    shown["Numbering"] = [row.get("method") for row in rows]
+    st.dataframe(shown, hide_index=True, **FIT,
+                 column_config={"name": st.column_config.TextColumn("Sequence")})
+
+    st.caption(
+        "🟢 inside the range spanned by the clinical-stage nanobodies and away "
+        "from its edges, 🟠 inside it but in the top or bottom 5% of the "
+        f"distribution, 🔴 outside it. Thresholds as of {tnp.THRESHOLD_DATE}; "
+        "the authors say plainly that they will move as more candidates "
+        "progress through trials, so an amber flag today is not an amber flag "
+        "for ever.")
+
+    st.markdown("**The guidelines**")
+    st.dataframe(tnp.metric_table(), hide_index=True, **FIT)
+
+    st.info(
+        "Four of the six metrics need a structure. **CDR3 compactness** is "
+        "computed on the Structure screen when you upload a model (§4.5b). "
+        "**PSH**, **PPC** and **PNC** are patch scores from the Therapeutic "
+        "Antibody Profiler methodology and are not implemented here: "
+        "reimplementing them from the description, without the reference "
+        "code, would put them on an unknown scale, and comparing that to the "
+        "published thresholds would be worse than reporting nothing. For "
+        f"those three, use the authors' own web application: {tnp.WEBAPP}")
+
+    st.caption(f"Thresholds and metric definitions: {tnp.REFERENCE}")
+
+    st.download_button(
+        "TNP profile (CSV)", table.to_csv(index=False),
+        file_name="tnp_profile.csv", mime="text/csv")
 
 
 def _compare(r: Run) -> None:

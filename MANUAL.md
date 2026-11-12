@@ -116,8 +116,8 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces fifteen different views of a set of sequences. Showing
-them as fifteen tabs made two problems at once: nobody could find anything, and
+The analysis produces sixteen different views of a set of sequences. Showing
+them as one tab each made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
 
@@ -129,7 +129,7 @@ top. Each family answers one question:
 |---|---|
 | 🎯 **Triage** | Which of these do I keep? (§3.2b) |
 | 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
-| ⚠️ **Developability** | Will it behave? (§3.7–3.8) |
+| ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b) |
 | 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
 | 🌍 **Repertoire** | How do they compare with real VHHs? (§3.11) |
 | 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
@@ -646,9 +646,8 @@ Low;
 - **comparing sequences with each other tells you more than the category of any single
   motif**. Use the totals to rank a panel, not to declare one motif dangerous.
 
-If you have an AlphaFold model, the structure-weighted analysis is a separate
-notebook
-and gives a far sharper answer.
+If you have a model, upload it: §4.6 applies both factors and shows the
+weighted score next to the unweighted one.
 
 **The liability map** places every motif at its residue position, one row per sequence,
 with bubble size proportional to the score and the CDRs shaded behind. This is
@@ -783,6 +782,61 @@ In the summary, `Mean` is higher-is-better and `Worst` is the single lowest
 window. `Worst` is usually what decides whether a candidate behaves: one bad
 patch
 is enough.
+
+### 3.8b Clinical context
+
+Where each sequence falls relative to the **36 nanobodies that have reached
+clinical trials**, on the metrics the Therapeutic Nanobody Profiler defines.
+
+This answers a different question from the rest of the Developability family.
+The liability score and the aggregation profile ask whether a sequence carries
+a known chemical or biophysical problem. This asks something blunter: has
+anything like this ever been taken into a clinic. A value outside the clinical
+range is not a defect, it is a molecule doing something no trialled nanobody
+does, which is worth knowing before you commit to it. cAbLys3 lands outside it
+on both length metrics, and cAbLys3 is a perfectly good VHH.
+
+**The six metrics, and which ones you get here.**
+
+| Metric | Clinical range | Amber band | Computed |
+|---|---|---|---|
+| Total CDR length | 20 to 39 | 20–24, 37–39 | here, from the sequence |
+| CDR3 length | 5 to 23 | 5–8, 21–23 | here, from the sequence |
+| CDR3 compactness | 0.56 to 1.61 | 0.56–0.81, 1.57–1.61 | Structure screen, §4.5b |
+| Patches of surface hydrophobicity | 73.40 to 155.47 | 73.40–79.59, 126.83–155.47 | not computed |
+| Patches of positive charge | 0.00 to 1.18 | 0.39–1.18 | not computed |
+| Patches of negative charge | 0.00 to 1.88 | 1.47–1.88 | not computed |
+
+🟢 is inside the clinical range and clear of its edges, 🟠 is inside it but in
+the top or bottom 5% of the distribution, 🔴 is outside it. Band edges are
+inclusive, so a value sitting exactly on 24 is amber rather than green: of the
+two readings of an ambiguous boundary that is the one that cannot turn a
+borderline candidate green.
+
+**The three patch scores are not computed here, deliberately.** They follow the
+Therapeutic Antibody Profiler patch methodology on a structure, which fixes a
+hydrophobicity scale, a patch definition and a neighbourhood around the CDRs.
+Reimplementing that from a description, without the reference code, would give
+numbers on a scale nobody has calibrated, and flagging those against the
+published thresholds would be worse than reporting nothing. Use the authors'
+own web application for them: <https://opig.stats.ox.ac.uk/webapps/tnp>.
+
+**IMGT or no flag.** TNP counts CDR residues in IMGT numbering. When ANARCI is
+unavailable the app annotates with regex anchors instead, and those boundaries
+are not the same, on cAbLys3 the two differ by several residues. A profile
+built on a regex annotation shows its lengths and carries **no flags at all**,
+with a warning saying why. A flag against the wrong boundary definition looks
+exactly like a correct one.
+
+**The thresholds are dated.** They were calibrated on the 36 clinical-stage
+sequences available in July 2025, and the authors state plainly that they will
+be revised as more candidates progress through trials. The app shows that date
+next to the flags. An amber flag today is not an amber flag for ever.
+
+Source: Gordon GL, Gervasio J, Souders C, Deane CM. *Characterising nanobody
+developability to improve therapeutic design using the Therapeutic Nanobody
+Profiler*. Commun Biol 9:344 (2026),
+doi:[10.1038/s42003-026-09594-y](https://doi.org/10.1038/s42003-026-09594-y).
 
 ### 3.9 Alignment
 
@@ -1394,6 +1448,38 @@ Waters are removed first. Ligands are kept, because a bound ligand really does
 cover the surface underneath it. When a binding partner is selected, these are
 the accessibilities the residues have **in the complex**.
 
+### 4.5b CDR3 shape
+
+A VHH paratope is mostly CDR3, and the same number of residues can be arranged
+two very different ways: a long loop extending away from the domain, or one of
+the same length folded back over the framework-2 face. **Compactness** is the
+Therapeutic Nanobody Profiler's single number for that difference, the loop's
+length in residues divided by how far it reaches. Low means extended, high
+means folded over FR2.
+
+It is the one TNP metric this app can compute, and it needs the model. The
+screen reports the value, the number of CDR3 residues measured, the reach in
+angstroms, and a flag against the clinical-stage range (0.56 to 1.61, see
+§3.8b).
+
+**This is a reimplementation from the paper's prose, not from the authors'
+code, and it has not been checked against their values.** Two choices were
+forced and neither is stated in the paper: the anchor point is the midpoint
+between the CA atoms of the two residues flanking the loop, and the reach is
+the greatest CA distance from that point. A different reading puts the numbers
+on a slightly different scale, and the published thresholds are calibrated on
+theirs. Use it to rank your own panel. For a value you intend to compare
+against the clinical range, run the sequence through the authors' web
+application.
+
+If part of the loop is missing from the model the reach is a lower bound and
+the compactness an upper bound, and the screen says so with the number of
+missing residues. If the loop or either anchor is absent entirely, no value is
+reported.
+
+Both conformations are represented among clinical-stage nanobodies, so a value
+inside the range is not an argument for either shape.
+
 ### 4.6 Liabilities in 3D
 
 The join worth uploading a structure for. The analysis section flags a
@@ -1411,6 +1497,35 @@ you can find it in the 3D view. Motifs in unmodelled regions are reported as
 The sequence-based `risk` column is left untouched on purpose. Downgrading it
 automatically because a residue looks buried in one static conformer would be
 overclaiming. Read the two columns together.
+
+**The weighted score** is the correction §3.7 says the sequence-only section
+cannot make, and it is a tick box rather than the default:
+
+    weighted = score x relative accessibility x pLDDT/100
+
+A buried motif goes to nearly zero, an exposed one keeps most of its score,
+and a residue in a low-confidence loop is discounted. Switch it on and the
+table gains a `weighted_score` and a `pLDDT` column.
+
+Three things about it are worth knowing before you quote a number from it.
+
+*The weights are this app's choice, not a published formula.* Multiplying by
+the accessibility and by pLDDT/100 is the obvious arithmetic and nothing fixes
+it: a square root, a floor below which a motif is simply dropped, or a sigmoid
+on pLDDT would each be defensible and give different numbers. Use the weighted
+column to rank motifs within one model, never as an absolute risk.
+
+*The risk category is not recomputed.* It stays the sequence-based one, for the
+reason in the paragraph above.
+
+*An unmodelled residue gets no weighted score rather than a zero.* "Not in the
+model" and "buried" are different claims, and a zero would quietly promote an
+unresolved loop into a solved problem.
+
+When the B-factor column is being read as a B-factor rather than as pLDDT, no
+confidence factor is applied and the weighting is by exposure alone: an
+experimental B-factor is not a confidence on the 0 to 100 scale, and dividing
+it by 100 would both scale by an arbitrary number and invert the meaning.
 
 ### 4.7 Surface patches
 
@@ -2651,7 +2766,8 @@ The two tables you look up rather than work out: the genetic code, and the
 twenty amino acids. Reached from **Reference** in the sidebar, under the
 manual, because it is something you consult rather than something you run.
 
-Nothing on that screen is typed in, and that is the only reason it is there.
+The first two tables on that screen are not typed in, and that is the only
+reason they are there.
 A reference table maintained separately can disagree with the app printed next
 to it, and when it does the reader has no way of telling which of the two is
 wrong. So the codon table is Biopython's, the usage figures are the measured
@@ -2659,6 +2775,9 @@ wrong. So the codon table is Biopython's, the usage figures are the measured
 eight that §9 raises, and the residue masses, hydropathy and charges are the
 same constants §3 builds its profiles from. They cannot contradict each other,
 because they are the same numbers.
+
+The third table is the exception and says so on the screen: it is a list of
+what this app does **not** compute. See §12.3.
 
 ### 12.1 Genetic code
 
@@ -2719,6 +2838,39 @@ pictures that never change. The carbon skeleton is drawn in `currentColor` so
 it follows the light or dark theme instead of being black in both.
 
 ---
+
+### 12.3 Elsewhere
+
+The one table in this app whose contents are transcribed rather than derived,
+and the only one where that is the right answer: a list of the questions about
+a VHH worth asking that this app does not answer, with the published method
+that does.
+
+Every other number here comes with a caption saying what it is and is not.
+This is the other half of that, collected in one place you can read **before**
+trusting a column rather than after. Entries are grouped by status, because
+the four are different promises:
+
+| Status | What it means |
+|---|---|
+| **not implemented** | A published method this app could approximate and does not, because the approximation would not be comparable to the published values. The TAP patch scores are the clear case (§3.8b). |
+| **approximated here** | This app computes something in the same spirit, with weights it states rather than fits. The aggregation profile against CamSol (§3.8). |
+| **out of reach** | Needs model weights, a GPU or a database this app cannot host in a container that may have 690 MB. The deep-learning nativeness and melting-temperature predictors. |
+| **data** | A curated collection rather than a predictor. Useful for putting your own measurement in context. |
+
+What is listed, in short: **TNP** for the three patch scores, **AbNatiV** for
+learned humanness and VHH-nativeness, the **Harvey polyreactivity** model,
+**CamSol** for a validated solubility number, **NanoMelt** and **TEMPRO** for
+predicted melting temperature, **NbThermo** for measured ones, and
+**SAbDab-nano** and **PLAbDab-nano** for structures and published sequences.
+
+Each citation was checked against the publication or its record, and each
+entry carries a DOI. The DOI is the identifier, not the URL: a web server
+moves, a DOI does not. Where a tool's own server address is given as well, it
+is where the authors put it and may be stale.
+
+The list lives in `elsewhere.py`, which is importable like everything else,
+and adding an entry there adds a row to the screen.
 
 ## 12b. The provenance register
 

@@ -15,12 +15,13 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+import elsewhere as ew
 import reference as rf
 from shell import FIT, Settings, embed_html, follow_app_theme, go_to
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
-VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
+VIEWS = ["🧬 Genetic code", "🔤 Amino acids", "🧰 Elsewhere"]
 
 # Tall enough for the drawing plus its caption, in the iframe it is
 # put in. The SVGs have no intrinsic height, so this is what decides it.
@@ -36,12 +37,15 @@ def render(settings: Settings) -> None:
     """
     st.title("📐 Reference")
     st.markdown(
-        "The two tables you look up rather than work out. Neither is typed in: "
+        "The tables you look up rather than work out. The first two are not "
+        "typed in: "
         "the codon table is Biopython's, the usage figures are the measured "
         "*E. coli* table the gene diagnosis screen scores CAI against, and the "
         "residue masses, hydropathy and charges are the same constants the "
-        "analysis screen builds its profiles from. So nothing here can "
-        "contradict what the rest of the app tells you.")
+        "analysis screen builds its profiles from. So neither can "
+        "contradict what the rest of the app tells you. The third is the "
+        "exception and says so: it is a list of what this app does **not** "
+        "compute, and who does.")
 
     view = st.radio("View", VIEWS, horizontal=True, key="ref_view",
                     label_visibility="collapsed")
@@ -49,8 +53,45 @@ def render(settings: Settings) -> None:
 
     if view == VIEWS[0]:
         _genetic_code()
-    else:
+    elif view == VIEWS[1]:
         _aminoacids()
+    else:
+        _elsewhere()
+
+
+# --------------------------------------------------------------------------
+def _elsewhere() -> None:
+    """The questions this app does not answer, and who answers them.
+
+    The one screen here whose content is transcribed rather than derived,
+    which is why the module it reads carries the checking in its docstring
+    instead. Grouped by status rather than listed flat: "we approximate this"
+    and "we cannot host this" are different promises to a user, and a single
+    table hides the difference.
+    """
+    st.subheader("What this app does not compute")
+    st.markdown(
+        "Every other number in this app comes with a caption saying what it "
+        "is and is not. Collected here is the other half of that: the "
+        "questions about a VHH that are worth asking, that this app does not "
+        "answer, and the published method that does. Read it before trusting "
+        "a column, not after.")
+
+    for kind, blurb in ew.KINDS.items():
+        frame = ew.table(kind)
+        if not len(frame):
+            continue
+        st.markdown(f"**{kind.capitalize()}**  \n{blurb}")
+        st.dataframe(frame.drop(columns=["Status here"]), hide_index=True,
+                     **FIT)
+
+    st.caption(
+        "Each citation was checked against the publication or its record. "
+        "The DOI is the identifier and stays resolvable; a web server address "
+        "is where the authors put the tool and may have moved.")
+    st.download_button(
+        "Download as CSV", ew.table().to_csv(index=False),
+        file_name="external_tools.csv", mime="text/csv")
 
 
 # --------------------------------------------------------------------------

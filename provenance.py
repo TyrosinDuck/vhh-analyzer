@@ -35,7 +35,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 __all__ = [
     "BASES", "Constant", "entries", "resolve", "value_text", "by_basis",
@@ -179,6 +179,30 @@ _REGISTRY = (
                "anchors have different lengths.",
         used_for="Sequence analysis and Structure: CDR and framework "
                  "annotation whenever ANARCI runs.",
+    ),
+    Constant(
+        key="tnp_thresholds",
+        label="Therapeutic Nanobody Profiler flagging thresholds",
+        where=("tnp", "METRICS"),
+        unit="per metric: residues, residues per angstrom, or patch score",
+        basis="published",
+        source="Table 2 of Gordon GL, Gervasio J, Souders C and Deane CM, "
+               "Commun Biol 9:344 (2026), doi 10.1038/s42003-026-09594-y, "
+               "transcribed from the published PDF and checked a second time "
+               "in tests/test_tnp.py. The ranges are those spanned by the 36 "
+               "clinical-stage nanobody sequences available to the authors, "
+               "and the amber bands the top and bottom 5% of each "
+               "distribution. The paper states that they will be revised as "
+               "more candidates progress through trials, so unlike most "
+               "entries here this one is expected to change: "
+               "tnp.THRESHOLD_DATE carries the calibration date and the app "
+               "shows it beside the flags.",
+        used_for="Sequence analysis: the clinical context tab. Structure: the "
+                 "flag on CDR3 compactness.",
+        note="Four of the six metrics need a structure, and three of those "
+             "are not computed anywhere in this app. Their thresholds are "
+             "carried anyway, so the screen can show what it is not "
+             "answering.",
     ),
     Constant(
         key="apr_threshold",

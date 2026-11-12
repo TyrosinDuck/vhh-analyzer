@@ -16,7 +16,72 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **Clinical context: where a sequence sits against nanobodies that reached
+  the clinic.** A new tab in the Developability family applies the
+  Therapeutic Nanobody Profiler guidelines (Gordon et al., Commun Biol 9:344,
+  2026) to the total CDR length and the CDR3 length, flagging each green,
+  amber or red against the range spanned by the 36 clinical-stage nanobody
+  sequences. This answers a question nothing else here asked: not whether a
+  sequence carries a known problem, but whether anything like it has ever
+  been taken into a clinic. A red flag is not a defect, cAbLys3 is red on
+  both. The thresholds are shown with the date they were calibrated, because
+  the authors say plainly that they will move as more candidates progress
+  through trials. See MANUAL.md §3.8b.
+
+  Two guards are worth knowing about. TNP counts in IMGT numbering, so a
+  sequence annotated with the regex anchors has its lengths reported and
+  **no flags at all**, with a warning: the two definitions differ by several
+  residues on a real VHH, and a flag against the wrong boundaries looks
+  exactly like a correct one. And the three patch scores in TNP (surface
+  hydrophobicity, positive and negative charge) are **not computed here**,
+  deliberately: reimplementing the TAP patch methodology from its description
+  without the reference code would give numbers on an uncalibrated scale, and
+  flagging those against published thresholds would be worse than reporting
+  nothing. The screen points at the authors' web application for them.
+
+- **CDR3 compactness, measured on an uploaded model.** The one TNP metric
+  this app can compute, on a new view in the Structure screen: the CDR3
+  loop's length divided by how far it reaches, which separates a loop that
+  extends away from the domain from one of the same length folded over the
+  framework-2 face. Reported with the reach, the residues measured, and a
+  flag against the clinical range. It is a reimplementation from the paper's
+  prose and has not been checked against the authors' values, which the
+  screen states every time it draws a number: two choices were forced that
+  the paper does not specify, so the absolute value may sit on a slightly
+  different scale from theirs. Rank your own panel with it. MANUAL.md §4.5b.
+
+- **Liability scores weighted by exposure and model confidence.** A tick box
+  on Liabilities in 3D multiplies each sequence liability score by the
+  residue's measured relative accessibility and by pLDDT/100. This is the
+  correction §3.7 has always said the sequence-only section cannot make: an
+  `NG` buried in the core and one on the CDR3 apex score the same 10 points
+  from sequence alone, which is why almost everything lands in Medium or
+  High. The weights are this app's choice and not a published formula, the
+  risk category is still not recomputed, and an unmodelled residue gets an
+  empty cell rather than a zero, because "not in the model" and "buried" are
+  different claims. Read as a B-factor rather than pLDDT, no confidence
+  factor is applied at all. MANUAL.md §4.6.
+
+- **Elsewhere: what this app does not compute, and who does.** A third table
+  on the Reference screen, and the only transcribed one there: nine published
+  tools and databases, each with what it determines, what this app does
+  instead, and why. Grouped by whether the method is not implemented
+  deliberately, approximated here with stated weights, or out of reach in a
+  690 MB container. Every citation was checked against the publication or its
+  record and carries a DOI. Importable as `elsewhere.py`. MANUAL.md §12.3.
+
 ### Fixed
+
+- **A loop variable shadowed the analysis run object.** In the Developability
+  family, the repair-suggestion block iterated with `for _, r in
+  doable.iterrows()`, and `r` is also the name of the `Run` the family is
+  handed. Python leaks a plain `for` target, so from that point on `r` was a
+  pandas row rather than the run, and anything further down the family that
+  reached for `r.sequences` raised `AttributeError`. Nothing did until the
+  new tab was added at the end of that family, which is the only reason this
+  surfaced now. The loop variable is renamed and a comment says why.
 
 These all come from one independent audit of the repository, run in November
 2026 by a reviewer that had not seen the code being written. Every item is a

@@ -125,22 +125,24 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # AttributeError; this turns that into a message naming the stale file.
 REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.10.21b",
                     "session": "2026.11.12a",
-                    "provenance": "2026.11.12a",
+                    "provenance": "2026.11.12b",
                     "sections.provenance": "2026.11.12a",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.11.12a",
-                    "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.12d", "compute": "2026.11.12b",
+                    "library": "2026.10.28a", "structure": "2026.11.12a",
+                    "shell": "2026.11.12d", "compute": "2026.11.12c",
                     "af3": "2026.11.04a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.12c",
+                    "sections.analysis": "2026.11.12d",
+                    "tnp": "2026.11.12a",
+                    "elsewhere": "2026.11.12a",
                     "sections.bench": "2026.11.12d",
                     "sections.phage": "2026.11.12d",
                     "sections.buffers": "2026.11.12c",
                     "buffers": "2026.11.12b",
-                    "sections.reference": "2026.11.12b",
+                    "sections.reference": "2026.11.12c",
                     "bench": "2026.11.12d",
                     "sections.cloning": "2026.11.12a",
                     "sections.genes": "2026.11.12b",
@@ -148,7 +150,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.10.21b",
                     "sections.library": "2026.11.12a",
                     "sections.manual": "2026.11.12a",
                     "sections.sequencing": "2026.11.12a",
-                    "sections.structure": "2026.11.12a"}
+                    "sections.structure": "2026.11.12b"}
 
 
 def _imported(name: str):

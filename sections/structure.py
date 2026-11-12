@@ -16,15 +16,17 @@ import streamlit as st
 
 import af3
 import structure as stx
+import tnp
 import vhh_core as vc
 from compute import (annotation_for, classify_cached, st_af3_full,
-                     st_af3_index, st_af3_member, st_confidence, st_disulfides,
+                     st_af3_index, st_af3_member, st_compactness,
+                     st_confidence, st_disulfides,
                      st_exposure, st_identity_map, st_interface,
                      st_interface_summary, st_liabilities, st_load, st_patches,
-                     st_resnum_map, st_viewer_html)
+                     st_resnum_map, st_weighted_liabilities, st_viewer_html)
 from shell import FIT, Settings, current_sequences, embed_html, footer
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 
 def render(settings: Settings) -> None:
@@ -225,7 +227,7 @@ behalf would mean this server making requests that look like they came from you.
         annotation = None
 
     views = ["🧬 Chains & confidence", "🔗 Disulfides", "💧 Exposure",
-             "⚠️ Liabilities in 3D", "🫧 Surface patches"]
+             "📐 CDR3 shape", "⚠️ Liabilities in 3D", "🫧 Surface patches"]
     if partners:
         views.append("🎯 Interface")
     views.append("👁 3D view")
@@ -397,6 +399,54 @@ behalf would mean this server making requests that look like they came from you.
             "surface underneath it.")
 
     # ------------------------------------------------------------------ #
+    elif view == "📐 CDR3 shape":
+        st.subheader("How far the CDR3 loop reaches")
+        st.markdown(
+            "A VHH paratope is mostly CDR3, and the same number of residues "
+            "can be arranged two very different ways: a long loop extending "
+            "away from the domain, or one of the same length folded back over "
+            "the framework-2 face. **Compactness** is the Therapeutic "
+            "Nanobody Profiler's single number for that difference, the loop's "
+            "length in residues divided by how far it reaches. It is the one "
+            "TNP metric this app can compute, and it needs the model you have "
+            "just uploaded.")
+        if annotation is None:
+            st.info("No CDR3 annotation is available for this chain, so there "
+                    "is no loop to measure. Annotate the model against one of "
+                    "the sequences loaded in the analysis section, or check "
+                    "that the chain is a variable domain.")
+        else:
+            shape = st_compactness(raw, fname, chain, annotation, offset_map)
+            value = shape.get("compactness")
+            if value is None:
+                st.warning(shape.get("note") or
+                           "The compactness could not be measured here.")
+            else:
+                flag = tnp.flag("cdr3_compactness", value)
+                lo, hi = tnp.METRICS["cdr3_compactness"]["clinical"]
+                cols = st.columns(3)
+                cols[0].metric("Compactness",
+                               f"{tnp.symbol(flag)} {value:.2f}",
+                               help=f"Clinical-stage nanobodies span "
+                                    f"{lo} to {hi}.")
+                cols[1].metric("CDR3 residues measured", shape["n_residues"])
+                cols[2].metric("Reach", f"{shape['reach']:.1f} Å",
+                               help="Greatest distance from the midpoint of "
+                                    "the two residues anchoring the loop to "
+                                    "any CA atom in it.")
+                if shape.get("note"):
+                    st.warning(shape["note"])
+                st.caption(
+                    "Lower means a loop that extends outward, higher means one "
+                    "folded over the framework-2 face. Both conformations are "
+                    "represented among clinical-stage nanobodies, so a value "
+                    "inside the range is not an argument for either shape: "
+                    "what the flag says is whether this loop is doing "
+                    "something no trialled nanobody does.")
+                st.warning("**" + shape["caveat"] + "**")
+                st.caption(f"Metric definition and thresholds: {tnp.REFERENCE}")
+
+    # ------------------------------------------------------------------ #
     elif view == "⚠️ Liabilities in 3D":
         st.subheader("Which of the flagged liabilities actually matter")
         st.markdown(
@@ -431,12 +481,33 @@ behalf would mean this server making requests that look like they came from you.
                 cols[3].metric("Not modelled", int(counts.get("not modelled", 0)),
                                help="In a loop or terminus the model does not "
                                     "cover, so nothing can be said.")
+                # The column is read where it is set, in the Chains &
+                # confidence view, rather than offering a second radio that
+                # could disagree with the first.
+                conf_kind = st.session_state.get("struct_kind", kind_guess)
+                weight = st.checkbox(
+                    "Weight each score by exposure and model confidence",
+                    value=False, key="struct_weight_liab",
+                    help="score x relative accessibility x pLDDT/100. The "
+                         "sequence-only score gives a buried motif and an "
+                         "exposed one the same points; this is the correction "
+                         "MANUAL §3.7 says the sequence section cannot make.")
+                if weight:
+                    joined = st_weighted_liabilities(joined,
+                                                     st_confidence(raw, fname,
+                                                                   chain),
+                                                     conf_kind)
+
                 st.dataframe(joined, hide_index=True, **FIT,
                              column_config={
                                  "rel_sasa": st.column_config.ProgressColumn(
                                      "Relative accessibility", min_value=0.0,
                                      max_value=1.0, format="%.2f"),
-                                 "exposure": "Measured"})
+                                 "exposure": "Measured",
+                                 "weighted_score": st.column_config.NumberColumn(
+                                     "Weighted score", format="%.2f"),
+                                 "plddt": st.column_config.NumberColumn(
+                                     "pLDDT", format="%.1f")})
                 st.download_button(
                     "Download as CSV", joined.to_csv(index=False).encode(),
                     file_name=f"{fname}_{chain}_liabilities_exposure.csv",
@@ -446,6 +517,22 @@ behalf would mean this server making requests that look like they came from you.
                     "untouched on purpose: downgrading it automatically because a "
                     "residue looks buried in one static conformer would be "
                     "overclaiming. Read the two columns together.")
+                if weight:
+                    st.warning(
+                        "**The weighting is this app's choice, not a published "
+                        "formula.** Multiplying by the accessibility and by "
+                        "pLDDT/100 is the obvious arithmetic and nothing fixes "
+                        "it: a square root, a floor, or a sigmoid on pLDDT "
+                        "would each be defensible and give different numbers. "
+                        "Use the weighted column to rank motifs within this "
+                        "model, never as an absolute risk, and note that it is "
+                        "empty rather than zero wherever the residue is not "
+                        "modelled."
+                        + ("" if conf_kind == "pLDDT" else
+                           " This column is being read as a B-factor, which is "
+                           "not a confidence on the 0 to 100 scale, so no "
+                           "confidence factor is applied and the weighting is "
+                           "by exposure alone."))
 
     # ------------------------------------------------------------------ #
     elif view == "🫧 Surface patches":

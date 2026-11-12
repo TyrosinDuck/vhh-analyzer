@@ -39,12 +39,13 @@ import sanger as sg
 import af3
 import buffers as bf
 import structure as stx
+import tnp
 import triage as tg
 import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -246,6 +247,20 @@ def liabilities_for(seq, ann, include_added):
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
 def proteases_for(seq, ann):
     return vc.find_protease_sites(seq, ann)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def tnp_profile_for(name, seq, ann, method, compactness):
+    """One sequence's TNP profile.
+
+    Cached per sequence like the liabilities above, and for the same reason:
+    adding one sequence to a panel of ten should cost one profile. The
+    annotation method is an argument rather than something read from the
+    sequence here, because it decides whether the profile may be flagged at
+    all and a cached answer keyed on less than that would be wrong.
+    """
+    return tnp.profile(name, seq, annotation=ann, method=method,
+                       compactness=compactness)
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -656,6 +671,31 @@ def st_resnum_map(raw: bytes, name: str, chain: str,
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
 def st_identity_map(raw: bytes, name: str, chain: str) -> dict:
     return stx.identity_resnum_map(stx.load_structure(raw, name), chain)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_compactness(raw: bytes, name: str, chain: str, annotation: dict | None,
+                   offset_map: dict) -> dict:
+    """The TNP CDR3 compactness of one chain.
+
+    ``offset_map`` is passed in rather than recomputed because which mapping is
+    in use is a choice the screen makes (the structure's own sequence, or one
+    of the loaded sequences) and the answer differs between them.
+    """
+    return stx.cdr3_compactness(stx.load_structure(raw, name), chain,
+                                annotation, offset_map)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_weighted_liabilities(joined: pd.DataFrame, confidence: pd.DataFrame,
+                            kind: str) -> pd.DataFrame:
+    """Liabilities re-weighted by exposure and model confidence.
+
+    Takes the already-joined table rather than the structure, so that the
+    expensive part (the SASA calculation inside `st_liabilities`) is not paid
+    twice and the weighting can be switched on and off for free.
+    """
+    return stx.weight_liabilities(joined, confidence, kind)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)

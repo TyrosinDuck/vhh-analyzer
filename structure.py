@@ -70,7 +70,7 @@ __all__ = [
     "PATCH_CONTACT", "PATCH_MIN_SIZE", "PATCH_MIN_REL", "__version__",
 ]
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.12a"
 
 
 def _three_to_one(resname: str) -> str | None:
@@ -797,6 +797,157 @@ def annotate_liabilities(liabilities: pd.DataFrame, model: Model, chain_id: str,
     frame["rel_sasa"] = rel
     frame["exposure"] = label
     return frame
+
+
+def weight_liabilities(annotated: pd.DataFrame,
+                       confidence: pd.DataFrame | None = None,
+                       kind: str | None = None) -> pd.DataFrame:
+    """Re-weight each sequence liability score by exposure, and by confidence.
+
+    Section 3.7 of the manual states the limitation this answers: the
+    sequence-only score gives an ``NG`` the same 10 points whether it is on the
+    CDR3 apex or packed into the core, which pushes almost every sequence into
+    Medium or High. With a model, two things are measurable, and both of them
+    scale the score down rather than up:
+
+        weighted = score x rel_sasa x confidence_factor
+
+    ``rel_sasa`` is the residue's relative accessibility, already measured by
+    :func:`annotate_liabilities`. A fully buried motif goes to nearly zero; a
+    fully exposed one keeps most of its score. ``confidence_factor`` is pLDDT
+    divided by 100 for a predicted model, and 1.0 for an experimental one,
+    where the B-factor is not a confidence on the same scale and is deliberately
+    not used.
+
+    **These weights are this module's choice, not a published formula.** The
+    multiplication is the obvious one and nothing in the literature fixes it:
+    a different implementation might use the square root of the accessibility,
+    a floor below which a motif is simply dropped, or a sigmoid on pLDDT. The
+    original score is left in place next to it for that reason, and the
+    weighted column is the one to compare candidates on, never to read as an
+    absolute risk. The unweighted ``risk`` category is not recomputed.
+
+    A row whose residue is not modelled gets no weighted score rather than a
+    zero: "not in the model" and "buried" are different claims, and a zero
+    would quietly promote an unresolved loop into a solved problem.
+    """
+    frame = annotated.copy()
+    if not len(frame) or "rel_sasa" not in frame:
+        for column in ("plddt", "weighted_score"):
+            frame[column] = pd.Series(dtype="float")
+        return frame
+
+    plddt_by_resnum = {}
+    # Only a pLDDT column is used. An experimental B-factor runs on an
+    # unbounded scale where high means poorly ordered, so dividing it by 100
+    # would scale scores by an arbitrary number and invert the meaning.
+    if (confidence is not None and len(confidence) and kind == "pLDDT"
+            and {"resnum", "value"} <= set(confidence.columns)):
+        plddt_by_resnum = {int(r.resnum): r.value
+                           for r in confidence.itertuples()}
+
+    plddt, weighted = [], []
+    for row in frame.itertuples():
+        resnum = getattr(row, "resnum", None)
+        rel = getattr(row, "rel_sasa", None)
+        score = getattr(row, "score", None)
+        # A residue outside the model has no number, and pandas turns that
+        # None into NaN as soon as the column holds one real number.
+        value = (plddt_by_resnum.get(int(resnum))
+                 if resnum is not None and not pd.isna(resnum) else None)
+        plddt.append(value)
+        if rel is None or score is None or pd.isna(rel) or pd.isna(score):
+            weighted.append(None)
+            continue
+        factor = 1.0 if value is None or pd.isna(value) else float(value) / 100.0
+        weighted.append(round(float(score) * float(rel) * factor, 2))
+
+    frame["plddt"] = plddt
+    frame["weighted_score"] = weighted
+    return frame
+
+
+# The CDR3 loop is IMGT 105 to 117, so the residues that anchor it to the rest
+# of the domain are the ones immediately before and after: IMGT 104 and 118.
+# Taken from the annotation rather than from the model's own numbering, which
+# may be sequential or the depositor's.
+def cdr3_compactness(model: Model, chain_id: str, annotation: dict,
+                     resnum_to_index: dict) -> dict:
+    """CDR3 loop length divided by its reach, the TNP compactness metric.
+
+    Following Gordon et al., Commun Biol 9:344 (2026): the loop is described by
+    its length in residues divided by how far it reaches away from the rest of
+    the variable domain, the reach being a distance in angstroms from the
+    anchor residues of the loop to its furthest point. A low compactness is a
+    loop that extends outward, a high one is a loop folded back over the
+    framework-2 face.
+
+    **This is a reimplementation from the paper's prose, not from the authors'
+    code, and it has not been checked against their values.** Two choices were
+    forced and neither is stated in the paper: the anchor point is taken as the
+    midpoint between the CA atoms of the two residues flanking the loop, and
+    the reach is the greatest CA distance from that point. A different reading
+    would put the numbers on a slightly different scale, and the published
+    thresholds are calibrated on theirs. Read the number to rank your own
+    panel; for a value to compare against the clinical range, run the sequence
+    through the authors' own web application.
+
+    Returns the metric with everything needed to judge it: the residues used,
+    the reach, and whether any of the loop was missing from the model.
+    """
+    # `caveat` is the standing warning and never changes; `note` is whatever
+    # happened to this particular chain. Keeping them apart stops a per-chain
+    # message from overwriting the reason not to trust the absolute value.
+    out = {"compactness": None, "reach": None, "n_residues": None,
+           "missing": None, "anchors": None, "note": None,
+           "caveat": "Reimplemented from the published description, not "
+                     "validated against the authors' code. Rank your own "
+                     "panel with it; for a value to compare against the "
+                     "clinical range, use the TNP web application."}
+
+    block = (annotation or {}).get("CDR3") or {}
+    start, end = block.get("start"), block.get("end")
+    if not start or not end or not resnum_to_index:
+        out["note"] = "no CDR3 annotation mapped onto this chain"
+        return out
+
+    # annotation positions are 1-based and inclusive; indices here are 0-based.
+    loop_indices = set(range(start - 1, end))
+    anchor_indices = (start - 2, end)
+
+    index_to_resnum = {}
+    for resnum, index in resnum_to_index.items():
+        index_to_resnum.setdefault(int(index), int(resnum))
+
+    ca = {}
+    for residue in _residues(model.model[chain_id]):
+        resnum = int(residue.id[1])
+        index = resnum_to_index.get(resnum)
+        if index is None or "CA" not in residue:
+            continue
+        ca[int(index)] = residue["CA"].get_coord()
+
+    loop = {i: ca[i] for i in sorted(loop_indices) if i in ca}
+    out["n_residues"] = len(loop)
+    out["missing"] = len(loop_indices) - len(loop)
+
+    anchors = [ca[i] for i in anchor_indices if i in ca]
+    out["anchors"] = [index_to_resnum.get(i) for i in anchor_indices]
+    if not loop or not anchors:
+        out["note"] = ("the CDR3 loop or its anchor residues are not modelled "
+                       "in this chain")
+        return out
+    if out["missing"]:
+        out["note"] = (f"{out['missing']} CDR3 residue(s) missing from the "
+                       f"model, so the reach is a lower bound and the "
+                       f"compactness an upper bound")
+
+    origin = np.mean(np.vstack(anchors), axis=0)
+    reach = max(float(np.linalg.norm(point - origin)) for point in loop.values())
+    out["reach"] = round(reach, 2)
+    if reach > 0:
+        out["compactness"] = round(len(loop) / reach, 3)
+    return out
 
 
 def resnum_map(model: Model, chain_id: str, structure_seq: str,

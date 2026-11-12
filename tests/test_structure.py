@@ -264,3 +264,133 @@ def test_patch_threshold_is_a_named_constant():
     assert 0.0 < stx.PATCH_MIN_REL < stx.EXPOSED_MIN, (
         "the patch threshold must sit below the 'exposed' cut-off, a residue "
         "inside a patch is half-covered by the patch itself")
+
+
+# --------------------------------------------------------------------------- #
+# CDR3 compactness, and the weighted liability score
+# --------------------------------------------------------------------------- #
+
+@needs_anarci
+def test_compactness_on_a_straight_chain_is_arithmetic_we_can_check(cablys3):
+    """The synthetic chain is a straight line, so the right answer is known.
+
+    CA atoms sit at x = 3.8 A times their index, y = z = 0. The anchors are
+    the residues on either side of the CDR3, so their midpoint is halfway
+    between them, and the furthest loop atom is the one at whichever end of
+    the loop is further from that midpoint. Both quantities are computable by
+    hand, which is the point: this pins the bookkeeping (which residues are
+    the loop, which are the anchors, which mapping is used) rather than any
+    claim about geometry, and the geometry of this chain is meaningless.
+    """
+    model = stx.load_structure(synthetic_pdb(cablys3), "synthetic.pdb")
+    annotation, _ = vc.annotate(cablys3, method="anarci")
+    offset_map = stx.identity_resnum_map(model, "A")
+
+    shape = stx.cdr3_compactness(model, "A", annotation, offset_map)
+
+    start, end = annotation["CDR3"]["start"], annotation["CDR3"]["end"]
+    n = end - start + 1
+    origin = ((start - 2) + end) / 2 * 3.8
+    expected_reach = max(abs(i * 3.8 - origin) for i in range(start - 1, end))
+
+    assert shape["n_residues"] == n
+    assert shape["missing"] == 0
+    assert shape["reach"] == pytest.approx(expected_reach, abs=0.01)
+    assert shape["compactness"] == pytest.approx(n / expected_reach, abs=0.001)
+
+
+@needs_anarci
+def test_compactness_says_when_the_loop_is_not_fully_modelled(cablys3):
+    """A gap in the loop makes the reach a lower bound, and it must say so.
+
+    An unmodelled residue is not a short loop. Reporting the number without
+    the warning would turn a hole in the model into a conformational claim.
+    """
+    annotation, _ = vc.annotate(cablys3, method="anarci")
+    start = annotation["CDR3"]["start"]
+    model = stx.load_structure(
+        synthetic_pdb(cablys3, missing={start, start + 1}), "synthetic.pdb")
+    offset_map = stx.identity_resnum_map(model, "A")
+    chain_seq, _residues = stx.chain_sequence(model.model["A"])
+    offset_map, _identity = stx.resnum_map(model, "A", chain_seq, cablys3)
+
+    shape = stx.cdr3_compactness(model, "A", annotation, offset_map)
+    assert shape["missing"] == 2
+    assert "missing from the model" in shape["note"]
+    assert shape["compactness"] is not None
+
+
+def test_compactness_never_drops_its_standing_caveat(cablys3):
+    """The reimplementation warning is a separate key from the per-chain note.
+
+    They were one field to begin with, and a chain-specific message
+    overwrote the reason not to trust the absolute value, which is the one
+    sentence that must always reach the screen.
+    """
+    model = stx.load_structure(synthetic_pdb(cablys3), "synthetic.pdb")
+    shape = stx.cdr3_compactness(model, "A", None, {})
+    assert "not validated" in shape["caveat"]
+    assert shape["compactness"] is None
+
+
+@needs_anarci
+def test_weighting_scales_a_liability_by_exposure_and_confidence(cablys3):
+    """weighted = score x rel_sasa x pLDDT/100, and nothing else.
+
+    The synthetic chain carries a uniform B-factor of 50, so if it is read as
+    pLDDT every weighted score is exactly half of score times accessibility.
+    A formula that silently did something else, a floor or a square root,
+    would not give that.
+    """
+    model = stx.load_structure(synthetic_pdb(cablys3), "synthetic.pdb")
+    annotation, _ = vc.annotate(cablys3, method="anarci")
+    joined = stx.annotate_liabilities(vc.find_liabilities(cablys3, annotation),
+                                      model, "A", cablys3, cablys3)
+    confidence = stx.confidence_table(model, "A")
+
+    weighted = stx.weight_liabilities(joined, confidence, "pLDDT")
+    scored = weighted[weighted["weighted_score"].notna()]
+    assert len(scored), "no liability was scored, pick a sequence that has one"
+    for row in scored.itertuples():
+        assert row.weighted_score == pytest.approx(
+            row.score * row.rel_sasa * 0.5, abs=0.02)
+
+
+@needs_anarci
+def test_weighting_leaves_an_unmodelled_residue_empty_not_zero(cablys3):
+    """"Not in the model" and "buried" must not collapse into one number.
+
+    A zero would read as a solved problem. The row keeps its sequence score
+    and gets no weighted score at all.
+    """
+    annotation, _ = vc.annotate(cablys3, method="anarci")
+    model = stx.load_structure(synthetic_pdb(cablys3, missing=set(range(20, 40))),
+                               "synthetic.pdb")
+    chain_seq, _residues = stx.chain_sequence(model.model["A"])
+    joined = stx.annotate_liabilities(vc.find_liabilities(cablys3, annotation),
+                                      model, "A", chain_seq, cablys3)
+    weighted = stx.weight_liabilities(joined, stx.confidence_table(model, "A"),
+                                      "pLDDT")
+    unmodelled = weighted[weighted["exposure"] == "not modelled"]
+    assert len(unmodelled), "expected the deleted stretch to hide a liability"
+    assert unmodelled["weighted_score"].isna().all()
+
+
+@needs_anarci
+def test_a_b_factor_column_contributes_no_confidence_factor(cablys3):
+    """An experimental B-factor is not a confidence on a 0 to 100 scale.
+
+    Dividing it by 100 would scale every score by an arbitrary number and
+    invert the meaning, since a high B-factor is bad and a high pLDDT is good.
+    Read as a B-factor, the weighting is by exposure alone.
+    """
+    model = stx.load_structure(synthetic_pdb(cablys3), "synthetic.pdb")
+    annotation, _ = vc.annotate(cablys3, method="anarci")
+    joined = stx.annotate_liabilities(vc.find_liabilities(cablys3, annotation),
+                                      model, "A", cablys3, cablys3)
+    weighted = stx.weight_liabilities(joined, stx.confidence_table(model, "A"),
+                                      "B-factor")
+    scored = weighted[weighted["weighted_score"].notna()]
+    for row in scored.itertuples():
+        assert row.weighted_score == pytest.approx(row.score * row.rel_sasa,
+                                                   abs=0.02)
