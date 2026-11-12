@@ -26,11 +26,12 @@ __all__ = [
     "REAGENTS", "SOLVENTS", "concentration_from_a280", "dilution_plan",
     "stock_preparation", "conjugation_plan", "mass_check", "MODIFICATIONS",
     "PIPETTE_MINIMUM_UL", "desalting_column", "PURIFICATION_STEPS",
-    "purification_balance", "BATCH_RECORD_SCHEMA", "batch_record",
-    "batch_record_inputs", "__version__",
+    "purification_balance", "CULTURE_ROUTES", "culture_for_target",
+    "BATCH_RECORD_SCHEMA", "batch_record", "batch_record_inputs",
+    "compare_batch_records", "__version__",
 ]
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 
 # --------------------------------------------------------------------------
@@ -808,6 +809,183 @@ def purification_balance(steps: list[dict], ext_coeff: float | None = None,
 
 
 # --------------------------------------------------------------------------
+# How much culture, for how much protein
+# --------------------------------------------------------------------------
+# The purification balance runs forwards: these volumes and absorbances came
+# out of a preparation, here is what it recovered. The question asked before a
+# preparation runs the other way, and it is the one a logistics role is asked
+# most often: somebody needs 5 mg, how much culture do we set up.
+#
+# There is no model here and there will not be one. A yield cannot be
+# predicted from a sequence, and anything claiming to would be the most
+# dangerous number in this app: plausible, precise, and wrong in a way nobody
+# notices until a purification has already been run. What this does is divide
+# a target by a yield *you measured on a previous preparation of the same
+# protein in the same host*, which is arithmetic on your own data and nothing
+# else. With no previous preparation to divide by, the honest answer is that
+# the app cannot help, and it says so rather than offering a default.
+
+# The two ways a measured yield can be stated, which must not be mixed. They
+# are listed here because the screen draws them from this and because the
+# distinction is the whole point of the function below.
+CULTURE_ROUTES = {
+    "final": "mg of purified protein per litre of culture, from a previous "
+             "preparation taken all the way through",
+    "expression": "mg per litre expressed, plus the fraction of it a "
+                  "purification recovered",
+}
+
+
+def culture_for_target(target_mg: float | None = None,
+                       target_mg_per_ml: float | None = None,
+                       target_volume_ml: float | None = None,
+                       route: str = "final",
+                       yield_mg_per_litre: float | None = None,
+                       recovery_pct: float | None = None,
+                       margin_pct: float = 0.0,
+                       flask_working_ml: float | None = None) -> dict:
+    """How much culture a target quantity needs, given a yield you measured.
+
+    The target is given either as a mass in mg, or as a concentration and a
+    volume, in which case the mass is their product. Giving both is an error
+    rather than a precedence rule: the two disagreeing is a sign that one of
+    them is left over from a different plan, and silently preferring one would
+    hide that.
+
+    ``route`` picks which measured yield is being divided by, and the two must
+    not be combined:
+
+    * ``"final"``: ``yield_mg_per_litre`` is mg of *purified* protein per
+      litre, from a preparation taken all the way through. The recovery is
+      already inside that figure, so supplying ``recovery_pct`` as well would
+      count it twice and is refused.
+    * ``"expression"``: ``yield_mg_per_litre`` is how much was *expressed* per
+      litre, and ``recovery_pct`` is the fraction a purification recovered.
+      Both are needed, because expression alone does not say what reaches the
+      tube.
+
+    ``margin_pct`` adds to the target before dividing, for the material a
+    preparation loses to assay aliquots and to the volume that stays in the
+    column. It is yours to set: nothing here knows what your steps lose.
+
+    ``flask_working_ml`` is the working volume of one flask, which turns a
+    culture volume into a number of flasks. It is optional because it is a
+    property of your shaker, not of the protein.
+
+    Returns ``required_mg``, ``culture_ml``, ``culture_litres``, ``flasks``,
+    ``basis`` naming what was divided by what, and ``warnings``. Every figure
+    is arithmetic on what you supplied: there is no yield in this module and
+    no default for one.
+    """
+    if route not in CULTURE_ROUTES:
+        raise ValueError(f"the route must be one of {sorted(CULTURE_ROUTES)}, "
+                         f"not {route!r}")
+
+    given_mass = target_mg not in (None, 0)
+    given_product = (target_mg_per_ml not in (None, 0)
+                     and target_volume_ml not in (None, 0))
+    if given_mass and given_product:
+        raise ValueError(
+            "the target is given twice, once as a mass and once as a "
+            "concentration times a volume. Give one of the two: if they "
+            "disagree, one of them belongs to a different plan")
+    if not given_mass and not given_product:
+        raise ValueError(
+            "no target: give a mass in mg, or a concentration and the volume "
+            "you need it in")
+
+    if given_mass:
+        target = float(target_mg)
+        target_basis = f"{target:g} mg asked for"
+    else:
+        concentration = float(target_mg_per_ml)
+        volume_ml = float(target_volume_ml)
+        if concentration <= 0 or volume_ml <= 0:
+            raise ValueError("a target concentration and volume must both be "
+                             "positive")
+        target = concentration * volume_ml
+        target_basis = (f"{concentration:g} mg/mL in {volume_ml:g} mL, which "
+                        f"is {target:g} mg")
+    if target <= 0:
+        raise ValueError("the target mass must be positive")
+
+    margin_pct = float(margin_pct or 0.0)
+    if margin_pct < 0:
+        raise ValueError("the margin cannot be negative")
+    required = target * (1.0 + margin_pct / 100.0)
+
+    if yield_mg_per_litre in (None, 0):
+        raise ValueError(
+            "no measured yield to divide by. This needs mg per litre from a "
+            "previous preparation of the same protein in the same host: "
+            "nothing here can predict one")
+    measured_yield = float(yield_mg_per_litre)
+    if measured_yield <= 0:
+        raise ValueError("the measured yield must be positive")
+
+    warnings: list[str] = []
+    if route == "final":
+        if recovery_pct not in (None, 0):
+            raise ValueError(
+                "a recovery was given alongside a final yield. A final yield "
+                "is what came out after purification, so the recovery is "
+                "already in it and applying it again would count the losses "
+                "twice. Either drop the recovery, or switch to the "
+                "expression route and give what was expressed")
+        per_litre = measured_yield
+        basis = (f"{target_basis}, divided by {measured_yield:g} mg of "
+                 f"purified protein per litre measured on a previous "
+                 f"preparation")
+    else:
+        if recovery_pct in (None, 0):
+            raise ValueError(
+                "the expression route needs the fraction a purification "
+                "recovered, as a percentage. Without it, mg expressed per "
+                "litre says nothing about what reaches the tube")
+        recovery = float(recovery_pct)
+        if not 0 < recovery <= 100:
+            raise ValueError("the recovery is a percentage above 0 and at "
+                             "most 100")
+        per_litre = measured_yield * recovery / 100.0
+        basis = (f"{target_basis}, divided by {measured_yield:g} mg expressed "
+                 f"per litre times a {recovery:g} per cent recovery, which is "
+                 f"{per_litre:g} mg per litre reaching the tube")
+
+    litres = required / per_litre
+    flasks = None
+    if flask_working_ml:
+        working = float(flask_working_ml)
+        if working <= 0:
+            raise ValueError("a flask working volume must be positive")
+        # Rounded up: half a flask is a flask, and rounding down would plan a
+        # preparation that cannot reach the target it was asked for.
+        import math
+        flasks = int(math.ceil(litres * 1000.0 / working))
+
+    if margin_pct:
+        warnings.append(
+            f"The target was raised by {margin_pct:g} per cent before "
+            f"dividing, to {required:.3f} mg, which is the margin you asked "
+            f"for and not an estimate of anything.")
+    warnings.append(
+        "This is one division, on a yield you measured. A different host, a "
+        "different induction or a different construct makes that yield "
+        "inapplicable, and the app cannot tell that it has changed.")
+
+    return {
+        "target_mg": round(target, 4),
+        "required_mg": round(required, 4),
+        "effective_yield_mg_per_litre": round(per_litre, 4),
+        "culture_litres": round(litres, 4),
+        "culture_ml": round(litres * 1000.0, 1),
+        "flasks": flasks,
+        "route": route,
+        "basis": basis,
+        "warnings": warnings,
+    }
+
+
+# --------------------------------------------------------------------------
 # Batch sheet
 # --------------------------------------------------------------------------
 # What goes on the label of a tube that leaves your bench. Not a certificate
@@ -1080,6 +1258,170 @@ def batch_record_inputs(data: dict) -> dict:
         "cystines": bool(data.get("cystines_formed", True)),
         "created_with": str(data.get("created_with") or ""),
         "rendered": data.get("rendered") or {},
+    }
+
+
+def compare_batch_records(records: list[tuple[str, dict]],
+                          properties_for=None,
+                          version: str = "") -> dict:
+    """Several saved batch records side by side, one row per lot.
+
+    A batch record is the one thing this app produces that accumulates. One of
+    them describes a tube; a year of them describes a preparation, and the
+    question they answer together, whether the last three lots came out like
+    the first three, is not visible in any single sheet. The app stores
+    nothing, so the records come back from wherever the user kept them, which
+    is also why this takes them as a list rather than reading a directory.
+
+    ``records`` is a list of ``(label, data)``, where ``label`` is whatever
+    the record came from, usually a file name, and ``data`` is the parsed
+    JSON. A record that cannot be read is reported in ``rejected`` with the
+    reason and left out of the rows, rather than failing the whole comparison:
+    one unreadable file among twelve should cost that file, not the other
+    eleven.
+
+    ``properties_for`` is called with a sequence and returns the properties
+    dict `batch_sheet` needs. It is a parameter rather than an import because
+    this module computes nothing from a sequence and is not about to start:
+    the caller owns that, and a test can pass a stub. Without it, the rows
+    carry what the records state and leave the derived concentration out.
+
+    What is deliberately *recomputed* rather than read back: every derived
+    value. A record carries the readings and, under ``rendered``, what the
+    sheet said at the time. The comparison recomputes from the readings with
+    the version running now, so a column that disagrees with an old printout
+    is visible instead of being carried forward. ``created_with`` is in each
+    row for exactly that reason.
+
+    What this is not: a trend. There is no fit, no control limit and no
+    verdict on whether a lot is acceptable. Those need a specification, and a
+    specification is a decision somebody makes, not something arithmetic can
+    supply.
+    """
+    rows: list[dict] = []
+    rejected: list[dict] = []
+    warnings: list[str] = []
+
+    for label, data in records or []:
+        try:
+            inputs = batch_record_inputs(data)
+        except ValueError as exc:
+            rejected.append({"source": str(label), "reason": str(exc)})
+            continue
+
+        properties: dict = {}
+        if properties_for and inputs["sequence"]:
+            try:
+                properties = properties_for(inputs["sequence"]) or {}
+            except Exception as exc:          # a stub, or a sequence it hates
+                rejected.append({
+                    "source": str(label),
+                    "reason": f"the sequence in it could not be "
+                              f"characterised ({exc})"})
+                continue
+
+        sheet = batch_sheet(inputs["name"], inputs["sequence"], properties,
+                            measured=inputs["measured"],
+                            fields=inputs["fields"],
+                            cystines=inputs["cystines"])
+
+        measured = inputs["measured"]
+        if measured.get("mg_per_ml"):
+            basis = "measured"
+            basis_detail = measured.get("method") or "method not stated"
+        elif measured.get("a280") is not None and sheet[
+                "concentration_mg_per_ml"]:
+            basis = "derived"
+            eps_key = ("ext_coeff_cystines" if inputs["cystines"]
+                       else "ext_coeff_reduced")
+            eps = properties.get(eps_key)
+            basis_detail = (f"A280, eps {eps:g} /M/cm" if eps
+                            else "A280")
+        else:
+            basis = None
+            basis_detail = ""
+
+        concentration = sheet["concentration_mg_per_ml"]
+        volume_ul = measured.get("volume_ul")
+        rows.append({
+            "source": str(label),
+            "lot": inputs["fields"].get("lot") or "",
+            "date": inputs["fields"].get("date") or "",
+            "name": inputs["name"],
+            "prepared_by": inputs["fields"].get("prepared_by") or "",
+            "host": inputs["fields"].get("host") or "",
+            "purification": inputs["fields"].get("purification") or "",
+            "buffer": inputs["fields"].get("buffer") or "",
+            "storage": inputs["fields"].get("storage") or "",
+            "concentration_mg_per_ml": concentration,
+            "basis": basis,
+            "basis_detail": basis_detail,
+            "volume_ul": volume_ul,
+            "total_mg": (round(concentration * volume_ul / 1000.0, 4)
+                         if (concentration and volume_ul) else None),
+            "measured_da": measured.get("measured_da"),
+            "mass_difference_da": sheet["mass_difference_da"],
+            "sequence": inputs["sequence"],
+            "created_with": inputs["created_with"],
+        })
+
+    # Lots grouped by the sequence they state, in the order the sequences
+    # first appear. More than one group means the comparison spans more than
+    # one protein, which is worth doing deliberately and not by accident.
+    groups: dict[str, list[str]] = {}
+    for row in rows:
+        if row["sequence"]:
+            groups.setdefault(row["sequence"], []).append(
+                row["lot"] or row["source"])
+    sequence_groups = list(groups.values())
+    if len(sequence_groups) > 1:
+        warnings.append(
+            "These records do not all carry the same sequence, so the rows "
+            "below describe " + str(len(sequence_groups)) + " different "
+            "proteins. The molar mass and extinction coefficient differ "
+            "between them, which means the concentrations are not comparable "
+            "even where the readings look similar.")
+
+    bases = {row["basis"] for row in rows if row["basis"]}
+    if len(bases) > 1:
+        warnings.append(
+            "Some concentrations here were read by a method that does not go "
+            "through the sequence and others were derived from an A280 with a "
+            "predicted extinction coefficient. Comparing the two compares two "
+            "methods as much as two lots: the basis column says which is "
+            "which.")
+
+    missing = [row["lot"] or row["source"] for row in rows
+               if row["concentration_mg_per_ml"] is None]
+    if missing:
+        warnings.append(
+            "No concentration could be put on " + ", ".join(missing) +
+            ". Either the record carries no reading, or it carries an A280 "
+            "and no sequence to divide it by.")
+
+    stamped = {row["created_with"] for row in rows if row["created_with"]}
+    older = sorted(stamp for stamp in stamped if version and stamp != version)
+    if older:
+        warnings.append(
+            "Some of these were written by another version of the app (" +
+            ", ".join(older) + f", against {version} running now). The "
+            f"derived columns were recomputed here, so a figure that "
+            f"disagrees with the printed sheet is a real disagreement and "
+            f"worth looking into rather than a rounding difference.")
+
+    lots = [row["lot"] for row in rows if row["lot"]]
+    repeated = sorted({lot for lot in lots if lots.count(lot) > 1})
+    if repeated:
+        warnings.append(
+            "More than one record calls itself " + ", ".join(repeated) +
+            ". Nothing here can tell which is which, so the source column is "
+            "the only thing separating them.")
+
+    return {
+        "rows": rows,
+        "rejected": rejected,
+        "warnings": warnings,
+        "sequence_groups": sequence_groups,
     }
 
 

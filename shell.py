@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -635,6 +635,7 @@ SECTIONS = {
 UTILITIES = {
     "manual": ("📖", "Manual"),
     "reference": ("📐", "Reference"),
+    "provenance": ("🔎", "Provenance"),
 }
 
 # The key of the landing page. Named rather than spelt out in the three places

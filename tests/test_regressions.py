@@ -819,16 +819,30 @@ def test_the_chou_fasman_lysine_matches_its_own_citation():
 
 
 def test_the_analysis_tab_count_in_the_manual_matches_the_code():
-    """The manual said fifteen views; the code builds fourteen.
+    """The manual said fifteen views; the code built fourteen.
 
     The families are the single source of truth for how many there are, so
     the manual is checked against them rather than against a second list.
+
+    The count itself is deliberately not written here either. It was, as
+    `assert view_count() == 14`, which made this test a third place holding
+    the number: adding a view meant editing the code, the manual and this
+    line, and the test that existed to catch a stale number needed updating
+    by hand every time the number legitimately changed. Now it reads the
+    count, spells it, and checks the manual says that and no other.
     """
     from sections.analysis import view_count
     manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
-    assert view_count() == 14
-    assert "fourteen different views" in manual
-    assert "fifteen different views" not in manual
+    words = {12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
+             16: "sixteen", 17: "seventeen", 18: "eighteen"}
+    count = view_count()
+    assert count in words, \
+        f"{count} views, and this test cannot spell that; add the word"
+    assert f"{words[count]} different views" in manual, \
+        f"the analysis builds {count} views and MANUAL.md says otherwise"
+    for number, word in words.items():
+        if number != count:
+            assert f"{word} different views" not in manual
 
 
 def test_no_constant_claims_a_source_the_repository_cannot_show():

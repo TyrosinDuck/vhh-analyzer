@@ -1,0 +1,12 @@
+{
+ "library_entries": [
+  "caplacizumab",
+  "cAbLys3",
+  "Nb80"
+ ],
+ "settings": {
+  "ph": 7.4,
+  "profile_window": 9,
+  "annotation_method": "regex"
+ }
+}

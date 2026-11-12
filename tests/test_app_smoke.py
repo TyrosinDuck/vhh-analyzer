@@ -102,8 +102,17 @@ def app():
 
 # Every screen draws its own title, except the manual, which renders MANUAL.md
 # as markdown and has no st.title of its own.
+# Every screen draws its own sidebar label as its title, which is what makes
+# this derivable from `shell` rather than typed out: a screen added to
+# SECTIONS or UTILITIES is covered here the moment it exists, where the
+# written-out version raised a KeyError in the middle of a sweep and said
+# nothing about which screen was missing a title.
+#
+# Two exceptions, both deliberate: the home page is titled with the app rather
+# than with the button, and the manual draws the document instead of a title
+# of its own.
 EXPECTED_TITLE = {**{button: button for button in SECTION_BUTTONS},
-                  "📐 Reference": "📐 Reference",
+                  **{button: button for button in UTILITY_BUTTONS},
                   "🏠 Home": "🧰 VHH tool box",
                   "📖 Manual": None}
 
@@ -786,3 +795,158 @@ def test_the_home_page_asks_how_the_app_is_used(app):
     footer = [str(c.value) for c in app.caption if "report a problem" in str(c.value)]
     assert len(footer) == 1 and shell.usage_url() in footer[0], \
         "the footer no longer links to the usage report"
+
+
+def test_the_culture_plan_divides_a_target_by_a_measured_yield(app):
+    """The view with its inputs filled, not only its empty state.
+
+    Arithmetic checked by hand: 10 mg at 4 mg per litre is 2.5 litres, and at
+    a working volume of 1 L that is three flasks, because half a flask is a
+    flask. The empty state is checked first, because "there is no default
+    yield" is the claim this view rests on and an empty box is what enforces
+    it.
+    """
+    from sections import bench as bench_screen
+
+    _goto(app, "⚗️ Batch & QC")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        bench_screen.V_PLAN).run()
+    _no_failure(app, "culture plan, empty")
+    assert any("no target" in info.value for info in app.info), \
+        "the empty plan did not say that it needs a target"
+
+    # A target and no yield: the state where a tool that guessed would guess.
+    app.session_state["cp_mg"] = 10.0
+    app.run()
+    _no_failure(app, "culture plan, target only")
+    assert any("nothing here can predict one" in info.value
+               for info in app.info), \
+        "with a target and no yield, the plan did not say it cannot predict one"
+    assert not [m for m in app.metric if m.label == "Culture needed"], \
+        "a culture volume was shown before any yield was given"
+
+    app.session_state["cp_yield"] = 4.0
+    app.session_state["cp_flask"] = 1000.0
+    app.run()
+    _no_failure(app, "culture plan, filled")
+
+    volume = [m for m in app.metric if m.label == "Culture needed"]
+    assert volume, "the culture volume metric did not render"
+    assert "2.50 L" in volume[0].value, volume[0].value
+    flasks = [m for m in app.metric if m.label == "Flasks"]
+    assert flasks and "3" in str(flasks[0].value), \
+        f"expected three flasks, got {flasks[0].value if flasks else None}"
+
+    # The fixture is shared, so the inputs go back as they were found.
+    app.session_state["cp_mg"] = None
+    app.session_state["cp_yield"] = None
+    app.session_state["cp_flask"] = 0.0
+    app.run()
+
+
+def test_the_lot_comparison_says_what_it_needs_before_any_file(app):
+    from sections import bench as bench_screen
+
+    _goto(app, "⚗️ Batch & QC")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        bench_screen.V_LOTS).run()
+    _no_failure(app, "across lots")
+    assert any("Batch sheet" in info.value for info in app.info), \
+        "the empty comparison did not say where the records come from"
+
+
+def test_the_session_tab_offers_the_run_as_a_file_and_a_paragraph(app):
+    """The session file and the methods paragraph, on a real run.
+
+    Streamlit executes every tab body of the selected family, so selecting
+    Outputs draws the Session tab too. What is checked is what the feature is
+    for: a file to download, and a paragraph that names the annotator that
+    actually ran rather than the setting, and says the values are
+    theoretical.
+    """
+    import shell
+
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    families = [r for r in app.radio if r.label == "Section"][0]
+    outputs = [option for option in families.options if "Outputs" in option][0]
+    families.set_value(outputs).run()
+    _no_failure(app, "analysis outputs")
+
+    labels = [button.label for button in app.button] + [
+        element.label for element in app.get("download_button")]
+    assert any("Download the session" in label for label in labels), \
+        f"no session download button among {labels}"
+
+    paragraphs = [block.value for block in app.code]
+    assert paragraphs, "the methods paragraph did not render"
+    text = "\n".join(paragraphs)
+    assert "theoretical" in text
+    assert shell.APP_NAME in text
+    # Without HMMER the run falls back to the regex anchors, and the paragraph
+    # has to say which one ran either way: that is the claim it exists for.
+    assert ("Regex anchors" in text) != HAS_HMMER or "ANARCI" in text
+
+
+def test_provenance_lists_the_constants_and_what_they_are_worth(app):
+    """The register, both views.
+
+    The values are read from the modules while the page is drawn, so this is
+    also the test that would catch an entry naming a constant that a refactor
+    renamed: the screen would raise instead of drawing.
+    """
+    import provenance as pv
+
+    _click(app, "🔎 Provenance")
+    _no_failure(app, "provenance section")
+    assert any(f"{len(pv.entries())} constants" in str(caption.value)
+               for caption in app.caption), \
+        "the register did not say how many constants it holds"
+    assert app.dataframe, "the register table did not render"
+
+    selector = [r for r in app.radio if r.label == "View"][0]
+    for view in selector.options:
+        [r for r in app.radio if r.label == "View"][0].set_value(view).run()
+        _no_failure(app, f"provenance view {view}")
+        assert _content_count(app) >= 6, f"provenance view {view} looks empty"
+
+    # The second view groups by standing, and the group that matters most is
+    # the one whose source could not be traced.
+    body = "\n".join(str(element.value) for element in app.markdown)
+    assert "unverified" in body, \
+        "the grouped view does not show the unverified constants"
+
+
+def test_a_pending_setting_reaches_the_sidebar_widget(app):
+    """The half of the session restore that can be driven from a test.
+
+    `AppTest` has no way to hand a file to `st.file_uploader`, so the upload
+    itself is exercised by hand and not here. What *is* testable is the
+    mechanism it depends on, and it is the part that fails silently: the
+    screen parks a value under `pending_set_ph`, the router moves it into the
+    widget's state before any widget is drawn, and the slider comes up on the
+    restored value. If the key were misspelt in either file, the session would
+    reload, the sequences would come back, and the pH would quietly be
+    whatever the slider was already on.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    before = app.session_state["set_ph"]
+    assert before != 6.0, "pick a different pH for this test"
+
+    app.session_state["pending_set_ph"] = 6.0
+    app.session_state["pending_set_window"] = 15
+    app.run()
+    _no_failure(app, "a restored setting")
+
+    assert app.session_state["set_ph"] == 6.0
+    assert app.session_state["set_window"] == 15
+    assert "pending_set_ph" not in app.session_state, \
+        "the pending key was not consumed, so it would be reapplied forever"
+    sliders = {slider.label: slider.value for slider in app.slider}
+    assert sliders["pH for net charge"] == 6.0
+    assert sliders["Profile window (residues)"] == 15
+
+    app.session_state["pending_set_ph"] = before
+    app.run()

@@ -17,7 +17,9 @@ so the coupling is written down rather than implied.
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import re
 import zipfile
 from collections.abc import Callable
@@ -34,8 +36,8 @@ import generator as gn
 import repertoire as rep
 import triage as tg
 import vhh_core as vc
-from compute import (aggregation_for, analyze_with_progress, annotations,
-    cdr3_identity_example,
+from compute import (aggregation_for, analyze_with_progress, annotation_for,
+    annotations, cdr3_identity_example,
     classify_cached, comparison_for, ctm, disulfides_for, dna_for,
     families_for, generate_cached, generator_matrix, germline_data, gn,
     hallmark_data, humanness_for, identity_for, liabilities_for, pd, plt,
@@ -46,11 +48,13 @@ from compute import (aggregation_for, analyze_with_progress, annotations,
     png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
     proteases_for, rarity_tables, rep, repairs_for, repertoire_stats, st,
     tempfile, tg, triage_for, vc)
-from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
-                   Settings, anarci_requirement, anarci_status,
-                   current_sequences, fig_to_png, footer, go_to, usage_prompt)
+import session as ses
+from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
+                   FIT, RELEASE, REPO_URL, VERSION, Settings,
+                   anarci_requirement, anarci_status, current_sequences,
+                   fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 
 @dataclass
@@ -121,9 +125,10 @@ _FAMILIES = {
                       "How they compare with the natural VHH repertoire: "
                       "unusual framework residues, CDR lengths and composition "
                       "against 1958 real VHHs."),
-    "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download"],
+    "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download", "Session"],
                    "What you make from them: codon-optimised DNA, fusion "
-                   "constructs, CSV, figures and the PDF report."),
+                   "constructs, CSV, figures, the PDF report, and the session "
+                   "file that lets somebody run this again."),
 }
 
 
@@ -1713,6 +1718,170 @@ def _outputs(r: Run) -> None:
 
         st.divider()
         st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
+
+    # --- Session ---------------------------------------------------------------- #
+    with tabs["Session"]:
+        _session(r)
+
+
+def _annotator_used(sequences: dict, method: str) -> str:
+    """Which annotator actually ran, not which one was asked for.
+
+    Under "auto" the setting says nothing: ANARCI runs if it is installed
+    beside the app and the regex anchors run if it is not, and the same file
+    reopened on another machine can therefore be annotated differently. The
+    answer comes from annotating one sequence, through the same cached call
+    the screen already made, so this costs nothing on a rerun.
+
+    With no sequence to annotate there is nothing to report, and reporting the
+    setting instead would be exactly the substitution this function exists to
+    avoid.
+    """
+    if not sequences:
+        return ""
+    first = next(iter(sequences.values()))
+    try:
+        _annotation, used = annotation_for(first, method)
+    except Exception:
+        # Strict "anarci" with ANARCI missing raises, and the screen has
+        # already said so where it matters.
+        return ""
+    return used
+
+
+def _session(r: Run) -> None:
+    """The session file and the methods paragraph: this run, written down."""
+    sequences = r.sequences
+    ph = r.ph
+    window = r.window
+    method = r.method
+
+    st.markdown(
+        "The app keeps nothing, which means an analysis cannot be looked up "
+        "later and a figure in a manuscript rests on a page nobody can "
+        "rebuild. A session file is the fix that does not need a database: "
+        "the sequences and the settings in one small file, which this screen "
+        "reads back.")
+
+    used = _annotator_used(sequences, method)
+    record = ses.session_record(
+        sequences, ph=ph, window=window, method=method, method_used=used,
+        version=VERSION, release=RELEASE, build=BUILD, code=CODE,
+        runtime=runtime_versions())
+
+    st.subheader("Save this run")
+    st.caption(
+        f"{len(sequences)} sequence{'s' if len(sequences) != 1 else ''}, "
+        f"pH {ph:g}, a {window}-residue window, and "
+        + (f"the CDR annotation **{method}** resolved to **{used}**."
+           if used and method == "auto"
+           else f"the CDR annotation set to **{method}**."
+           if not used else f"**{used}** as the annotator."))
+    st.download_button(
+        "⬇️ Download the session (JSON)",
+        json.dumps(record, indent=1, ensure_ascii=False),
+        file_name="vhh_session.json", mime="application/json", key="ses_out",
+        **FIT)
+    st.caption(
+        "It holds the question, not the answer: the sequences and the "
+        "settings, and no computed value. Reopening it recomputes everything "
+        "with whatever version is running then, and the version that wrote it "
+        "is in the file, so a run that disagrees with the original is visible "
+        "instead of being papered over. Your sequences are in this file, so "
+        "it is as confidential as they are.")
+
+    st.divider()
+    st.subheader("Reopen a session")
+    _restore()
+
+    st.divider()
+    st.subheader("Material and methods")
+    st.caption(
+        "Assembled from the same record, so every sentence names a setting "
+        "that was actually used. Check it, then paste it: it describes this "
+        "run and nothing else, and the sequence names are deliberately left "
+        "out.")
+    paragraph = ses.methods_paragraph(record, app_name=APP_NAME, doi=DOI,
+                                      repo_url=REPO_URL)
+    st.code(paragraph, language=None)
+    st.download_button(
+        "⬇️ Download the paragraph (TXT)", paragraph,
+        file_name="vhh_methods.txt", mime="text/plain", key="ses_methods",
+        **FIT)
+    st.caption(
+        "It covers the characterisation and the annotation, which is what a "
+        "session records. It says nothing about the bench calculators, a "
+        "cloning design or a structure, because this file cannot vouch for "
+        "those. To cite the exact code rather than the latest release, use "
+        "the version DOI of the release you ran, from its Zenodo record.")
+    usage_prompt("Sequence analysis, Session")
+
+
+def _restore() -> None:
+    """Put a saved session back on the screen.
+
+    The sequences go into the analysis text area and the three settings into
+    the sidebar widgets, both through `pending_` keys that `app.py` moves into
+    place before any widget is drawn: a widget's state cannot be written once
+    the widget exists, and the sidebar is drawn before this screen.
+
+    A file is applied once. The digest guard is the same one the batch record
+    reload uses, and for the same reason: without it, every rerun would
+    overwrite whatever the user had changed since loading.
+    """
+    upload = st.file_uploader("Session file (JSON)", type=["json"],
+                              key="ses_in", label_visibility="collapsed")
+    if upload is None:
+        return
+
+    raw = upload.getvalue()
+    digest = hashlib.sha256(raw).hexdigest()
+    if st.session_state.get("ses_digest") == digest:
+        st.caption("Loaded. The sequences and the settings are as the file "
+                   "left them; press **Analyze** to recompute.")
+        return
+
+    try:
+        loaded = ses.session_inputs(json.loads(raw.decode("utf-8")))
+    except (ValueError, UnicodeDecodeError) as exc:
+        st.error(f"That is not a session file this app can read: {exc}")
+        return
+    except json.JSONDecodeError as exc:
+        st.error(f"That file is not valid JSON: {exc}")
+        return
+
+    if not loaded["sequences"]:
+        st.warning(
+            "That session carries no sequence, so there is nothing to put "
+            "back in the box. Its settings are still in the file if you want "
+            "to set them by hand.")
+        return
+
+    st.session_state["pending_seq_text"] = ses.fasta(loaded["sequences"])
+    st.session_state["pending_set_ph"] = float(loaded["ph"])
+    st.session_state["pending_set_window"] = int(loaded["window"])
+    # The method is only restored if this machine can honour it. A file asking
+    # for strict ANARCI on a server without HMMER would otherwise be put in a
+    # selectbox that does not offer it, which is a crash rather than a
+    # fallback. Said out loud, because an annotation method that silently
+    # changed is exactly what makes two runs disagree.
+    wanted = loaded["method"]
+    if wanted == "anarci" and not anarci_status():
+        st.warning(
+            "That session was run with ANARCI set explicitly, and "
+            f"{anarci_requirement()}. The sequences and the other settings "
+            "are restored; the annotation method is left as it is, so the "
+            "CDR boundaries here will not match that run.")
+    else:
+        st.session_state["pending_set_method"] = wanted
+    if loaded["created_with"] and loaded["created_with"] != VERSION:
+        st.info(
+            f"That session was written with {loaded['created_with']}, and "
+            f"this app is {VERSION}. Nothing was carried over except the "
+            f"sequences and the settings, so what you get now is this "
+            f"version's reading of them.")
+    st.session_state["ses_digest"] = digest
+    st.rerun()
 
 
 def render(settings: Settings) -> None:

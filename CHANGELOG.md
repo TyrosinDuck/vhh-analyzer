@@ -118,6 +118,32 @@ services exists.
 
 ### Changed
 
+- **Batch & QC dispatches its views through one table.** The screen chose
+  between five views with a chain of calls that each took their own arguments,
+  which is what had previously let a view be reached by index. The views now
+  share one signature, taking a frozen `Tube` with the selected protein and
+  the settings, exactly as the analysis families share a `Run`, and the
+  dispatch is a lookup. The table also carries whether a view works on the
+  sequence picked at the top, so the two views that supply their own, the
+  culture plan and the lot comparison, do not have a picker drawn above them
+  that they ignore; previously that would have been an `if` naming views a
+  second time.
+
+- **Two tests stopped holding a copy of what they were checking.** The test
+  guarding the analysis view count asserted the number was fourteen, which
+  made it a third place where that number lived: adding a view meant editing
+  the code, the manual and the assertion, and the test written to catch a
+  stale number had to be hand-updated whenever the number legitimately moved.
+  It now reads the count, spells it, and checks the manual says that and no
+  other. The smoke test's map of expected screen titles was written out per
+  utility screen and raised a `KeyError` in the middle of a sweep when a
+  screen was added, saying nothing about which one; it is derived from
+  `shell.SECTIONS` and `shell.UTILITIES`, with the home page and the manual as
+  the two deliberate exceptions.
+
+- **The analysis offers fifteen views rather than fourteen**, the new one
+  being Session, and MANUAL.md §3.0 follows the count as before.
+
 - **The JOSS manuscript's bibliography is verified rather than provisional.**
   Its ten entries were written at the author/title/year level and carried a
   header saying to check every one before submitting. All ten were checked
@@ -146,6 +172,126 @@ services exists.
   place it is cited, which no test can answer.
 
 ### Added
+
+- **A session file, and a methods paragraph built from it**, as a fourth tab
+  of the analysis Outputs family. The app stores nothing, which is why no
+  sequence submitted to it can be read by anyone else and also why an
+  analysis run in March cannot be looked up in September. The session file is
+  the answer that needs no database: the sequences and the three settings in
+  one small JSON file, which the same tab reads back, putting the sequences in
+  the input and the settings in the sidebar. It holds no computed value on
+  purpose. Reopening it recomputes with whatever version is running then, and
+  the version that wrote it is in the file, so a number that comes out
+  differently is visible instead of being carried forward.
+
+  It refuses rather than half restores: an unknown format number, a setting
+  outside what the sidebar can show, a fractional profile window, a sequence
+  that is not text. One case restores partly and says so, a session saved with
+  the annotation method set explicitly to ANARCI and reopened where ANARCI is
+  not installed.
+
+  The methods paragraph is assembled from the same record, so every sentence
+  names a setting that was actually used. It names the annotator that ran
+  rather than the one that was asked for, which is the claim a user cannot
+  check by looking: "auto" resolves to ANARCI where it is installed and to the
+  regex anchors where it is not, and the same file reopened on another machine
+  can be annotated differently. It says the mass, the pI and the extinction
+  coefficients are ProtParam values computed from the sequence and were not
+  measured, and it carries the source fingerprint, because a release number
+  does not identify a build. Sequence names are left out, since they are
+  usually internal clone identifiers and the text is meant for a manuscript.
+
+  The sidebar sliders are keyed for this, and `app.py` now moves any
+  `pending_<key>` into place before drawing a widget rather than naming the
+  two keys that needed it. The restore itself cannot be driven by `AppTest`,
+  which has no way to hand a file to an uploader, so the upload was exercised
+  by hand; the mechanism under it, which is the part that would fail silently,
+  is covered by a smoke test.
+
+- **A provenance register**, as a third screen below the sidebar divider,
+  beside the manual and the reference tables. Every constant the app computes
+  with, its current value, what it is worth and where it came from, grouped by
+  standing: published, vendor, standard, convention, observed here,
+  unverified. That information was already in the repository and effectively
+  invisible, sitting in comments and in captions on three different screens,
+  and the audit above is what made it worth collecting.
+
+  No value is typed into the register. Each entry names the module and the
+  attribute that owns its constant, the value is read live while the page is
+  drawn, and a test parses `provenance.py` and fails if a numeric literal
+  appears in an entry. The vendor rows are derived from `bench.REAGENTS` and
+  the atomic weights take their source from `buffers.ATOMIC_WEIGHTS_SOURCE`,
+  so adding a reagent adds a row and no source sentence exists twice.
+
+  What it cannot do, and the page says so: check that the sentence still
+  describes the value. The value comes from the code and the text from a
+  person, so a threshold that moves without its justification will be shown
+  with the old one.
+
+- **How much culture, for how much protein**, as the fifth view of Batch & QC.
+  The purification balance runs forwards; this runs the other way, which is
+  the question asked before a preparation rather than after it. It divides a
+  target by a yield measured on a previous preparation and does nothing else:
+  there is no yield model and the yield box has no default, for the same
+  reason the balance has no default extinction coefficient. A prefilled mg/L
+  would produce a complete plan resting on nothing, and a plan is acted on.
+
+  Three refusals carry the view. A target given twice, once as a mass and
+  once as a concentration times a volume, is refused rather than resolved,
+  because two targets that disagree mean one belongs to a different plan. A
+  recovery given alongside a final yield is refused, because a final yield
+  already contains the purification losses and applying them again would
+  double the culture while looking entirely reasonable. No yield at all is
+  refused with the reason, rather than answered.
+
+- **Across lots**, as the seventh view of Batch & QC. The batch record is the
+  one thing this app produces that accumulates, and the question a year of
+  them answers, whether the last three lots came out like the first three, is
+  not visible in any single sheet. Drop the JSON records in and they line up
+  in one table.
+
+  Every derived column is recomputed from the readings with the version
+  running now rather than read back from what each sheet said at the time,
+  which is the only way a disagreement with an old printout can be seen; the
+  version that wrote each record is a column, and a warning names the records
+  written by another version. It flags lots that do not all carry the same
+  sequence, concentrations that were not all obtained the same way, a lot with
+  no usable reading, and two records calling themselves the same lot. A file
+  that cannot be read costs its own row and no other. The chart is drawn only
+  when every lot was quantified the same way, because a line through two
+  methods looks like one measurement drifting, and it is stated to be a line
+  between lots and not a trend: a verdict on a lot needs a specification, and
+  that is a decision somebody makes.
+
+- **A worked example, in `examples/`,** and the two questions it answers kept
+  apart. Three published sequences, one set of settings, and the descriptors
+  this code produces from them, checked by `python3 tools/make_examples.py
+  --check` and by the test suite. The sequences are not copied into it: the
+  manifest names three entries of `data/library.csv` and both other files are
+  generated from it, so a correction to the library reaches the example
+  instead of leaving it describing the old sequence.
+
+  *Has it changed*: the baseline catches a refactor that moved a number and,
+  just as important, a dependency upgrade that moved one. Nothing else in the
+  suite would notice, because every other test checks that the code does what
+  the code says, and a changed constant is perfectly consistent with that.
+
+  *Is it right*: one descriptor can be checked without leaving the repository,
+  and it is the one most results rest on. The molar mass is recomputed from
+  the per-residue formulas in `data/aminoacids/meta.json` and the CIAAW 2021
+  atomic weights in `buffers.py`, through the formula parser the buffer
+  recipes use, and compared with what Biopython reports. The two routes share
+  no constant and agree to within 0.19 Da on about 13.9 kDa, which is 14 parts
+  per million; on the twenty individual amino acids the same comparison is
+  exact for eighteen and differs by 0.007 Da for methionine and cysteine,
+  which is a revision of sulfur's standard atomic weight. The isoelectric
+  point and the extinction coefficients have no second source in this
+  repository, so nothing here checks them, and `examples/README.md` says so
+  rather than letting the example imply otherwise.
+
+  The example is annotated with the regex anchors deliberately: ANARCI is
+  installed beside the app rather than by it, so a baseline that used it would
+  pass or fail according to whether HMMER happens to be on the machine.
 
 - **An enrichment calculator**, as the second view of Phage & panning. One
   row per round, four numbers each: the colonies counted on the plate panned

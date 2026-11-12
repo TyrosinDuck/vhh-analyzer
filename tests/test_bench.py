@@ -827,3 +827,248 @@ def test_exponents_typed_as_factors_were_wrong_by_the_difference():
 
     raw = bench.panning_enrichment(30, 3, 30, 2)
     assert raw["enrichment"] == pytest.approx(1.5)
+
+
+# --------------------------------------------------------------------------
+# How much culture, for how much protein
+# --------------------------------------------------------------------------
+# One division, and four ways of getting it wrong that the function refuses
+# rather than averages over. The refusals are the content here: the arithmetic
+# is a division, and a test that only checked the division would miss every
+# way this view could mislead somebody into setting up the wrong culture.
+
+def test_culture_is_the_target_divided_by_a_measured_yield():
+    plan = bench.culture_for_target(target_mg=10.0, yield_mg_per_litre=4.0)
+    assert plan["culture_litres"] == pytest.approx(2.5)
+    assert plan["culture_ml"] == pytest.approx(2500.0)
+    assert plan["required_mg"] == pytest.approx(10.0)
+    assert "divided by 4 mg of purified protein per litre" in plan["basis"]
+
+
+def test_a_target_can_be_given_as_a_concentration_and_a_volume():
+    """The usual way a request arrives: so many mL at so many mg/mL."""
+    plan = bench.culture_for_target(target_mg_per_ml=2.0, target_volume_ml=5.0,
+                                    yield_mg_per_litre=4.0)
+    assert plan["target_mg"] == pytest.approx(10.0)
+    assert plan["culture_litres"] == pytest.approx(2.5)
+
+
+def test_a_target_given_twice_is_refused_rather_than_resolved():
+    """Two targets that disagree mean one of them belongs to another plan.
+
+    Preferring either silently would plan a culture for a quantity nobody
+    asked for, and the user would have no way of seeing which number was
+    used.
+    """
+    with pytest.raises(ValueError, match="given twice"):
+        bench.culture_for_target(target_mg=10.0, target_mg_per_ml=2.0,
+                                 target_volume_ml=5.0,
+                                 yield_mg_per_litre=4.0)
+
+
+def test_a_margin_is_added_before_dividing_and_is_named_as_yours():
+    plan = bench.culture_for_target(target_mg=10.0, yield_mg_per_litre=4.0,
+                                    margin_pct=20.0)
+    assert plan["required_mg"] == pytest.approx(12.0)
+    assert plan["culture_litres"] == pytest.approx(3.0)
+    assert any("margin you asked for" in w for w in plan["warnings"])
+
+
+def test_there_is_no_default_yield_to_fall_back_on():
+    """The refusal that matters most.
+
+    A plausible mg/L standing in for a measurement would produce a complete
+    plan resting on nothing, and a plan is acted on: somebody sets up the
+    culture. This is the same reasoning as the empty extinction coefficient
+    fields in Quantify, and it is why this view says it cannot help rather
+    than offering a number.
+    """
+    with pytest.raises(ValueError, match="nothing here can predict one"):
+        bench.culture_for_target(target_mg=10.0)
+
+
+def test_a_recovery_cannot_be_applied_to_a_yield_that_already_includes_it():
+    """Counting the purification losses twice is the trap in this view.
+
+    A final yield is what came out of a finished preparation, so the recovery
+    is inside it. Multiplying by a recovery again would double the culture,
+    and the result would look entirely reasonable.
+    """
+    with pytest.raises(ValueError, match="count the losses twice"):
+        bench.culture_for_target(target_mg=10.0, route="final",
+                                 yield_mg_per_litre=4.0, recovery_pct=50.0)
+
+
+def test_the_expression_route_needs_the_recovery_and_applies_it_once():
+    with pytest.raises(ValueError, match="needs the fraction"):
+        bench.culture_for_target(target_mg=10.0, route="expression",
+                                 yield_mg_per_litre=8.0)
+    plan = bench.culture_for_target(target_mg=10.0, route="expression",
+                                    yield_mg_per_litre=8.0, recovery_pct=50.0)
+    assert plan["effective_yield_mg_per_litre"] == pytest.approx(4.0)
+    assert plan["culture_litres"] == pytest.approx(2.5)
+    assert "50 per cent recovery" in plan["basis"]
+
+
+def test_flasks_are_rounded_up_because_half_a_flask_is_a_flask():
+    plan = bench.culture_for_target(target_mg=10.0, yield_mg_per_litre=4.0,
+                                    flask_working_ml=1000.0)
+    assert plan["flasks"] == 3
+    assert bench.culture_for_target(
+        target_mg=8.0, yield_mg_per_litre=4.0,
+        flask_working_ml=1000.0)["flasks"] == 2
+
+
+def test_the_plan_always_says_the_yield_may_not_apply():
+    """Every plan carries the caveat, not only the ones with a margin."""
+    plan = bench.culture_for_target(target_mg=1.0, yield_mg_per_litre=1.0)
+    assert any("cannot tell that it has changed" in w
+               for w in plan["warnings"])
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"target_mg": -1.0, "yield_mg_per_litre": 4.0},
+    {"target_mg": 10.0, "yield_mg_per_litre": -4.0},
+    {"target_mg": 10.0, "yield_mg_per_litre": 4.0, "margin_pct": -10.0},
+    {"target_mg": 10.0, "yield_mg_per_litre": 4.0, "flask_working_ml": -1.0},
+    {"target_mg": 10.0, "yield_mg_per_litre": 4.0, "route": "guesswork"},
+    {"target_mg": 10.0, "route": "expression", "yield_mg_per_litre": 4.0,
+     "recovery_pct": 140.0},
+])
+def test_impossible_inputs_raise(kwargs):
+    with pytest.raises(ValueError):
+        bench.culture_for_target(**kwargs)
+
+
+# --------------------------------------------------------------------------
+# Across lots
+# --------------------------------------------------------------------------
+
+SEQ_A = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSV"
+         "KGRFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYDWGQGTQVTVSS")
+SEQ_B = SEQ_A.replace("DRGYSSSWYD", "DRGYSSSWYE")   # one CDR3 residue apart
+
+# A stub rather than the real characterisation: this module computes nothing
+# from a sequence, and the comparison's job is to line records up, not to
+# recompute ProtParam. Round numbers make the arithmetic checkable by eye.
+STUB = {"ext_coeff_cystines": 20000.0, "ext_coeff_reduced": 19875.0,
+        "mw_da": 14000.0, "length": 120, "pI": 8.5, "n_Cys": 2,
+        "n_primary_amines": 3}
+
+
+def a_lot(lot, *, a280=None, mg_per_ml=None, method="", volume_ul=1000.0,
+          sequence=SEQ_A, measured_da=None, version="1.1.0"):
+    return bench.batch_record(
+        name="NbX", seq=sequence,
+        fields={"lot": lot, "date": "2026-11-12", "host": "E. coli WK6"},
+        measured={"a280": a280, "mg_per_ml": mg_per_ml, "method": method,
+                  "dilution": 1.0, "path_cm": 1.0, "volume_ul": volume_ul,
+                  "measured_da": measured_da},
+        cystines=True, version=version)
+
+
+def test_lots_line_up_with_their_derived_values_recomputed():
+    """The comparison recomputes rather than reading back what was rendered.
+
+    A record carries what the sheet said at the time, under `rendered`. The
+    comparison deliberately ignores it: a column that disagrees with an old
+    printout is the one thing worth seeing, and carrying the old number
+    forward would hide exactly that.
+    """
+    records = [("a.json", a_lot("A", a280=1.0)),
+               ("b.json", a_lot("B", a280=0.5))]
+    out = bench.compare_batch_records(records, properties_for=lambda _s: STUB,
+                                     version="1.1.0")
+    assert [row["lot"] for row in out["rows"]] == ["A", "B"]
+    # 1.0 / 20000 * 14000 = 0.7 mg/mL, in 1 mL
+    assert out["rows"][0]["concentration_mg_per_ml"] == pytest.approx(0.7)
+    assert out["rows"][0]["total_mg"] == pytest.approx(0.7)
+    assert out["rows"][1]["total_mg"] == pytest.approx(0.35)
+    assert out["rows"][0]["basis"] == "derived"
+    assert "eps 20000 /M/cm" in out["rows"][0]["basis_detail"]
+    assert not out["rejected"]
+
+
+def test_an_unreadable_record_costs_its_own_row_and_no_other():
+    """One bad file among twelve should not cost the other eleven."""
+    out = bench.compare_batch_records(
+        [("good.json", a_lot("A", a280=1.0)),
+         ("bad.json", {"schema": "something-else/1"}),
+         ("worse.json", "not even an object")],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert [row["lot"] for row in out["rows"]] == ["A"]
+    assert {bad["source"] for bad in out["rejected"]} == {"bad.json",
+                                                          "worse.json"}
+    assert all(bad["reason"] for bad in out["rejected"])
+
+
+def test_mixing_two_quantification_methods_is_said_out_loud():
+    """A BCA and an A280 divided by a predicted coefficient are not the same
+    measurement, and a column of both invites a comparison that is partly
+    between methods."""
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=1.0)),
+         ("b.json", a_lot("B", mg_per_ml=0.7, method="BCA"))],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert any("compares two methods" in w for w in out["warnings"])
+    assert {row["basis"] for row in out["rows"]} == {"derived", "measured"}
+
+
+def test_lots_of_different_proteins_are_grouped_and_flagged():
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=1.0)),
+         ("b.json", a_lot("B", a280=1.0, sequence=SEQ_B))],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert len(out["sequence_groups"]) == 2
+    assert any("different" in w and "proteins" in w for w in out["warnings"])
+
+
+def test_a_record_from_another_version_is_named():
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=1.0, version="1.0.0"))],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert any("1.0.0" in w and "another version" in w
+               for w in out["warnings"])
+
+
+def test_two_records_calling_themselves_the_same_lot_are_flagged():
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=1.0)),
+         ("b.json", a_lot("A", a280=0.5))],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert any("More than one record calls itself A" in w
+               for w in out["warnings"])
+
+
+def test_a_lot_with_no_usable_reading_is_listed_as_such():
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=None, mg_per_ml=None))],
+        properties_for=lambda _s: STUB, version="1.1.0")
+    assert out["rows"][0]["concentration_mg_per_ml"] is None
+    assert any("No concentration could be put on A" in w
+               for w in out["warnings"])
+
+
+def test_without_a_properties_provider_the_readings_still_line_up():
+    """A notebook comparing records has no reason to characterise anything.
+
+    The derived concentration needs an extinction coefficient, so it is
+    absent, and the readings and the written fields are all still there.
+    """
+    out = bench.compare_batch_records(
+        [("a.json", a_lot("A", a280=1.0, measured_da=14010.0))],
+        version="1.1.0")
+    row = out["rows"][0]
+    assert row["concentration_mg_per_ml"] is None
+    assert row["measured_da"] == pytest.approx(14010.0)
+    assert row["host"] == "E. coli WK6"
+
+
+def test_a_sequence_the_provider_cannot_characterise_is_rejected_not_silent():
+    def angry(_sequence):
+        raise RuntimeError("no")
+
+    out = bench.compare_batch_records([("a.json", a_lot("A", a280=1.0))],
+                                      properties_for=angry, version="1.1.0")
+    assert not out["rows"]
+    assert "could not be characterised" in out["rejected"][0]["reason"]

@@ -59,8 +59,8 @@ the
 The app opens on a home page with nine sections, sorted into three groups by
 the molecule they work on. The sidebar carries the same nine entries under the
 same group titles, plus a **Home** button at the top and, below the divider,
-the **Manual** you are reading and a **Reference** screen, available from every
-screen.
+the **Manual** you are reading, a **Reference** screen and a **Provenance**
+register, available from every screen.
 
 | Group | Section | Use it for |
 |---|---|---|
@@ -70,10 +70,11 @@ screen.
 | **DNA**, reads, coding sequences and plasmids | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
-| **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered, the batch sheet |
+| **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered, how much culture a target takes, the batch sheet, and a year of batch sheets side by side |
 | | 🧂 **Buffers & media** | what to weigh for a buffer or a medium, at any volume and concentration, with the hydrate you have |
 | | 🦠 **Phage & panning** | the titre of a phage stock, and how much of it a round of panning takes |
 | *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
+| | 🔎 **Provenance** | every constant the app computes with, what it is worth, and where it came from |
 
 Each group has its own colour, a blue, a green and an orange, used for the
 group titles on the home page and in the sidebar, for the **Open** button of
@@ -115,8 +116,8 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces fourteen different views of a set of sequences. Showing
-them as fourteen tabs made two problems at once: nobody could find anything, and
+The analysis produces fifteen different views of a set of sequences. Showing
+them as fifteen tabs made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
 
@@ -1187,6 +1188,62 @@ most of the file size and most of the build time.
 
 ---
 
+### 3.16 Session and methods
+
+The app keeps nothing. That is deliberate, it is why no sequence you submit can
+be read by anyone else, and it has a cost: an analysis you ran in March cannot
+be looked up in September, and a figure in a manuscript rests on a page nobody
+can rebuild. "I used the VHH tool box" names a tool and not a run. The pH, the
+profile window and the annotator are all choices, and the annotator in
+particular can differ between two servers running the same code, because ANARCI
+is installed beside the app rather than by it.
+
+This tab is the answer that needs no database: a small file you keep.
+
+**Save this run** writes a JSON file holding the sequences and the three
+settings, and nothing else. No computed value is in it. Reopening it recomputes
+everything with whatever version is running then, which is the point: the
+version that wrote the file is recorded in it, so a number that comes out
+differently is visible instead of being carried forward. The file contains your
+sequences, so it is exactly as confidential as they are.
+
+**Reopen a session** takes such a file, puts the sequences back in the analysis
+input and the three settings back in the sidebar, and leaves you to press
+**Analyze**. Four things make it refuse rather than half restore a run, because
+a screen that looks like the saved one and is not is worse than an error:
+
+- a file whose format number this version does not read;
+- a setting outside what the sidebar can show;
+- a profile window that is not a whole number;
+- a sequence that is not text.
+
+One case restores partly and says so: a session saved with the annotation
+method set explicitly to **anarci**, reopened where ANARCI is not installed.
+The sequences and the other settings come back, the method is left alone, and
+the screen says that the CDR boundaries will not match the original run.
+
+**Material and methods** is a paragraph assembled from the same record. Every
+sentence names a setting that was actually used, which is why it is generated
+rather than offered as a template with blanks to fill: a template is how a
+methods section comes to describe IMGT numbering on a server that fell back to
+the regex anchors. It names the annotator that ran, not the one that was asked
+for; it says that the mass, the pI and the extinction coefficients are
+ProtParam values computed from the sequence and were not measured; and it
+carries the version and the source fingerprint, because a release number alone
+does not identify a build. The sequence names are left out, since they are
+usually internal clone identifiers and this text is meant to be pasted into a
+manuscript.
+
+It describes the characterisation and the annotation, and nothing else. It says
+nothing about the bench calculators, a cloning design or a structure, because a
+session file records none of those.
+
+To cite the exact code that produced a result rather than the latest release,
+use the version DOI of the release you ran, from its Zenodo record. The
+concept DOI in the footer always resolves to the newest one.
+
+---
+
 ## 4. Structure
 
 Every other section reasons from sequence alone, because a sequence is what you
@@ -1653,6 +1710,50 @@ The table downloads as CSV. Nothing is carried from here into the batch sheet:
 retype the final row there, because a number you have not retyped is a number
 you have not checked.
 
+### 5.4b How much culture, for how much protein
+
+The purification balance runs forwards: these volumes and absorbances came out
+of a preparation, here is what it recovered. This view runs the other way,
+which is the question asked before a preparation: somebody needs 5 mg, how much
+culture do we set up.
+
+**There is no yield model here and there will not be one.** A yield cannot be
+predicted from a sequence, and a number that looked like one would be the most
+dangerous figure in this app: plausible, precise, and wrong in a way nobody
+notices until a purification has already run. What this view does is divide a
+target by a yield **you measured on a previous preparation of the same protein
+in the same host**. With no previous preparation to divide by, it says it
+cannot help, and the yield box is empty rather than prefilled, for the same
+reason the purification balance has no default extinction coefficient.
+
+What you give it:
+
+- **the target**, either as a mass in mg or as a concentration and the volume
+  you need it in, in which case the mass is their product. Giving both is
+  refused rather than resolved: if the two disagree, one of them belongs to a
+  different plan, and silently preferring either would plan a culture for a
+  quantity nobody asked for.
+- **a margin**, in per cent, added to the target before dividing, for the
+  material that goes to assay aliquots and stays in the column. It is yours to
+  set. Nothing here knows what your steps lose.
+- **the yield you measured**, by one of two routes, which must not be mixed:
+  - *mg of purified protein per litre of culture*, from a preparation taken all
+    the way through. The purification balance in §5.4 computes exactly this
+    figure. The recovery is already inside it, so giving a recovery as well is
+    refused: it would count the losses twice, double the culture, and look
+    entirely reasonable.
+  - *mg per litre expressed, plus the recovery*, for when what you know is the
+    expression level and what a purification keeps. Both are needed, because
+    expression alone says nothing about what reaches the tube.
+- **the working volume of one flask**, optionally, which turns the volume into
+  a number of flasks, rounded up: half a flask is a flask, and rounding down
+  would plan a preparation that cannot reach its target.
+
+It reports the culture volume, the protein to make including your margin, the
+number of flasks, and one line saying exactly what was divided by what. Change
+the host, the induction or the construct and the yield you divided by no longer
+applies. The app cannot tell that it has changed.
+
 ### 5.5 Batch sheet
 
 The page that goes with a tube when it leaves your bench. You give it a lot
@@ -1725,6 +1826,54 @@ numbers, produces an error naming the problem, because a record half
 understood reprints a sheet with fields missing and nothing on the page saying
 so. It is not an audit trail: nothing stops the file being edited in a text
 editor, and nothing in it can tell whether it was.
+
+---
+
+### 5.6 Across lots
+
+One batch record describes a tube. A year of them describes a preparation, and
+the question they answer together, whether the last three lots came out like
+the first three, is not visible in any single sheet.
+
+Drop the JSON records from §5.5 here, as many as you like, and they line up in
+one table: lot, date, host, purification, concentration with its basis, volume,
+total, and the difference between the measured mass and the sequence. Nothing
+was kept on the server, so these are your own files coming back from wherever
+you put them, and they are not stored here either.
+
+Every derived column is **recomputed** from the readings in each record, with
+the version of the app you are running now, rather than read back from what the
+record said at the time. That is deliberate. A record does carry what its sheet
+said, and reprinting that would hide the one thing worth seeing: a figure that
+disagrees with an old printout. The **Written with** column says which version
+wrote each record, and the table says so in a warning when any of them was
+written by another version.
+
+Four things it tells you rather than letting you find out later:
+
+- **the lots do not all carry the same sequence**, so the rows describe more
+  than one protein and the concentrations are not comparable even where the
+  readings look similar;
+- **the concentrations were not all obtained the same way**, some derived from
+  an A280 with a predicted extinction coefficient and some read by a method
+  that does not go through the sequence. Comparing those compares two methods
+  as much as two lots;
+- **a lot carries no usable reading**, either because the record has none or
+  because it has an A280 and no sequence to divide it by;
+- **two records call themselves the same lot**, in which case the file name is
+  the only thing separating them.
+
+A file that cannot be read costs its own row and no other: one unreadable
+record among twelve should not cost you the other eleven, so it is listed with
+the reason and left out of the table.
+
+The chart under the table is drawn only when every lot was quantified the same
+way, because a line through two methods looks like one measurement drifting.
+It is a line between lots and not a trend: there is no fit, no control limit
+and no verdict on whether a lot is acceptable. Those need a specification, and
+a specification is a decision somebody makes, not something arithmetic can
+supply. **This is not a LIMS**, there is no database behind it and nothing here
+is an audit trail.
 
 ---
 
@@ -2571,6 +2720,49 @@ it follows the light or dark theme instead of being black in both.
 
 ---
 
+## 12b. The provenance register
+
+Below the divider in the sidebar, beside this manual, there is a page listing
+every constant the app computes with: what it is, what its value currently is,
+what it is worth, and where it came from.
+
+It exists because that information used to be real but invisible. Each constant
+sat beside a comment in the source saying what it had been checked against, and
+a user deciding whether to trust a number had to find the right caption on the
+right screen or read the code. The register puts all of it on one page.
+
+**The values on that page are read from the modules that own them while the
+page is drawn.** No constant is typed into the register, and the test suite
+parses the file and fails if a number appears in it. So the page cannot show a
+value the app is not using, and a constant that gets renamed in a refactor
+breaks the page loudly instead of leaving it to show a stale number.
+
+Each constant carries one of six standings, which is the useful part:
+
+| Standing | What it means |
+|---|---|
+| **published** | from a publication, checked against it. Changing it means the reading of the paper was wrong |
+| **vendor** | a manufacturer's own figure for a product. Lot-specific in principle, so your vial's certificate of analysis outranks it |
+| **standard** | a value every table agrees on, with no single paper behind it in this app's reading |
+| **convention** | a choice, not a finding. Defensible and widely used, and nothing fixes it at this value rather than a nearby one |
+| **observed here** | set from a measurement made while building this app, on a small number of cases named in the source. Not a validated parameter |
+| **unverified** | in wide circulation and traceable to no primary source this project could find. Used because the arithmetic is standard, and shown beside an alternative route wherever the app can offer one |
+
+Several of the entries say plainly that an attribution could not be confirmed.
+Those are the useful ones: the filamentous-phage optical constant, the
+side-chain pKa table and the lysine helix propensity all carry what was and
+was not checked, and the app shows a second route beside the phage titre for
+exactly that reason.
+
+**What the page cannot do**, because it would be easy to assume otherwise: it
+cannot check that the sentence still describes the value. The value comes from
+the code; the source text is prose written by a person. If a threshold moves
+and the sentence under it does not, the page will show the new number with the
+old justification. The code beside each constant is the authority, and the
+repository is public.
+
+---
+
 ## 13. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file,
@@ -2694,6 +2886,25 @@ somewhere other than Community Cloud.
 - A panning enrichment is a ratio of two colony counts. It says the output grew,
   not that the selection worked: a background binder and a faster-growing clone
   enrich alike. Its stated error is the counting floor, not the total error.
+- The culture plan is one division, by a yield you measured on a previous
+  preparation. It predicts nothing, and it cannot tell that the host, the
+  induction or the construct has changed since that yield was measured.
+- The comparison across lots recomputes each derived value with the version you
+  are running, and draws no trend: no fit, no control limit, no verdict on
+  whether a lot is acceptable. It is not a LIMS and nothing in it is an audit
+  trail.
+- A session file records the inputs of a run, not its environment. It says
+  which Python, Streamlit, Biopython and ANARCI the run saw, which is enough to
+  tell you that two runs are not comparable and not enough to make them
+  comparable.
+- The worked example in `examples/` is a baseline, not a validation: the
+  expected numbers were produced by this code. The one exception is the molar
+  mass, which the test suite also computes from the residue formulas and the
+  CIAAW atomic weights in this repository and finds to agree within 14 ppm.
+  The isoelectric point and the extinction coefficients have no second source
+  here, so nothing in the suite checks them.
+- The provenance register shows the live value of every constant and cannot
+  check that the sentence beside it still describes that value.
 
 ---
 

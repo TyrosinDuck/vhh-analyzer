@@ -78,9 +78,11 @@ try:
     import constructs
     import generator
     import library
+    import provenance
     import reference
     import repertoire
     import sanger
+    import session
     import shell
     import structure
     import triage
@@ -99,6 +101,7 @@ try:
     import sections.library
     import sections.manual
     import sections.phage
+    import sections.provenance
     import sections.reference
     import sections.sequencing
     import sections.structure
@@ -121,21 +124,24 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
 REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.10.21b",
+                    "session": "2026.11.12a",
+                    "provenance": "2026.11.12a",
+                    "sections.provenance": "2026.11.12a",
                     "cloning": "2026.10.21b", "generator": "2026.10.21b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.11.12a",
                     "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.12c", "compute": "2026.11.12b",
+                    "shell": "2026.11.12d", "compute": "2026.11.12b",
                     "af3": "2026.11.04a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.12b",
-                    "sections.bench": "2026.11.12c",
+                    "sections.analysis": "2026.11.12c",
+                    "sections.bench": "2026.11.12d",
                     "sections.phage": "2026.11.12d",
                     "sections.buffers": "2026.11.12c",
                     "buffers": "2026.11.12b",
                     "sections.reference": "2026.11.12b",
-                    "bench": "2026.11.12c",
+                    "bench": "2026.11.12d",
                     "sections.cloning": "2026.11.12a",
                     "sections.genes": "2026.11.12b",
                     "sections.home": "2026.11.12c",
@@ -189,12 +195,19 @@ SCREENS = {key: _checked[f"sections.{key}"] for key in screen_keys()}
 st.session_state.setdefault("section", HOME)
 
 # A widget's state cannot be written after the widget exists, so anything that
-# wants to fill the text area (the sequencing section) parks its text here and
-# reruns; it is moved into place before the widget is created.
-if "pending_seq_text" in st.session_state:
-    st.session_state["seq_text"] = st.session_state.pop("pending_seq_text")
-if "pending_gene_dna" in st.session_state:
-    st.session_state["gene_dna"] = st.session_state.pop("pending_gene_dna")
+# wants to fill a widget (the sequencing section filling the analysis text area,
+# a session file restoring the sidebar settings) parks the value under
+# `pending_<key>` and reruns; it is moved into place here, before any widget is
+# created.
+#
+# Derived from whatever keys are present rather than named one by one. It was
+# two explicit lines, and the third thing that needed it would have been a
+# third line somewhere else: a mechanism that has to be extended for each
+# caller is one that the next caller reimplements badly. The keys are listed
+# first and popped afterwards, because mutating a dict while iterating over it
+# raises.
+for _pending in [key for key in st.session_state if key.startswith("pending_")]:
+    st.session_state[_pending[len("pending_"):]] = st.session_state.pop(_pending)
 # Streamlit discards a widget's state once the widget stops being rendered, and
 # leaving a section is exactly that. Re-asserting these keys on every run, before
 # any section draws, is what keeps an input filled when you come back to it.
@@ -227,9 +240,10 @@ with st.sidebar:
             st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
                       disabled=section == key, on_click=go_to, args=(key,))
     st.divider()
-    # The manual and the reference tables sit below the divider rather than in
-    # SECTIONS: they are what you consult, not what you run, they belong to no
-    # group, and the home page cards are built from SECTIONS. They are listed
+    # The manual, the reference tables and the provenance register sit below
+    # the divider rather than in SECTIONS: they are what you consult, not what
+    # you run, they belong to no group, and the home page cards are built from
+    # SECTIONS. They are listed
     # in `shell.UTILITIES` all the same, so that the router reaches them the
     # same way it reaches a section.
     for key, (icon, label) in UTILITIES.items():
@@ -243,15 +257,21 @@ with st.sidebar:
     # the analysis screen was last left on: see `Settings.defaults`.
     if section == "analysis":
         st.markdown("#### Settings")
+        # Keyed, so that a session file can put these back where they were.
+        # The keys are what `sections/analysis.py` writes as `pending_set_ph`
+        # and so on before rerunning; the bounds here are the ones
+        # `session.METHODS_SETTINGS` validates a file against, and a test
+        # checks the two agree.
         ph = st.slider("pH for net charge", 3.0, 10.0, vc.DEFAULTS["ph"], 0.1,
+                       key="set_ph",
                        help="Net charge and the stability flags use this pH.")
         window = st.slider("Profile window (residues)", 3, 21,
-                           vc.DEFAULTS["profile_window"], 2,
+                           vc.DEFAULTS["profile_window"], 2, key="set_window",
                            help="Sliding window for the per-residue profiles.")
         has_anarci = anarci_status()
         options = ["auto", "regex"] + (["anarci"] if has_anarci else [])
         method = st.selectbox(
-            "CDR annotation method", options, index=0,
+            "CDR annotation method", options, index=0, key="set_method",
             help="'auto' uses ANARCI when available and falls back to the regex "
                  "anchors otherwise.")
         st.caption(f"ANARCI: "

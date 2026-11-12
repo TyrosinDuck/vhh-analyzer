@@ -10,11 +10,13 @@ the three has to be typed again or looked up wrong.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import tempfile
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -25,7 +27,7 @@ from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, usage_prompt)
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -35,14 +37,53 @@ V_QUANTIFY = "🧮 Quantify"
 V_MASS = "⚖️ Mass check"
 V_CONJUGATE = "🏷️ Conjugate"
 V_BALANCE = "🧫 Purification"
+V_PLAN = "📐 How much culture"
 V_BATCH = "📄 Batch sheet"
+V_LOTS = "🗂️ Across lots"
 
-VIEWS = [V_QUANTIFY, V_MASS, V_CONJUGATE, V_BALANCE, V_BATCH]
 
-# Every view here works on the sequence picked at the top. The phage titre,
-# which needs none, was a view of this screen and is now its own section
-# (sections/phage.py): it was the only reason the screen had to choose the
-# view before asking for a sequence, through an early return in render().
+@dataclasses.dataclass(frozen=True)
+class Tube:
+    """What the views of this screen share: one protein, and the settings.
+
+    The same reasoning as `sections.analysis.Run` and `shell.Settings`: every
+    view takes this and nothing else, whether or not it reads any of it, so
+    the dispatch below is one table rather than a chain of calls with
+    different signatures. A chain is what let the earlier version reach a view
+    by index.
+
+    Any of the three may be empty. The calculators work on typed numbers, and
+    two of the views do not use a sequence at all.
+    """
+
+    name: Any
+    sequences: Any
+    props: Any
+    ph: Any
+    method: Any
+
+
+# Every view, the function that draws it, and whether it works on the sequence
+# picked at the top of the screen. Listed once: `VIEWS` is the radio's options,
+# the dispatch is a lookup in this, and whether to draw the sequence picker is
+# read from it rather than decided by an `if` that names views a second time.
+# A view added here and nowhere else is reachable and drawn.
+#
+# The two that need no sequence are the ones that supply their own: the culture
+# plan is arithmetic on a target and a yield you measured, and the lot
+# comparison takes each sequence from the record it is reading. Drawing the
+# picker above them would suggest the view used it. The phage titre, which also
+# needs none, is its own section now (sections/phage.py).
+def _views() -> dict:
+    return {
+        V_QUANTIFY: (_quantify, True),
+        V_MASS: (_mass, True),
+        V_CONJUGATE: (_conjugate, True),
+        V_BALANCE: (_balance, True),
+        V_PLAN: (_plan, False),
+        V_BATCH: (_batch, True),
+        V_LOTS: (_lots, False),
+    }
 
 
 def render(settings: Settings) -> None:
@@ -68,19 +109,15 @@ def render(settings: Settings) -> None:
     view = st.radio("View", VIEWS, horizontal=True, label_visibility="collapsed",
                     key="bench_view")
 
-    name, sequences, props = _sequence_source(ph, method)
+    draw, needs_sequence = _views()[view]
+    if needs_sequence:
+        name, sequences, props = _sequence_source(ph, method)
+    else:
+        name, sequences, props = None, {}, {}
     st.divider()
 
-    if view == V_QUANTIFY:
-        _quantify(props)
-    elif view == V_MASS:
-        _mass(name, sequences, props)
-    elif view == V_CONJUGATE:
-        _conjugate(name, sequences, props, method)
-    elif view == V_BALANCE:
-        _balance(props)
-    else:
-        _batch(name, props)
+    draw(Tube(name=name, sequences=sequences, props=props, ph=ph,
+              method=method))
 
     _disclaimer()
 
@@ -164,7 +201,9 @@ def _sequence_source(ph: float, method: str):
 
 
 # --------------------------------------------------------------------------
-def _quantify(props: dict) -> None:
+def _quantify(t: Tube) -> None:
+    props = t.props
+
     st.subheader("Concentration from a measured A280")
     st.markdown(
         "Beer-Lambert, with the extinction coefficient computed from the "
@@ -292,7 +331,9 @@ def _quantify(props: dict) -> None:
 
 
 # --------------------------------------------------------------------------
-def _mass(name, sequences, props: dict) -> None:
+def _mass(t: Tube) -> None:
+    name, sequences, props = t.name, t.sequences, t.props
+
     st.subheader("Is it the protein you think it is?")
     if not sequences:
         st.info("Load a sequence in the analysis section to compare a measured "
@@ -380,7 +421,10 @@ def _mass(name, sequences, props: dict) -> None:
 
 
 # --------------------------------------------------------------------------
-def _conjugate(name, sequences, props: dict, method: str) -> None:
+def _conjugate(t: Tube) -> None:
+    name, sequences, props = t.name, t.sequences, t.props
+    method = t.method
+
     st.subheader("How much labelling reagent to add")
     st.markdown(
         "NHS esters react with the lysine side-chain amines and the "
@@ -543,7 +587,9 @@ def _conjugate(name, sequences, props: dict, method: str) -> None:
 
 
 # --------------------------------------------------------------------------
-def _balance(props: dict) -> None:
+def _balance(t: Tube) -> None:
+    props = t.props
+
     st.subheader("Purification balance")
     st.markdown(
         "What came out of each step, how much of the previous step survived "
@@ -695,6 +741,119 @@ def _balance(props: dict) -> None:
         "checked.")
 
 
+# --------------------------------------------------------------------------
+def _plan(t: Tube) -> None:
+    st.subheader("How much culture, for how much protein")
+    st.markdown(
+        "The purification balance runs forwards: here is what a preparation "
+        "recovered. This runs the other way, which is the question asked "
+        "before the preparation: somebody needs a quantity, how much culture "
+        "does that take. It is one division, by a yield **you measured**.")
+    st.info(
+        "**There is no yield model here and there will not be one.** A yield "
+        "cannot be predicted from a sequence, and a number that looked like "
+        "one would be the most dangerous figure in this app: plausible, "
+        "precise, and wrong in a way nobody notices until the purification "
+        "has already run. With no previous preparation to divide by, this "
+        "view cannot help you.", icon="⚠️")
+
+    st.markdown("**What is needed**")
+    ways = ["A mass", "A concentration and a volume"]
+    way = st.radio("Target", ways, horizontal=True, key="cp_way",
+                   help="The second is the usual way a request arrives: so "
+                        "many mL at so many mg/mL.")
+    target_mg = target_conc = target_vol = None
+    asked = st.columns(3)
+    if way == ways[0]:
+        with asked[0]:
+            target_mg = st.number_input(
+                "Protein needed (mg)", 0.0, 1e6, None, 0.1, key="cp_mg",
+                placeholder="how many mg")
+    else:
+        with asked[0]:
+            target_conc = st.number_input(
+                "Concentration needed (mg/mL)", 0.0, 1000.0, None, 0.1,
+                key="cp_conc", placeholder="mg/mL")
+        with asked[1]:
+            target_vol = st.number_input(
+                "Volume needed (mL)", 0.0, 1e5, None, 0.1, key="cp_vol",
+                placeholder="mL")
+    with asked[2]:
+        margin = st.number_input(
+            "Margin (%)", 0.0, 500.0, 0.0, 5.0, key="cp_margin",
+            help="Added to the target before dividing, for the material that "
+                 "goes to assay aliquots and stays in the column. Yours to "
+                 "set: nothing here knows what your steps lose.")
+
+    st.markdown("**The yield you measured**")
+    # No default, for the same reason the purification balance has none for
+    # the extinction coefficient: a plausible mg/L sitting in the box would
+    # produce a whole plan resting on nothing, and a plan is acted on.
+    labels = {
+        "final": "mg of purified protein per litre of culture",
+        "expression": "mg per litre expressed, plus the recovery",
+    }
+    route = st.radio(
+        "Route", list(bn.CULTURE_ROUTES), horizontal=True, key="cp_route",
+        format_func=lambda key: labels[key],
+        help="These must not be mixed. A final yield already has the "
+             "purification losses inside it, so applying a recovery to it "
+             "would count them twice.")
+    st.caption(bn.CULTURE_ROUTES[route].capitalize() + ".")
+
+    measured = st.columns(3)
+    with measured[0]:
+        observed = st.number_input(
+            "Yield (mg/L)", 0.0, 1e5, None, 0.1, key="cp_yield",
+            placeholder="from a previous prep",
+            help="The **Purification** view computes exactly this figure "
+                 "from a preparation you have already run.")
+    recovery = None
+    with measured[1]:
+        if route == "expression":
+            recovery = st.number_input(
+                "Recovery (%)", 0.0, 100.0, None, 1.0, key="cp_recovery",
+                placeholder="what purification kept")
+    with measured[2]:
+        flask = st.number_input(
+            "Working volume per flask (mL), optional", 0.0, 1e5, 0.0, 50.0,
+            key="cp_flask",
+            help="A property of your shaker, not of the protein. Turns the "
+                 "volume into a number of flasks, rounded up.")
+
+    try:
+        plan = bn.culture_for_target(
+            target_mg=target_mg, target_mg_per_ml=target_conc,
+            target_volume_ml=target_vol, route=route,
+            yield_mg_per_litre=observed, recovery_pct=recovery,
+            margin_pct=margin, flask_working_ml=flask or None)
+    except ValueError as exc:
+        st.info(f"{exc}.".replace("..", "."))
+        return
+
+    st.divider()
+    cards = st.columns(3)
+    with cards[0]:
+        st.metric("Culture needed", f"{plan['culture_litres']:.2f} L",
+                  help=f"{plan['culture_ml']:.0f} mL")
+    with cards[1]:
+        st.metric("Protein to make", f"{plan['required_mg']:.2f} mg",
+                  help="The target, plus the margin you set.")
+    with cards[2]:
+        st.metric("Flasks", plan["flasks"] if plan["flasks"] else "-",
+                  help="Rounded up: half a flask is a flask. Give a working "
+                       "volume above to see it.")
+
+    st.caption(plan["basis"] + ".")
+    for warning in plan["warnings"]:
+        st.caption(warning)
+    st.caption(
+        "Nothing here is a prediction. Change the host, the induction or the "
+        "construct and the yield you divided by no longer applies, and the "
+        "app cannot tell that it has changed.")
+
+
+# --------------------------------------------------------------------------
 # The widget keys the batch form uses, and the record key each one holds. Kept
 # here so that loading a record and drawing the form cannot disagree about
 # where a value lives: a reload that filled seven of eight fields would look
@@ -776,7 +935,9 @@ def _reload_record(props: dict) -> None:
         st.rerun()
 
 
-def _batch(name, props: dict) -> None:
+def _batch(t: Tube) -> None:
+    name, props = t.name, t.props
+
     st.subheader("Batch sheet")
     st.markdown(
         "The page that goes with a tube when it leaves your bench. Three "
@@ -977,3 +1138,122 @@ def _batch(name, props: dict) -> None:
         "stored here, so the pair of files is the whole record. It is not an "
         "audit trail, and nothing in it can tell whether it has been edited.")
     usage_prompt("Batch & QC, batch sheet")
+
+
+# --------------------------------------------------------------------------
+def _lots(t: Tube) -> None:
+    st.subheader("Across lots")
+    st.markdown(
+        "One batch record describes a tube. A year of them describes a "
+        "preparation, and the question they answer together, whether the last "
+        "three lots came out like the first three, is not visible in any "
+        "single sheet. Drop the JSON records here and they line up in one "
+        "table.")
+    st.caption(
+        "Nothing was kept on the server, so these are your files coming back "
+        "from wherever you put them. They are read in your browser session "
+        "and are not stored here either.")
+
+    uploads = st.file_uploader(
+        "Batch records (JSON)", type=["json"], accept_multiple_files=True,
+        key="lots_in",
+        help="The files the **Batch sheet** view saves beside each PDF.")
+    if not uploads:
+        st.info(
+            "No records yet. Each one is the JSON file the **Batch sheet** "
+            "view offers next to the PDF.")
+        return
+
+    records: list[tuple[str, dict]] = []
+    unreadable: list[tuple[str, str]] = []
+    for upload in uploads:
+        try:
+            records.append((upload.name,
+                            json.loads(upload.getvalue().decode("utf-8"))))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            unreadable.append((upload.name, f"not valid JSON ({exc})"))
+
+    # The properties come from the same cached analysis the rest of the app
+    # uses, with the settings this screen was given, so a concentration
+    # recomputed here is the one the analysis section would report for that
+    # sequence. `bench.py` takes this as a parameter because it computes
+    # nothing from a sequence itself.
+    def properties_for(sequence: str) -> dict:
+        props, _annotation, _error = analyze_one("lot", sequence, t.ph,
+                                                 t.method)
+        return props or {}
+
+    comparison = bn.compare_batch_records(records,
+                                          properties_for=properties_for,
+                                          version=VERSION)
+
+    for name, reason in unreadable:
+        st.error(f"**{name}**: {reason}")
+    for bad in comparison["rejected"]:
+        st.error(f"**{bad['source']}**: {bad['reason']}")
+
+    rows = comparison["rows"]
+    if not rows:
+        st.warning("None of those files could be read as a batch record.")
+        return
+
+    table = pd.DataFrame([{
+        "Lot": row["lot"] or "(none)",
+        "Date": row["date"],
+        "Protein": row["name"],
+        "Host": row["host"],
+        "Purification": row["purification"],
+        "mg/mL": row["concentration_mg_per_ml"],
+        "Basis": row["basis_detail"] or row["basis"] or "",
+        "Volume (uL)": row["volume_ul"],
+        "Total (mg)": row["total_mg"],
+        "Mass minus sequence (Da)": row["mass_difference_da"],
+        "Written with": row["created_with"],
+        "File": row["source"],
+    } for row in rows])
+    st.dataframe(table, **FIT, hide_index=True)
+
+    for warning in comparison["warnings"]:
+        st.warning(warning)
+
+    # Drawn only when every row was quantified the same way. A line through a
+    # mixture of A280-derived and separately measured concentrations invites
+    # exactly the comparison the warning above says not to make, and a chart
+    # is more persuasive than the sentence under it.
+    bases = {row["basis"] for row in rows if row["basis"]}
+    plottable = [row for row in rows if row["total_mg"]]
+    if len(bases) == 1 and len(plottable) > 1:
+        st.markdown("**Total per lot, in the order given**")
+        st.line_chart(
+            pd.DataFrame({"Total (mg)": [row["total_mg"]
+                                         for row in plottable]},
+                         index=[row["lot"] or row["source"]
+                                for row in plottable]))
+        st.caption(
+            "A line between lots, not a trend: there is no fit here, no "
+            "control limit and no verdict on whether a lot is acceptable. "
+            "Those need a specification, which is a decision somebody makes.")
+    elif len(bases) > 1:
+        st.caption(
+            "No chart, because these lots were not all quantified the same "
+            "way. A line through two methods looks like one measurement "
+            "drifting.")
+
+    st.download_button(
+        "⬇️ Download the comparison (CSV)", table.to_csv(index=False),
+        file_name="batch_lots.csv", mime="text/csv", key="lots_csv", **FIT)
+    st.caption(
+        "Every derived column was recomputed here from the readings in each "
+        "record, with this version of the app, rather than read back from "
+        "what the record said at the time. A figure that disagrees with an "
+        "old printout is a real disagreement, and the **Written with** column "
+        "says which version made each record.")
+    usage_prompt("Batch & QC, across lots")
+
+
+# The radio's options, derived from the dispatch table above rather than typed
+# beside it. At the bottom of the module because `_views()` names the view
+# functions and they have to exist before it is called: a constant written up
+# beside the table raised a NameError on import, which is a screen nobody can
+# open. The smoke test compares these labels with the radio the app draws.
+VIEWS = list(_views())

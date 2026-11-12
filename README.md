@@ -46,6 +46,21 @@ and how far to trust it. Edit the Markdown file and the app picks it up, there
 is one
 source of truth.
 
+The **Provenance** page, in the sidebar beside the manual, lists every constant
+the app computes with, what it is worth (published, vendor, standard,
+convention, observed here, unverified) and where it came from. The values are
+read from the modules that own them while the page is drawn, so it cannot show
+a number the app is not using.
+
+`examples/` holds a worked example: three published sequences, one set of
+settings, and the descriptors this code produces from them, with
+`python3 tools/make_examples.py --check` to compare. It is a baseline rather
+than an independent reference, except for the molar mass, which the test suite
+recomputes from the per-residue formulas and the CIAAW atomic weights in this
+repository and finds to agree within 14 ppm. `examples/README.md` says exactly
+which descriptors have been checked against a second source and which have
+not.
+
 ### Bundled data
 
 `data/library.csv`, the sequence library. Edit it locally, commit and push; the
@@ -73,11 +88,16 @@ floor on codon substitutions, and the back-translation preference order.
 | `sections/sequencing.py` | the Sanger screen |
 | `sections/library.py` | the Sequence library screen |
 | `sections/home.py`, `sections/manual.py`, `sections/reference.py` | the landing page, the manual and the reference tables |
+| `sections/provenance.py` | the provenance register: every constant and where it came from |
 
 Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
 `structure.py`, `codons.py`, `bench.py`, `buffers.py`, `repertoire.py`,
 `sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`,
-`reference.py`, `af3.py`.
+`reference.py`, `af3.py`. Plus two files that describe the app rather than
+compute with it: `session.py`, which writes the inputs of a run to a file so
+the run can be repeated, and `provenance.py`, which names the module and
+attribute that owns each constant so the register reads live values instead of
+a second copy.
 
 This table used to carry a line count per file, typed in by hand. It drifted,
 which is what a hand-kept count of something the repository already knows does:
