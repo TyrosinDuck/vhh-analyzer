@@ -56,8 +56,8 @@ the
 
 ## 2. Getting around
 
-The app opens on a home page with seven sections, sorted into three groups by
-the molecule they work on. The sidebar carries the same seven entries under the
+The app opens on a home page with nine sections, sorted into three groups by
+the molecule they work on. The sidebar carries the same nine entries under the
 same group titles, plus a **Home** button at the top and, below the divider,
 the **Manual** you are reading and a **Reference** screen, available from every
 screen.
@@ -70,7 +70,9 @@ screen.
 | **DNA**, reads, coding sequences and plasmids | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
-| **Bench**, the purified protein in the tube | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered |
+| **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered, the batch sheet |
+| | 🧂 **Buffers & media** | what to weigh for a buffer or a medium, at any volume and concentration, with the hydrate you have |
+| | 🦠 **Phage & panning** | the titre of a phage stock, and how much of it a round of panning takes |
 | *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
 
 Each group has its own colour, a blue, a green and an orange, used for the
@@ -172,7 +174,7 @@ Three ways in:
   separated by blank lines. Whitespace, digits and gap characters are stripped.
 - **Upload a FASTA file** with the uploader on the right.
 - **Load example** fills the box with three published VHHs (caplacizumab, cAbLys3 and Nb80) so you can see what every tab looks like before committing your own
-  data. They come from the library (§8), where their PDB entries are given.
+  data. They come from the library (§10), where their PDB entries are given.
 
 Click **Analyze**, or press ⌘ + Enter (Ctrl + Enter on Windows and Linux). The
 button
@@ -1092,7 +1094,7 @@ codon-pair bias or tRNA availability. Run the output through your synthesis
 vendor's
 own checker before ordering.
 
-A **Send to gene diagnosis** button passes the sequences straight to §7, where
+A **Send to gene diagnosis** button passes the sequences straight to §9, where
 the
 frame, rare-codon and GC checks run on them, including the GC balancing this
 optimiser does globally but not window by window.
@@ -1434,8 +1436,8 @@ because side chains are the part a predictor places least reliably.
 
 ## 5. Batch & QC
 
-The only section of the **Bench** group, and named differently from it so the
-home page does not show the same word twice.
+The first section of the **Bench** group, and named differently from it so
+the home page does not show the same word twice.
 
 Every other section reasons about a sequence. This one is about the tube: how
 much protein is in it, whether it is the protein you think it is, and how much
@@ -1445,8 +1447,8 @@ It is the arithmetic that gets done on the back of a glove box on a Friday
 afternoon, which is exactly why it is worth writing down once. The views start
 from the molar mass, extinction coefficient and lysine count that the analysis
 section already derives from the sequence, so none of those has to be typed
-again or looked up wrong. The exception is the phage titre, which is about the
-step before all of that and needs no sequence at all.
+again or looked up wrong. The phage titre, which needs no sequence, has its
+own section (§7).
 
 Load your sequences in the analysis section first and pick one at the top. The
 calculators still work without that, with the molar mass and extinction
@@ -1570,66 +1572,7 @@ alternative. Which lysines are actually *accessible* is a structural question
 this cannot answer: upload a model to §4.
 
 
-### 5.4 Phage titre
-
-The step before the rest of this section. An absorbance at 260 nm turns into
-particles per millilitre, and that is what decides how much stock goes into the
-next round of panning. Nothing here needs a sequence.
-
-You give the reading, how many times the stock was diluted to take it, and a
-**glycerol correction**. The three multiply together into the absorbance the
-undiluted stock would have, which is then converted twice.
-
-The glycerol part is the one that is easy to get backwards, so the app asks for
-the two volumes rather than for a factor. If you read the absorbance on the
-phage and *then* add glycerol, the tube you pipette from afterwards is more
-dilute than what you measured, so the correction is **below one**: 500 uL of
-phage plus 55.5 uL of pure glycerol is 555.5 uL, 10% glycerol, and the factor
-is 500/555.5 = 0.900. If instead you read the absorbance after mixing, the
-glycerol is already in the reading and the factor is 1. A factor above one is
-for the other question, what the concentration was before the glycerol went in,
-which is not the titre of the tube you are about to aliquot.
-
-**Two constants, and they do not agree.** This is the whole point of the view,
-so it is worth being blunt about it.
-
-The **empirical** route multiplies by a number measured directly: a titration
-in which an A260 of 1 corresponded to 3 x 10^10 particles per millilitre. That
-is a correspondence observed for a particular preparation on a particular
-instrument, which is why the app lets you edit it rather than burying it.
-
-The **optical** route is Day's relation for filamentous phage,
-
-    virions/mL = A269 x 6e16 / (bases in the genome)
-
-which works the absorbance out from the single-stranded DNA the particle
-carries. The genome length is an input because a phagemid carrying an insert is
-not the length of the helper phage; M13mp18 is 7249 bases. Reading at 260 nm
-rather than 269, and without subtracting the A320 scatter, costs some accuracy
-but not an order of magnitude.
-
-On the same reading these two differ by a factor of roughly 275. A gap that
-size is not rounding, and the app says so rather than choosing for you. It
-means one of the two is not describing your stock: most often the empirical
-factor was established on a different preparation, or the reading carries a
-large scattering contribution that a calculation from the genome has no way to
-know about. **Use the one you can defend, and record which one in the
-notebook.** A plaque or colony titration settles it outright and is the only
-one of the three that counts particles that actually infect.
-
-Below that, **how much to take**: pick which titre to work from, give the
-number of particles you want for a solid-phase round, and the app gives two
-volumes side by side, the solid-phase one and the liquid-phase one, which is
-twice it. Showing only the first and leaving you to double it is how a liquid
-round gets set up with half the phage it should have had. The factor of two is
-a protocol convention and not something the app derives, so if yours differs,
-change the target. A round of panning is usually run with 10^11 to 10^13
-particles. If a volume comes out below two microlitres it cannot be pipetted
-accurately, and the app offers a dilution instead, exactly as the conjugation
-planner does and for the same reason.
-
-
-### 5.5 Purification balance
+### 5.4 Purification balance
 
 What came out of each step of a preparation, how much of the previous step
 survived it, and how much per litre of culture. The other views in this
@@ -1675,7 +1618,7 @@ The table downloads as CSV. Nothing is carried from here into the batch sheet:
 retype the final row there, because a number you have not retyped is a number
 you have not checked.
 
-### 5.6 Batch sheet
+### 5.5 Batch sheet
 
 The page that goes with a tube when it leaves your bench. You give it a lot
 number, who prepared it, the host, the purification, the buffer and the
@@ -1750,9 +1693,190 @@ editor, and nothing in it can tell whether it was.
 
 ---
 
-## 6. Sanger sequencing
+## 6. Buffers & media
 
-### 6.1 What it does
+What to weigh, or pipette, for a buffer or a medium, at the volume and the
+concentration factor you need, with the form of each salt that is actually on
+your shelf. Nothing here needs a sequence.
+
+### 6.1 Using it
+
+Pick a recipe, give the final volume in mL and the concentration factor: 1
+for the buffer as used, 20 for a 20X stock. The factor starts at the one the
+recipe says your laboratory usually makes. A recipe always describes the 1X
+buffer, so a stock and the buffer it gives are one recipe, not two lists of
+the same numbers to keep in step.
+
+For each component the table gives its form, its formula, the molar mass,
+its concentration at 1X and at the chosen factor, and the amount: a mass to
+weigh, or a volume to pipette when it is a % v/v or comes from a stock
+solution. Under it, the steps, written from what the recipe declares: how to
+handle the pH, the volume to make up to, sterilization, storage, and the
+dilution to use a stock. The table downloads as CSV.
+
+### 6.2 Hydrates: choosing the form you weigh
+
+The reason this section exists. NaH2PO4 is sold anhydrous, as the
+monohydrate and as the dihydrate; Na2HPO4 as the anhydrous salt and as the
+di-, hepta- and dodecahydrate. The same buffer needs a different mass of each.
+
+A component that exists in several forms gets a selector, showing each form
+with its formula, which is what to compare with the label of the bottle.
+Changing the form recomputes the mass so that the buffer gets the same number
+of moles:
+
+- a component given in a **molar unit** (mM) does not depend on the form; the
+  mass is moles times the molar mass of the form you pick. The recipe may
+  name the form usually weighed, which is then offered first;
+- a component given as a **mass** (g/L) is tied to the form the recipe names,
+  which the recipe file must state; another form is converted through the two
+  molar masses. 1.78 g/L of Na2HPO4·2H2O, weighed as the anhydrous salt, is
+  1.78 × 141.958 / 177.988 = 1.420 g/L.
+
+Compounds without a defined formula (tryptone, yeast extract, PEG 8000,
+Tween 20) cannot be converted, and offer only the form the recipe names.
+
+### 6.3 Where the molar masses come from
+
+**No molar mass is typed anywhere.** Each is derived from the formula with
+the abridged standard atomic weights of the IUPAC Commission on Isotopic
+Abundances and Atomic Weights (CIAAW), based on the *Atomic Weights 2021*
+report (Prohaska et al., Pure Appl. Chem. 2022, doi:10.1515/pac-2019-0603),
+copied into `buffers.py` with the date. A formula containing an element that
+is not in that table is refused rather than given a weight from somewhere
+else.
+
+They are therefore **derived**, not measured, and only as right as the
+formula on the line. The app cannot tell that the formula is the one on your
+bottle, and a typo that yields valid symbols passes: `NaCI`, with a capital
+i, reads as sodium, carbon and iodine.
+
+### 6.4 pH
+
+A recipe declares its pH in one of two ways, and the steps differ:
+
+- **adjust**: the 1X buffer is set to that pH with what the recipe names.
+  If you prepare a concentrated stock, the app adds that a stock generally
+  does not read the pH it gives once diluted, and says to check on a 1X
+  dilution rather than assume;
+- **measured**: nothing is adjusted, and the pH is what the 1X reads without
+  adjustment, according to the recipe's source. The app says **not** to
+  adjust. The laboratory's PBS is the example: its 20X stock reads about 6.8,
+  and 7.4 once diluted.
+
+The app never computes a pH or a ratio of acid to base: Henderson-Hasselbalch
+with a textbook pKa ignores ionic strength and temperature, and the pH meter
+has the last word anyway.
+
+### 6.5 What it does not know
+
+**Solubility.** A high concentration factor can ask for more than dissolves,
+and the app has no way to say so. Nor does it know that a concentrated stock
+may precipitate in the cold: that belongs in the recipe's notes.
+
+**Whose recipes these are.** They are one laboratory's, each with the source
+it gives, not a reference collection. They live in `data/buffers/` in the
+public repository, read-only from the app like the sequence library, and are
+edited by hand and pushed: see §6.6.
+
+### 6.6 Editing the recipes
+
+Three CSV files in `data/buffers/`, described line by line in their own
+header comments and in `data/buffers/README.md`:
+
+| File | One row per | Holds |
+|---|---|---|
+| `compounds.csv` | form of a compound | name, form, formula, optional CAS number |
+| `recipes.csv` | recipe | kind, 1X pH and whether it is adjusted, sterilization, storage, usual stock factor, source |
+| `recipe_components.csv` | component | 1X concentration and unit, the form a mass refers to, optional stock solution |
+
+Every recipe needs a source. Check the files with
+`python3 tools/check_buffers.py` before pushing: it runs the loader the app
+uses, so what it accepts is what the app shows. A faulty row is not silently
+dropped: the app lists each problem with its file and line, and a recipe with
+any faulty component is left out whole, since a buffer missing one salt is a
+different buffer. Files saved by a spreadsheet in a French or Belgian locale
+use `;` and decimal commas; the check recognises them and says so.
+
+---
+
+## 7. Phage & panning
+
+The third section of the **Bench** group. Batch & QC is about a purified
+protein; this one is about the step before it, the phage stocks that go into
+each round of panning. Nothing here needs a sequence, so the screen asks for
+none.
+
+It used to be a view of Batch & QC, and moved out because it was the only
+view there that never used the sequence selected at the top. Its arithmetic
+did not change.
+
+**No empirical model lives in this section either.** Every number is a
+reading you supply, a constant that cites its source and can be edited, or
+arithmetic on those two.
+
+### 7.1 Phage titre
+
+An absorbance at 260 nm turns into particles per millilitre, and that is what
+decides how much stock goes into the next round of panning.
+
+You give the reading, how many times the stock was diluted to take it, and a
+**glycerol correction**. The three multiply together into the absorbance the
+undiluted stock would have, which is then converted twice.
+
+The glycerol part is the one that is easy to get backwards, so the app asks for
+the two volumes rather than for a factor. If you read the absorbance on the
+phage and *then* add glycerol, the tube you pipette from afterwards is more
+dilute than what you measured, so the correction is **below one**: 500 uL of
+phage plus 55.5 uL of pure glycerol is 555.5 uL, 10% glycerol, and the factor
+is 500/555.5 = 0.900. If instead you read the absorbance after mixing, the
+glycerol is already in the reading and the factor is 1. A factor above one is
+for the other question, what the concentration was before the glycerol went in,
+which is not the titre of the tube you are about to aliquot.
+
+**Two constants, and they do not agree.** This is the whole point of the view,
+so it is worth being blunt about it.
+
+The **empirical** route multiplies by a number measured directly: a titration
+in which an A260 of 1 corresponded to 3 x 10^10 particles per millilitre. That
+is a correspondence observed for a particular preparation on a particular
+instrument, which is why the app lets you edit it rather than burying it.
+
+The **optical** route is Day's relation for filamentous phage,
+
+    virions/mL = A269 x 6e16 / (bases in the genome)
+
+which works the absorbance out from the single-stranded DNA the particle
+carries. The genome length is an input because a phagemid carrying an insert is
+not the length of the helper phage; M13mp18 is 7249 bases. Reading at 260 nm
+rather than 269, and without subtracting the A320 scatter, costs some accuracy
+but not an order of magnitude.
+
+On the same reading these two differ by a factor of roughly 275. A gap that
+size is not rounding, and the app says so rather than choosing for you. It
+means one of the two is not describing your stock: most often the empirical
+factor was established on a different preparation, or the reading carries a
+large scattering contribution that a calculation from the genome has no way to
+know about. **Use the one you can defend, and record which one in the
+notebook.** A plaque or colony titration settles it outright and is the only
+one of the three that counts particles that actually infect.
+
+Below that, **how much to take**: pick which titre to work from, give the
+number of particles you want for a solid-phase round, and the app gives two
+volumes side by side, the solid-phase one and the liquid-phase one, which is
+twice it. Showing only the first and leaving you to double it is how a liquid
+round gets set up with half the phage it should have had. The factor of two is
+a protocol convention and not something the app derives, so if yours differs,
+change the target. A round of panning is usually run with 10^11 to 10^13
+particles. If a volume comes out below two microlitres it cannot be pipetted
+accurately, and the app offers a dilution instead, exactly as the conjugation
+planner does and for the same reason.
+
+---
+
+## 8. Sanger sequencing
+
+### 8.1 What it does
 
 You upload the chromatograms from a screening run. For each read the app:
 
@@ -1766,7 +1890,7 @@ Because all six frames are searched, forward and reverse reads are handled
 without
 being told which is which.
 
-### 6.2 Settings
+### 8.2 Settings
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -1780,7 +1904,7 @@ plasmid map rather than from memory. A wrong layout makes the app report
 missing tags
 on clones that are perfectly fine.
 
-### 6.3 Reading the results table
+### 8.3 Reading the results table
 
 Four counters at the top: reads, VHHs extracted, unique sequences, failures.
 
@@ -1816,12 +1940,12 @@ derived from the anchor that actually matched.
 **Identical protein sequences are grouped.** The same colony picked twice shows up as
 one sequence with a copy count, and the duplicates are marked.
 
-### 6.4 Quality traces
+### 8.4 Quality traces
 
 An expander draws the Phred quality along each read, with the window kept after
 trimming in blue and a dashed line at Phred 20. Up to twelve reads are drawn.
 
-### 6.5 Sending clones to the analysis
+### 8.5 Sending clones to the analysis
 
 Below the table, pick the clones worth keeping and press **Send selected to
 analysis**.
@@ -1830,13 +1954,13 @@ The app switches to the analysis section with those sequences loaded.
 **Duplicates are deselected by default**: one entry per unique protein sequence. Tick
 them back on if you want to see them separately.
 
-### 6.6 Downloads
+### 8.6 Downloads
 
 The full per-read table as CSV, and the extracted VHHs as protein or DNA FASTA.
 
 ---
 
-## 7. Gene diagnosis
+## 9. Gene diagnosis
 
 Its own section, reached from the home page or from the **DNA** tab of the
 analysis section, which hands its back-translated sequences straight over.
@@ -1985,7 +2109,7 @@ this tab is still in play.
 
 ---
 
-## 8. Sequence library
+## 10. Sequence library
 
 The sequences you come back to, kept as a file in the repository so they are
 one
@@ -2005,7 +2129,7 @@ anyone whether or not they ever open the app. Nothing unpublished, nothing
 under
 an NDA, nothing from a collaborator who has not agreed, belongs in it.
 
-### 8.1 What is in it
+### 10.1 What is in it
 
 Twenty-two published sequences, every one taken from the source named in its
 note (a PDB entry or KEGG) rather than written from memory. They are chosen
@@ -2052,7 +2176,7 @@ entries carry DNA, labelled in the note as **back-translated by this app, not
 the
 published gene**.
 
-### 8.2 Using it
+### 10.2 Using it
 
 Filter by free text over names and notes, by tag, or by whether an entry
 carries
@@ -2064,7 +2188,7 @@ a protein-only entry and asking for DNA simply sends nothing for it.
 
 Both kinds also download as FASTA if you want them outside the app.
 
-### 8.3 Editing it
+### 10.3 Editing it
 
 The library is `data/library.csv`. Edit it in a spreadsheet or a text editor,
 commit, push, the app serves the new version on its next deploy.
@@ -2090,11 +2214,11 @@ to fix, and the message carries the line number.
 
 ---
 
-## 9. In-silico cloning
+## 11. In-silico cloning
 
 One screen, three steps.
 
-### 9.1 Recipient vector
+### 11.1 Recipient vector
 
 Five vectors ship with the app: **pMECS, pMES3, pMES4, pHEN6, pHEN25**. You can
 also
@@ -2123,7 +2247,7 @@ The **Expected tags** selector says which cassette layout the finished
 construct should
 have; it is used when the construct is translated back.
 
-### 9.2 Donor DNA
+### 11.2 Donor DNA
 
 Two kinds of donor:
 
@@ -2149,7 +2273,7 @@ The bundled list is MP57, GIII, FP and RP, in `data/primers.csv`. You can
 upload your
 own CSV with `name,sequence` columns; nothing is stored.
 
-### 9.3 The plan
+### 11.3 The plan
 
 The app cuts, joins and translates **every candidate enzyme pair for real**,
 then
@@ -2204,7 +2328,7 @@ vector's frame would flag every correct construct. Translating the finished
 construct
 is the only check that means anything.
 
-### 9.4 What you get
+### 11.4 What you get
 
 The recommended enzyme pair, the construct size, the VHH length, how much
 vector is
@@ -2217,7 +2341,7 @@ parts so SnapGene or Benchling opens it ready to read; as FASTA; and the
 amplicon as
 FASTA. Plus a short protocol paragraph.
 
-### 9.5 Folded-away detail
+### 11.5 Folded-away detail
 
 - **All enzyme pairs considered** (every pair with its verdict and, when rejected, why. - **Restriction sites**) every enzyme that cuts the backbone, how often, where, and
   whether it also cuts the insert. An enzyme that cuts the insert is not
@@ -2233,7 +2357,7 @@ vector rather
 ---
 
 
-## 10. Reference tables
+## 12. Reference tables
 
 The two tables you look up rather than work out: the genetic code, and the
 twenty amino acids. Reached from **Reference** in the sidebar, under the
@@ -2243,12 +2367,12 @@ Nothing on that screen is typed in, and that is the only reason it is there.
 A reference table maintained separately can disagree with the app printed next
 to it, and when it does the reader has no way of telling which of the two is
 wrong. So the codon table is Biopython's, the usage figures are the measured
-*E. coli* table that §7 scores CAI against, the rare-codon flags are the same
-eight that §7 raises, and the residue masses, hydropathy and charges are the
+*E. coli* table that §9 scores CAI against, the rare-codon flags are the same
+eight that §9 raises, and the residue masses, hydropathy and charges are the
 same constants §3 builds its profiles from. They cannot contradict each other,
 because they are the same numbers.
 
-### 10.1 Genetic code
+### 12.1 Genetic code
 
 First the textbook block: rows are the first two bases, columns the third.
 Read across a row and the amino acid usually does not change, which is the
@@ -2261,13 +2385,13 @@ Then all 64 codons, filterable by amino acid or down to the rare ones:
 - **w** is that share divided by the best synonym's, the relative
   adaptiveness; CAI is the geometric mean of these. A codon with w near 1 is
   the one the host prefers.
-- **rare_in_ecoli** marks the eight codons §7 flags, each with the tRNA that
+- **rare_in_ecoli** marks the eight codons §9 flags, each with the tRNA that
   is limiting for it.
 
 Stop codons have no share, because they do not compete with a synonym for an
 amino acid, so a share would be a number about nothing.
 
-### 10.2 Amino acids
+### 12.2 Amino acids
 
 Twenty structures, drawn as they exist **at pH 7.4**: the zwitterion, with
 aspartate and glutamate deprotonated and lysine and arginine protonated.
@@ -2306,7 +2430,7 @@ it follows the light or dark theme instead of being black in both.
 
 ---
 
-## 11. How your data is handled
+## 13. How your data is handled
 
 Sequences, chromatograms and plasmids are **never written to a persistent file,
 logged,
@@ -2355,13 +2479,13 @@ issue is public, like any other, so leave sequences and anything confidential
 out of it; none is needed. Without a GitHub account, or to say it privately,
 the same panel opens an e-mail to the author with the same questions. The
 same request appears as one line under the analysis downloads (§3.15) and
-under the batch sheet (§5.6), the two places where the app has just given you
+under the batch sheet (§5.5), the two places where the app has just given you
 something to keep; there the links also say which screen they came from.
 Either is optional, and either decides what gets improved next.
 
 ---
 
-## 12. Running it on your own machine
+## 14. Running it on your own machine
 
 ```bash
 git clone https://github.com/TyrosinDuck/vhh-analyzer
@@ -2393,7 +2517,7 @@ somewhere other than Community Cloud.
 
 ---
 
-## 13. Limits and caveats, in one place
+## 15. Limits and caveats, in one place
 
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
@@ -2417,10 +2541,13 @@ somewhere other than Community Cloud.
   exposure cut-off was checked against a single complex.
 - A structural epitope says which residues are covered, not which ones the binding
   energy depends on.
+- Buffer molar masses are derived from formulas, not measured, and only as right as
+  the formula typed for each form. The recipes are one laboratory's, and nothing in
+  the app knows solubilities.
 
 ---
 
-## 14. Troubleshooting
+## 16. Troubleshooting
 
 **An upload fails with "AxiosError: Request failed with status code 500".** The
 browser could not hand the file to the server, and the request never reached
@@ -2513,7 +2640,7 @@ is the single most useful thing you can send back.
 
 ---
 
-## 15. Under the hood
+## 17. Under the hood
 
 Built on Biopython (ProtParam, Restriction, pairwise alignment), ANARCI for
 IMGT

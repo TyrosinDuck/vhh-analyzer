@@ -33,7 +33,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.10b"
+__version__ = "2026.11.12b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -71,7 +71,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261110"
+BUILD = "20261112"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked
@@ -529,7 +529,7 @@ def footer() -> None:
 GROUPS = {
     "Protein": ("#4c72b0", "The amino-acid sequence and its fold"),
     "DNA": ("#438452", "Reads, coding sequences and plasmids"),
-    "Bench": ("#bb5b25", "The purified protein in the tube"),
+    "Bench": ("#bb5b25", "The tube, and the readings taken on it"),
 }
 
 # Ordered by group, then by the order of use within a group, because the home
@@ -575,7 +575,20 @@ SECTIONS = {
               "The arithmetic between a purified protein and the next "
               "experiment: concentration from a measured A280, whether the "
               "measured mass is the protein you think it is, how much "
-              "labelling reagent to add, and the titre of a phage stock.",
+              "labelling reagent to add, what each purification step "
+              "recovered, and the batch sheet that leaves with the tube.",
+              "Bench"),
+    "buffers": ("🧂", "Buffers & media",
+                "What to weigh for a buffer or a medium at any volume and "
+                "concentration factor, with the hydrate of each salt you "
+                "actually have: the mass follows from its formula. The "
+                "recipes are the laboratory's own, kept in the repository.",
+                "Bench"),
+    "phage": ("🦠", "Phage & panning",
+              "The phage stocks that go into each round of panning: the "
+              "titre from an A260, by two routes shown side by side, and how "
+              "much stock a solid-phase or liquid-phase round takes. No "
+              "sequence needed.",
               "Bench"),
 }
 

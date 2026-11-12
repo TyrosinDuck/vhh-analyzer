@@ -1,0 +1,37 @@
+# VHH tool box - buffer and medium recipes. One row per recipe; its
+# components are in recipe_components.csv, under the same recipe name.
+# A recipe describes the 1X buffer, the one used. The app prepares it at any
+# concentration factor, so a 20X stock and its 1X are one recipe, not two.
+#
+# recipe          unique name, as shown in the app: "PBS", "LB", "IMAC binding"
+# kind            buffer | medium | solution
+# ph              pH of the 1X buffer, or empty
+# ph_mode         adjust   - the pH is set to this value with ph_adjust_with
+#                 measured - nothing is adjusted; the 1X reads about this pH
+#                 Empty if ph is empty.
+# ph_adjust_with  what to adjust with, free text: "HCl", "NaOH 10 M".
+#                 Required with adjust, empty with measured.
+# sterilization   filter | autoclave | none
+# storage         free text: "RT", "4 C, 1 month"
+# usual_stock     optional. The concentration factor your lab usually makes it
+#                 at, e.g. 20 for a 20X stock; the app starts there. Empty: 1.
+# source          REQUIRED. Where the recipe comes from: "CIP protocol <name>,
+#                 <date>", a paper, a kit manual. A recipe without a source,
+#                 or whose source is EXAMPLE, is refused by the app.
+# notes           free text shown under the recipe
+#
+# Lines starting with # are ignored. Check with: python3 tools/check_buffers.py
+recipe,kind,ph,ph_mode,ph_adjust_with,sterilization,storage,usual_stock,source,notes
+PBS,buffer,7.4,measured,,filter,4 C,20,"CIP J.Vaneyck, protocol of 2023-09-29","Made as a 20X stock, which reads about pH 6.8; diluted to 1X it reads 7.4. Neither is adjusted."
+TES (Tris-EDTA-sucrose),buffer,8.0,adjust,HCl,filter,,,CIP J.Vaneyck 2026,
+NaPi 50 mM pH 7,buffer,7.0,measured,,filter,,,CIP J.Vaneyck 2026,"The phosphate masses add up to 50 mM; the mixture is at pH 7 without adjustment."
+NaPi 50 mM pH 8,buffer,8.0,adjust,NaOH,filter,,,CIP J.Vaneyck 2026,
+NaPi 50 mM imidazole 500 mM pH 8,buffer,8.0,adjust,HCl,filter,,,CIP J.Vaneyck 2026,
+TB (base),medium,,,,autoclave,,,CIP J.Vaneyck 2026,"Concentrations are those of the base, before the additions. Mixed after autoclaving, just before use: 675 mL TB + 75 mL TB-SALT + 750 uL ampicillin 100 mg/mL + 750 uL MgCl2 1 M + 3.75 mL glucose 20%."
+TB-SALT,solution,,,,autoclave,,,CIP J.Vaneyck 2026,"Added to TB after autoclaving: 75 mL per 675 mL of TB."
+Glucose 20%,solution,,,,autoclave,,,CIP J.Vaneyck 2026,
+IPTG 1 M,solution,,,,filter,-20 C,,CIP J.Vaneyck 2026,
+MgCl2 1 M,solution,,,,filter,,,CIP J.Vaneyck 2026,
+Ampicillin 100 mg/mL,solution,,,,filter,,,CIP J.Vaneyck 2026,"1000X stock: 100 ug/mL in the culture."
+2X-TY,medium,,,,autoclave,,,CIP J.Vaneyck 2026,No agar.
+PEG-NaCl,solution,,,,autoclave,,,CIP J.Vaneyck 2026,"Dissolve the NaCl in about 600 mL of water with heating and stirring, add the PEG after 5 min, keep warming and stirring until both are dissolved (can take overnight), then make up to the final volume."

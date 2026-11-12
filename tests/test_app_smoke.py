@@ -46,9 +46,14 @@ _FRAME = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
 FASTA = "".join(f">Nb{i}\n{_FRAME.format(cdr3='DRGYSSSWYD' + last)}\n"
                 for i, last in enumerate("YFWLKRD"))
 
-NAV = ["🔬 Sequence analysis", "🧊 Structure", "📚 Sequence library",
-       "🧪 Sanger sequencing", "🔧 Gene diagnosis", "🧬 In-silico cloning",
-       "⚗️ Batch & QC", "📖 Manual", "📐 Reference", "🏠 Home"]
+# Derived from shell.SECTIONS rather than written out. The list used to be
+# typed here, a second list of the sections, and a section added to SECTIONS
+# but not here would have been left out of every smoke test without a sound.
+import shell  # noqa: E402
+
+SECTION_BUTTONS = [f"{icon} {label}"
+                   for icon, label, *_ in shell.SECTIONS.values()]
+NAV = SECTION_BUTTONS + ["📖 Manual", "📐 Reference", "🏠 Home"]
 
 
 def _labels(app):
@@ -90,18 +95,10 @@ def app():
 
 # Every screen draws its own title, except the manual, which renders MANUAL.md
 # as markdown and has no st.title of its own.
-EXPECTED_TITLE = {
-    "🔬 Sequence analysis": "🔬 Sequence analysis",
-    "🧊 Structure": "🧊 Structure",
-    "⚗️ Batch & QC": "⚗️ Batch & QC",
-    "🧪 Sanger sequencing": "🧪 Sanger sequencing",
-    "🔧 Gene diagnosis": "🔧 Gene diagnosis",
-    "📚 Sequence library": "📚 Sequence library",
-    "🧬 In-silico cloning": "🧬 In-silico cloning",
-    "📐 Reference": "📐 Reference",
-    "🏠 Home": "🧰 VHH tool box",
-    "📖 Manual": None,
-}
+EXPECTED_TITLE = {**{button: button for button in SECTION_BUTTONS},
+                  "📐 Reference": "📐 Reference",
+                  "🏠 Home": "🧰 VHH tool box",
+                  "📖 Manual": None}
 
 
 def _content_count(app):
@@ -374,13 +371,7 @@ def test_sequence_input_survives_leaving_the_section(app):
 
 
 def test_bench_renders_every_view(app):
-    """Including the phage view, which is the odd one out.
-
-    The others ask for a sequence before they draw; the phage one does
-    not use a sequence at all, so the screen chooses the view first and skips
-    the sequence block entirely for that one. That is an early ``return`` in
-    the middle of ``render()``, which is exactly the shape of thing that
-    stops drawing the rest of the screen when someone edits around it.
+    """Every view of Batch & QC, with no sequence loaded.
 
     The expected views are read from the module rather than counted here. A
     hard-coded five was a second list of the same thing: it failed when a view
@@ -403,6 +394,61 @@ def test_bench_renders_every_view(app):
         [r for r in app.radio if r.label == "View"][0].set_value(view).run()
         _no_failure(app, f"bench view {view}")
         assert _content_count(app) >= 6, f"bench view {view} looks empty"
+
+
+def test_the_phage_section_computes_both_titres_and_both_volumes(app):
+    """The phage titre in its own section, with no sequence anywhere.
+
+    It used to be a view of Batch & QC reached through an early return;
+    moved out, it is checked for what it is for rather than for drawing:
+    the two titres and the two volumes. The numbers are the screen's
+    defaults worked by hand: 0.459 x 100 = 45.9; 45.9 x 6e16 / 7249 is
+    3.80e14 /mL, and 1e11 particles of that is 0.263 uL, below the 2 uL a
+    pipette can take, so the volume shown is the one after the dilution
+    `bench.phage_aliquot` proposes. Only the presence of both volumes is
+    checked here; their arithmetic is pinned in tests/test_bench.py.
+    """
+    _goto(app, "🦠 Phage & panning")
+    _no_failure(app, "phage section")
+    assert not [r for r in app.radio if r.label == "Sequence"], \
+        "the phage section asks for a sequence it does not use"
+    metrics = {m.label: m.value for m in app.metric}
+    assert set(metrics) >= {"Empirical", "From the genome", "Corrected A260"}
+    assert metrics["Corrected A260"] == "45.9"
+    assert metrics["From the genome"] == "3.80e+14 /mL"
+    shown = " ".join(s.value for s in app.success)
+    assert "Solid phase" in shown and "Liquid phase" in shown
+
+
+def test_the_buffers_section_prepares_pbs_at_its_usual_stock(app):
+    """The screen opens on the first recipe at its usual factor, and changing
+    the form of a salt changes the mass shown. PBS is made at 20X: 160 g of
+    NaCl per litre, and 35.60 g of the dihydrate phosphate or, as the
+    anhydrous salt, 35.6 x 141.958 / 177.988 = 28.39 g."""
+    _goto(app, "🧂 Buffers & media")
+    _no_failure(app, "buffers section")
+    assert app.number_input(key="buf_factor_PBS").value == 20.0
+    table = app.dataframe[0].value
+    amounts = dict(zip(table["Component"], table["Amount"]))
+    assert amounts["Sodium chloride"] == "160.00 g"
+    assert amounts["Disodium hydrogen phosphate"] == "35.60 g"
+    app.selectbox(key="buf_form_PBS_Disodium hydrogen phosphate").set_value(
+        "anhydrous").run()
+    _no_failure(app, "buffers section, anhydrous phosphate")
+    table = app.dataframe[0].value
+    amounts = dict(zip(table["Component"], table["Amount"]))
+    assert amounts["Disodium hydrogen phosphate"] == "28.39 g"
+    steps = " ".join(m.value for m in app.markdown)
+    assert "Do not adjust the pH" in steps
+
+
+def test_batch_and_qc_no_longer_offers_the_phage_titre(app):
+    from sections import bench as bench_screen
+
+    assert not any("Phage" in view for view in bench_screen.VIEWS)
+    _goto(app, "⚗️ Batch & QC")
+    selector = [r for r in app.radio if r.label == "View"][0]
+    assert not any("Phage" in view for view in selector.options)
 
 
 def test_finished_results_ask_how_the_app_is_used(app):

@@ -1,0 +1,62 @@
+# VHH tool box - compounds available for buffer and medium recipes.
+# One row per FORM of a compound: each hydrate is its own row, under the same
+# compound name. The app offers the forms of a compound as a choice and
+# recomputes the mass to weigh from the formula of the form you pick.
+#
+# compound  the name recipes refer to; identical for every form of it
+# form      short label: anhydrous, monohydrate, dihydrate, heptahydrate...
+# formula   Hill-style formula, hydrate water after a dot: NaH2PO4.2H2O
+#           Parentheses allowed: Ca(OH)2. Leave EMPTY for anything without a
+#           defined formula (tryptone, yeast extract, PEG 8000, Tween 20):
+#           those can only be used in g/L, mg/mL, ug/mL, % w/v or % v/v.
+# cas       optional, copied from the bottle; helps telling forms apart
+# note      optional free text
+#
+# The molar mass is NOT typed anywhere: the app derives it from the formula
+# with the IUPAC standard atomic weights. Check every formula against the
+# label of the bottle you actually have. Delete the forms your lab does not
+# stock, add the ones it does. Lines starting with # are ignored.
+compound,form,formula,cas,note
+Sodium chloride,anhydrous,NaCl,,
+Potassium chloride,anhydrous,KCl,,
+Sodium dihydrogen phosphate,anhydrous,NaH2PO4,,
+Sodium dihydrogen phosphate,monohydrate,NaH2PO4.H2O,,
+Sodium dihydrogen phosphate,dihydrate,NaH2PO4.2H2O,,
+Disodium hydrogen phosphate,anhydrous,Na2HPO4,,
+Disodium hydrogen phosphate,dihydrate,Na2HPO4.2H2O,,
+Disodium hydrogen phosphate,heptahydrate,Na2HPO4.7H2O,,
+Disodium hydrogen phosphate,dodecahydrate,Na2HPO4.12H2O,,
+Potassium dihydrogen phosphate,anhydrous,KH2PO4,,
+Dipotassium hydrogen phosphate,anhydrous,K2HPO4,,
+Dipotassium hydrogen phosphate,trihydrate,K2HPO4.3H2O,,
+Tris base,anhydrous,C4H11NO3,,
+Tris hydrochloride,anhydrous,C4H11NO3.HCl,,
+HEPES,free acid,C8H18N2O4S,,
+Imidazole,anhydrous,C3H4N2,,
+Glycine,anhydrous,C2H5NO2,,
+EDTA disodium,dihydrate,C10H14N2Na2O8.2H2O,,
+Magnesium chloride,anhydrous,MgCl2,,
+Magnesium chloride,hexahydrate,MgCl2.6H2O,,
+Magnesium sulfate,anhydrous,MgSO4,,
+Magnesium sulfate,heptahydrate,MgSO4.7H2O,,
+Calcium chloride,anhydrous,CaCl2,,
+Calcium chloride,dihydrate,CaCl2.2H2O,,
+Sodium hydrogen carbonate,anhydrous,NaHCO3,,
+Sodium carbonate,anhydrous,Na2CO3,,
+Sodium carbonate,decahydrate,Na2CO3.10H2O,,
+D-Glucose,anhydrous,C6H12O6,,
+D-Glucose,monohydrate,C6H12O6.H2O,,
+Sucrose,anhydrous,C12H22O11,,
+IPTG,anhydrous,C9H18O5S,,
+Sodium hydroxide,anhydrous,NaOH,,
+Glycerol,liquid,C3H8O3,,"Usually dosed in % v/v; a molar amount would be weighed, not pipetted"
+Tryptone,powder,,,
+Yeast extract,powder,,,
+Agar,powder,,,
+PEG 6000,powder,,,"Polydisperse: average molar mass only, dose by mass"
+PEG 8000,powder,,,"Polydisperse: average molar mass only, dose by mass"
+Tween 20,liquid,,,
+Bovine serum albumin,powder,,,
+Skim milk powder,powder,,,
+Ampicillin sodium salt,powder,,,
+Kanamycin sulfate,powder,,,

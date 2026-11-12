@@ -18,6 +18,53 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **A Buffers & media section**, in the Bench group: what to weigh or
+  pipette for a buffer or a medium, at any final volume and concentration
+  factor, with the form of each salt that is actually on the shelf. A
+  component that exists as several hydrates gets a selector, and the mass
+  follows from the formula of the form picked: 1.78 g/L of Na2HPO4.2H2O is
+  1.420 g/L of the anhydrous salt. No molar mass is typed anywhere; each is
+  derived from the formula with the CIAAW abridged standard atomic weights
+  (Atomic Weights 2021), copied into `buffers.py` with the date, and a
+  formula with an element outside that table is refused. The screen says the
+  masses are derived, and that it knows nothing of solubility.
+  A recipe describes the 1X buffer and declares whether its pH is adjusted
+  (with what) or only measured; a 20X stock is the same recipe at a factor of
+  20, so the steps can say not to adjust the PBS stock, and, for a buffer
+  whose pH is adjusted, that a concentrated stock does not generally read the
+  pH it gives once diluted. Components can come from a stock solution, which
+  turns a mass into a volume.
+  The recipes are the laboratory's own, thirteen to start with, in three CSV
+  files under `data/buffers/`, read-only in the app like the sequence library
+  and each with its source. A faulty row is reported with its file and line,
+  and a recipe with a faulty component is left out whole.
+  `tools/check_buffers.py` runs the same loader before a push. The tests
+  check the molar masses against sums worked by hand and the preparation
+  against the laboratory's written protocols, amount by amount: PBS 20X,
+  TES, NaPi, TB, TB-SALT, glucose, MgCl2, ampicillin, 2X-TY and PEG-NaCl
+  come back out to the gram.
+
+- **A Phage & panning section**, in the Bench group, beside Batch & QC.
+  The phage titre was a view of Batch & QC, the only one of six that needed
+  no sequence: the screen had to choose the view before asking for one and
+  skip the sequence block through an early return. It is now a section of its
+  own, with the same arithmetic, the same constants and the same widget keys,
+  so a titre typed before an update is still there within the session. It
+  is where the next panning calculators will go. Batch & QC keeps five views,
+  all on the sequence picked at the top. The Bench group's tagline is now
+  "The tube, and the readings taken on it", since a phage stock is not a
+  purified protein. The flow diagram has a box for the new section, under
+  the analysis with no arrow coming in, because it takes nothing from the
+  other sections; checked by rendering it in a headless browser on a light
+  and a dark theme. The manual's chapters from Sanger sequencing onwards are
+  renumbered by one (Sanger sequencing is now §7), and the references to
+  them follow.
+  The smoke tests read the list of sections from `shell.SECTIONS` instead of
+  a list typed in the test file, which a new section would have escaped.
+  A new smoke test opens the phage section and checks the two titres and the
+  two volumes on the screen's defaults, and another that Batch & QC no
+  longer offers the view.
+
 - **A way to say how you use the app.** The app records nothing about what
   is done in it, so the hosting platform's count of visitors is the only
   usage figure there is, and a visit is not a use. A **Using it in your work?

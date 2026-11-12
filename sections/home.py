@@ -17,9 +17,9 @@ from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    follow_app_theme, group_header_html, report_url,
                    sections_by_group, usage_mailto, usage_url)
 
-__version__ = "2026.11.10b"
+__version__ = "2026.11.12b"
 
-# Drawn as inline SVG rather than with a diagramming library: it is six boxes
+# Drawn as inline SVG rather than with a diagramming library: it is a few boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
 # dependency for that would be a dependency to keep working.
 #
@@ -35,10 +35,12 @@ __version__ = "2026.11.10b"
 # operating system's, see there for why).
 FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;height:auto;max-width:900px" role="img"
-     aria-label="How the seven sections feed each other. You supply the input
+     aria-label="How the nine sections feed each other. You supply the input
      yourself to Sanger sequencing (.ab1 files), Sequence analysis (sequences),
-     Structure (a model), Gene diagnosis (coding DNA) and Batch &amp; QC (a
-     sequence).
+     Structure (a model), Gene diagnosis (coding DNA), Batch &amp; QC (a
+     sequence), Buffers &amp; media (a recipe, a volume and a concentration)
+     and Phage &amp; panning (an A260 reading); the last two take nothing
+     from the other sections.
      Sanger sequencing and the sequence library feed Sequence analysis, which
      feeds Structure, Gene diagnosis, In-silico cloning and Batch &amp; QC; the
      library
@@ -82,6 +84,8 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <path d="M 755 74 V 94"/>
     <path d="M 755 228 V 248"/>
     <path d="M 755 536 V 556"/>
+    <path d="M 442 536 V 556"/>
+    <path d="M 442 382 V 402"/>
   </g>
   <g fill="none" stroke="currentColor" stroke-opacity="0.34" stroke-width="1.3"
      stroke-dasharray="5 4">
@@ -90,6 +94,8 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <rect x="660" y="30" width="190" height="42" rx="8"/>
     <rect x="660" y="184" width="190" height="42" rx="8"/>
     <rect x="660" y="492" width="190" height="42" rx="8"/>
+    <rect x="347" y="492" width="190" height="42" rx="8"/>
+    <rect x="347" y="338" width="190" height="42" rx="8"/>
   </g>
   <g font-size="11" fill="currentColor" fill-opacity="0.72" text-anchor="middle"
      font-family="system-ui, -apple-system, sans-serif">
@@ -103,6 +109,10 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <text x="755" y="217" font-weight="600">coding DNA</text>
     <text x="755" y="510">you paste</text>
     <text x="755" y="525" font-weight="600">one sequence</text>
+    <text x="442" y="356">you choose</text>
+    <text x="442" y="371" font-weight="600">a recipe and a volume</text>
+    <text x="442" y="510">you measure</text>
+    <text x="442" y="525" font-weight="600">an A260</text>
   </g>
 
   <!-- Edge labels -->
@@ -135,6 +145,10 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <text x="753" y="455" font-size="11" fill-opacity="0.68">backbone + insert</text>
 
     <text x="753" y="609" font-size="11" fill-opacity="0.68">A280, mass, conjugation</text>
+
+    <text x="442" y="609" font-size="11" fill-opacity="0.68">titre, input per round</text>
+
+    <text x="442" y="455" font-size="11" fill-opacity="0.68">what to weigh, form by form</text>
   </g>
 <!--LEGEND-->
 </svg>"""
@@ -153,6 +167,12 @@ _BOXES = {
     "genes": (642, 250, 222, 70, 10),
     "cloning": (642, 404, 222, 70, 10),
     "bench": (642, 558, 222, 70, 10),
+    # Under the analysis rather than in the left column, where the library's
+    # arrow to gene diagnosis runs down x=124. No arrow comes in: the titre
+    # takes nothing from the other sections.
+    "phage": (324, 558, 236, 70, 10),
+    # Above it, same column, for the same reason: no arrow comes in.
+    "buffers": (324, 404, 236, 70, 10),
 }
 _HUB = "analysis"
 

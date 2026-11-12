@@ -45,7 +45,7 @@ def test_the_agreed_grouping():
     assert shell.sections_by_group() == {
         "Protein": ["analysis", "structure", "library"],
         "DNA": ["sequencing", "genes", "cloning"],
-        "Bench": ["bench"],
+        "Bench": ["bench", "buffers", "phage"],
     }
 
 

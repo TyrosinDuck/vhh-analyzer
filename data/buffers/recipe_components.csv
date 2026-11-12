@@ -1,0 +1,51 @@
+# VHH tool box - components of each recipe in recipes.csv, at their 1X
+# concentration. One row per component, the recipe name repeated on each row.
+#
+# recipe    must match a name in recipes.csv
+# compound  must match a compound name in compounds.csv
+# amount    concentration in the 1X buffer, a number with a dot as decimal
+#           separator: 137 or 0.5, never 0,5
+# unit      M | mM | uM | g/L | mg/mL | ug/mL | % w/v | % v/v
+#           Molar units need a compound with a formula.
+# form      With a molar unit, optional: the form offered first, the one
+#           usually weighed. The app still offers the others.
+#           Required when the amount is a mass (g/L...) of a compound that
+#           has several forms, since 1.42 g/L of Na2HPO4 and of Na2HPO4.2H2O
+#           are not the same buffer. The app then converts to any other form
+#           through the formulas.
+# stock     optional. If you add this component from a stock solution rather
+#           than weighing it, the stock concentration with its unit: "1 M",
+#           "50 % v/v", "100 mg/mL". Same kind of unit as amount. The app
+#           then gives a volume to pipette instead of a mass.
+# note      optional free text
+#
+# Lines starting with # are ignored. Check with: python3 tools/check_buffers.py
+recipe,compound,amount,unit,form,stock,note
+PBS,Sodium chloride,8,g/L,,,
+PBS,Potassium chloride,0.2,g/L,,,
+PBS,Potassium dihydrogen phosphate,0.24,g/L,,,
+PBS,Disodium hydrogen phosphate,1.78,g/L,dihydrate,,
+TES (Tris-EDTA-sucrose),Tris base,24.22,g/L,,,
+TES (Tris-EDTA-sucrose),EDTA disodium,0.19,g/L,dihydrate,,
+TES (Tris-EDTA-sucrose),Sucrose,171.15,g/L,,,
+NaPi 50 mM pH 7,Sodium dihydrogen phosphate,3.244,g/L,dihydrate,,
+NaPi 50 mM pH 7,Disodium hydrogen phosphate,4.146,g/L,anhydrous,,
+NaPi 50 mM pH 8,Sodium dihydrogen phosphate,3.244,g/L,dihydrate,,
+NaPi 50 mM pH 8,Disodium hydrogen phosphate,4.146,g/L,anhydrous,,
+NaPi 50 mM imidazole 500 mM pH 8,Sodium dihydrogen phosphate,3.244,g/L,dihydrate,,
+NaPi 50 mM imidazole 500 mM pH 8,Disodium hydrogen phosphate,4.146,g/L,anhydrous,,
+NaPi 50 mM imidazole 500 mM pH 8,Imidazole,0.5,M,,,
+TB (base),Yeast extract,24,g/L,,,
+TB (base),Tryptone,12,g/L,,,
+TB (base),Glycerol,0.4,% v/v,,,
+TB-SALT,Potassium dihydrogen phosphate,23.1,g/L,,,
+TB-SALT,Dipotassium hydrogen phosphate,125.4,g/L,anhydrous,,
+Glucose 20%,D-Glucose,20,% w/v,anhydrous,,
+IPTG 1 M,IPTG,1,M,,,
+MgCl2 1 M,Magnesium chloride,1,M,hexahydrate,,
+Ampicillin 100 mg/mL,Ampicillin sodium salt,100,mg/mL,,,
+2X-TY,Tryptone,16,g/L,,,
+2X-TY,Yeast extract,10,g/L,,,
+2X-TY,Sodium chloride,5,g/L,,,
+PEG-NaCl,Sodium chloride,146,g/L,,,
+PEG-NaCl,PEG 6000,200,g/L,,,

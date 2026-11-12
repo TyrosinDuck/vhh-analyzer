@@ -37,13 +37,14 @@ import library as lib
 import repertoire as rep
 import sanger as sg
 import af3
+import buffers as bf
 import structure as stx
 import triage as tg
 import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.10c"
+__version__ = "2026.11.12a"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -616,6 +617,12 @@ def st_interface_summary(raw: bytes, name: str, a: str, b: str) -> dict:
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=2)
 def load_library_cached():
     return lib.load_library()
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=2)
+def load_buffers_cached():
+    """The recipe book and its problems, read once rather than per rerun."""
+    return bf.load()
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)

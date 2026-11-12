@@ -56,6 +56,9 @@ floor on codon substitutions, and the back-translation preference order.
 | `sections/analysis.py` | 1804 | the Sequence analysis screen, six families |
 | `sections/structure.py` | 619 | the Structure screen |
 | `sections/bench.py` | ~330 | the Batch & QC screen |
+| `sections/buffers.py` | ~140 | the Buffers & media screen |
+| `buffers.py` | ~470 | recipe loading and checking, formulas, molar masses, preparation arithmetic |
+| `sections/phage.py` | ~190 | the Phage & panning screen |
 | `sections/cloning.py` | 331 | the In-silico cloning screen |
 | `sections/genes.py` | 273 | the Gene diagnosis screen |
 | `sections/sequencing.py` | 150 | the Sanger screen |
@@ -93,7 +96,7 @@ and
 
 ## Layout
 
-The app opens on a home page with seven sections in three groups, Protein,
+The app opens on a home page with nine sections in three groups, Protein,
 DNA and Bench, also reachable from the sidebar, which carries a **Home**
 button on every screen:
 
@@ -105,7 +108,9 @@ button on every screen:
 | **DNA** | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
 | | **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
 | | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
-| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, how much labelling reagent to add with the volumes you can actually pipette, a phage titre from an A260, a purification balance step by step, and a one-page batch sheet with a JSON record that reloads it |
+| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, how much labelling reagent to add with the volumes you can actually pipette, a purification balance step by step, and a one-page batch sheet with a JSON record that reloads it |
+| | **Buffers & media** | what to weigh for a buffer or a medium at any volume and concentration factor, with the hydrate you have: molar masses derived from the formulas with the CIAAW atomic weights. The recipes are the laboratory's own, in `data/buffers/`, read-only in the app like the library |
+| | **Phage & panning** | the titre of a phage stock from an A260, by two routes shown side by side, and the volume a round of panning takes |
 
 They share one sequence list: what you load in the analysis section is what the
 cloning section offers as an insert, the sequencing section writes into it, the

@@ -77,9 +77,11 @@ try:
     import vhh_core as vc
     from sections import (analysis as sections_analysis,
                           bench as sections_bench,
+                          buffers as sections_buffers,
                           cloning as sections_cloning, genes as sections_genes,
                           home as sections_home, library as sections_library,
                           manual as sections_manual,
+                          phage as sections_phage,
                           reference as sections_reference,
                           sequencing as sections_sequencing,
                           structure as sections_structure)
@@ -139,16 +141,19 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.10b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.10b", "compute": "2026.11.10c",
+                    "shell": "2026.11.12b", "compute": "2026.11.12a",
                     "af3": "2026.11.04a",
                     "reference": "2026.10.30a",
                     "sections.analysis": "2026.11.10f",
-                    "sections.bench": "2026.11.10a",
+                    "sections.bench": "2026.11.12a",
+                    "sections.phage": "2026.11.12a",
+                    "sections.buffers": "2026.11.12a",
+                    "buffers": "2026.11.12a",
                     "sections.reference": "2026.11.05a",
                     "bench": "2026.11.04b",
                     "sections.cloning": "2026.10.28c",
                     "sections.genes": "2026.10.28c",
-                    "sections.home": "2026.11.10b",
+                    "sections.home": "2026.11.12b",
                     "sections.library": "2026.10.28c",
                     "sections.manual": "2026.10.29b",
                     "sections.sequencing": "2026.10.28c",
@@ -481,6 +486,16 @@ if section == "structure":
 
 if section == "bench":
     sections_bench.render(ph, method)
+    footer()
+    st.stop()
+
+if section == "buffers":
+    sections_buffers.render()
+    footer()
+    st.stop()
+
+if section == "phage":
+    sections_phage.render()
     footer()
     st.stop()
 
