@@ -1,37 +1,34 @@
 """
-VHH tool box, Streamlit front-end.
+VHH tool box, Streamlit front-end: the router, and nothing else.
 
-The app is organised in three sections, reachable from the home page and from
-the sidebar:
+What this file does, in order: import every module of the project inside one
+guard, refuse to run if any of them is older than this release expects, draw
+the sidebar, and hand the run to exactly one screen.
 
-* **Sequence analysis**: characterization, CDR annotation, alignment, DNA
-* **Sanger sequencing**: extract VHHs from .ab1 chromatograms, then send the
-  ones you pick to the analysis section
-* **In-silico cloning**: pick a backbone, an insert and get the enzymes and
-  primers that fit
+What it does not do: compute, draw a screen, or hold a list of the screens.
+Every cached computation is in `compute.py`, every screen is a `render` in
+`sections/`, and the set of screens is derived from `shell.screen_keys()`,
+which reads `shell.SECTIONS` and `shell.UTILITIES`. Adding a section is one
+entry in `SECTIONS`, one file in `sections/`, one line in `REQUIRED_MODULES`,
+and no edit here. This file was a single 3 911-line script before the screens
+were pulled out of it; keeping it a router is what stops it growing back.
 
 Data handling: submitted sequences are never written to a persistent file,
 logged or sent to a third party. They are processed in the server's memory. The
 result cache is deliberately short-lived (see CACHE_TTL) and the alignment step
 writes a temporary FASTA that is deleted as soon as the figure is rendered.
 
-All analysis logic lives in vhh_core.py, sanger.py and cloning.py, which a
-notebook can import exactly the same way.
+All analysis logic lives in vhh_core.py, sanger.py, cloning.py, structure.py,
+bench.py and buffers.py, which a notebook can import exactly the same way.
 
 Run locally:   streamlit run app.py
 """
 
 from __future__ import annotations
 
-import io
-import re
 import importlib
-import tempfile
 import time
-from pathlib import Path
 
-import matplotlib.pyplot as plt
-import pandas as pd
 import streamlit as st
 
 
@@ -64,71 +61,59 @@ def _updating(exc: BaseException) -> None:
 # mid-deploy run trips on. The guard used to sit only around the version check
 # further down, which runs after them and so never got the chance.
 # tests/test_regressions.py fails if a project module is imported outside it.
+#
+# The modules are imported for their side effect of being loaded, not for what
+# this file calls: a router calls one `render` and the version check. The
+# screens and the cached layer import what they need themselves. This block
+# used to pull in sixty-two names from `compute` and twenty from `shell`,
+# left behind when the screens moved into `sections/`, and a dead import list
+# is one more thing to keep in step with nothing.
 try:
-    import cloning as cl
-    import generator as gn
-    import constructs as ctm
-    import repertoire as rep
-    import triage as tg
-    import codons as cdn
-    import library as lib
-    import sanger as sg
-    import structure as stx
+    import af3
+    import bench
+    import buffers
+    import cloning
+    import codons
+    import compute
+    import constructs
+    import generator
+    import library
+    import reference
+    import repertoire
+    import sanger
+    import shell
+    import structure
+    import triage
     import vhh_core as vc
-    from sections import (analysis as sections_analysis,
-                          bench as sections_bench,
-                          buffers as sections_buffers,
-                          cloning as sections_cloning, genes as sections_genes,
-                          home as sections_home, library as sections_library,
-                          manual as sections_manual,
-                          phage as sections_phage,
-                          reference as sections_reference,
-                          sequencing as sections_sequencing,
-                          structure as sections_structure)
-    import compute as cpt
-    import shell as shl
-    # The shared chrome and the cached computation layer. Listed by name
-    # rather than star-imported, so that this block is the documented
-    # surface the section bodies below are allowed to rely on.
-    from shell import (APP_ICON, APP_NAME, AUTHOR, AUTHOR_URL, CACHE_MAX_ENTRIES,
-        CACHE_TTL, EXAMPLE, FIT, SECTIONS, VERSION, _FIG_CACHE, _fit,
-        anarci_status, current_sequences, fig_to_png, footer, go_to,
-        group_header_html, load_manual, sections_by_group)
-    from compute import (_analyze, _analyze_one, aggregation_for, analyze_one,
-        run_analysis,
-        analyze_with_progress, classify_cached, comparison_for, diagnose_gene,
-        disulfides_for, dna_for, evaluate_pairs_cached, families_for, gc_fix_for,
-        gene_summary, generate_cached, generator_matrix, germline_data,
-        hallmark_data, humanness_for, liabilities_for, load_library_cached,
-        load_plasmid_cached, pcr_cached, plan_cloning_cached, png_aggregation,
-        png_cdr_lengths, png_charge, png_chou_fasman, png_composition,
-        png_construct, png_differences, png_family_dendrogram, png_gc_comparison,
-        png_gene_diagnosis, png_identity, png_liability_map,
-        png_liability_profile, png_logo, png_msa, png_plasmid_map, png_profiles,
-        png_quality, png_rarity, png_secondary_structure, primer_report_cached,
-        process_ab1, proteases_for, rarity_for, rarity_tables, repairs_for,
-        repertoire_stats, st_confidence, st_disulfides, st_exposure,
-        st_identity_map, st_interface, st_interface_summary, st_load, st_patches,
-        st_resnum_map, triage_for)
+    # Submodules, not `from sections import analysis, bench, ...`: half of
+    # those names are also the name of a root module imported just above
+    # (`bench`, `buffers`, `cloning`, `library`, `reference`, `structure`),
+    # and the second binding would silently win. The router reaches a screen
+    # through `SCREENS` rather than through any of these names.
+    import sections.analysis
+    import sections.bench
+    import sections.buffers
+    import sections.cloning
+    import sections.genes
+    import sections.home
+    import sections.library
+    import sections.manual
+    import sections.phage
+    import sections.reference
+    import sections.sequencing
+    import sections.structure
+    from shell import (APP_ICON, APP_NAME, CACHE_MAX_ENTRIES, CACHE_TTL, FIT,
+                       HOME, SECTIONS, Settings, UTILITIES, anarci_status,
+                       footer, go_to, group_header_html, screen_keys,
+                       sections_by_group)
 except (KeyError, ImportError) as _exc:
     _updating(_exc)
 
-
-# Three published sequences rather than invented ones, each verifiable: see
-# data/library.csv for their PDB entries. The first of these used to be labelled
-# "NbExample1" and presented as a generic VHH, it is in fact caplacizumab, which
-# is a poor thing to leave mislabelled in a public app.
-
-# Version stamp, YYYYMMDD.HHMM. Bump this by hand when you push a change that
-# users would notice, it is what someone will quote back to you in a bug report.
 
 # Wall-clock start of this script run. Streamlit re-executes the whole file on
 # every interaction, so this is set afresh each time and measures what the user
 # actually waits for, not just the analysis loop.
 _RUN_STARTED = time.perf_counter()
-
-# The app name and its icon live here so the page title, the sidebar, the home
-# page, the footer and the PDF report can never drift apart.
 
 st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 
@@ -141,23 +126,23 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.10b", "sanger": "2026.10.21b",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.10.27e",
                     "library": "2026.10.28a", "structure": "2026.11.04a",
-                    "shell": "2026.11.12b", "compute": "2026.11.12a",
+                    "shell": "2026.11.12c", "compute": "2026.11.12b",
                     "af3": "2026.11.04a",
                     "reference": "2026.10.30a",
-                    "sections.analysis": "2026.11.10f",
-                    "sections.bench": "2026.11.12a",
-                    "sections.phage": "2026.11.12c",
-                    "sections.buffers": "2026.11.12b",
+                    "sections.analysis": "2026.11.12a",
+                    "sections.bench": "2026.11.12b",
+                    "sections.phage": "2026.11.12d",
+                    "sections.buffers": "2026.11.12c",
                     "buffers": "2026.11.12b",
-                    "sections.reference": "2026.11.05a",
+                    "sections.reference": "2026.11.12a",
                     "bench": "2026.11.12b",
-                    "sections.cloning": "2026.10.28c",
-                    "sections.genes": "2026.10.28c",
-                    "sections.home": "2026.11.12b",
-                    "sections.library": "2026.10.28c",
-                    "sections.manual": "2026.10.29b",
-                    "sections.sequencing": "2026.10.28c",
-                    "sections.structure": "2026.11.04b"}
+                    "sections.cloning": "2026.11.12a",
+                    "sections.genes": "2026.11.12a",
+                    "sections.home": "2026.11.12c",
+                    "sections.library": "2026.11.12a",
+                    "sections.manual": "2026.11.12a",
+                    "sections.sequencing": "2026.11.12a",
+                    "sections.structure": "2026.11.12a"}
 
 
 def _imported(name: str):
@@ -189,147 +174,19 @@ if _stale:
              " alongside `app.py`, they are released together.")
     st.stop()
 
-
-
-
-
-# How long a result may stay in the in-memory cache, and how many results are
-# kept at once. The cache makes moving a sidebar slider instant instead of
-# re-running the whole analysis, but it is shared by the whole server process,
-# so it is kept deliberately small and short-lived. Set CACHE_TTL = 0 to switch
-# caching off entirely: the app then recomputes on every interaction, which
-# costs well under a second for a handful of sequences.
+# One module per screen, taken from the dict that was just version-checked
+# rather than from a mapping written out here: a screen this router could draw
+# without having checked its version is exactly the stale-file case the check
+# exists for. `test_metadata.py` fails if a screen is missing from
+# `REQUIRED_MODULES`, which is what would make this raise on a click.
+SCREENS = {key: _checked[f"sections.{key}"] for key in screen_keys()}
 
 
 # --------------------------------------------------------------------------- #
-# Cached workers
+# Session state
 # --------------------------------------------------------------------------- #
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Streamlit re-runs the whole script (and every tab body) on each interaction,
-# so without caching, moving one slider re-renders every figure. These return
-# PNG bytes rather than figure objects because bytes cache cleanly and a static
-# image is all these plots need; the PDF builder rebuilds real figures on demand.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --------------------------------------------------------------------------- #
-# Navigation
-# --------------------------------------------------------------------------- #
-
-
-st.session_state.setdefault("section", "home")
-
-
-
-
-
-
-
-
-
+st.session_state.setdefault("section", HOME)
 
 # A widget's state cannot be written after the widget exists, so anything that
 # wants to fill the text area (the sequencing section) parks its text here and
@@ -345,7 +202,11 @@ for _input_key in ("seq_text", "gene_dna"):
     st.session_state.setdefault(_input_key, "")
     st.session_state[_input_key] = st.session_state[_input_key]
 
+# A key that is not a screen can only come from a session older than a rename.
+# It lands on the home page, which is reachable, rather than on a KeyError.
 section = st.session_state["section"]
+if section not in SCREENS:
+    section = HOME
 
 
 # --------------------------------------------------------------------------- #
@@ -355,7 +216,7 @@ section = st.session_state["section"]
 with st.sidebar:
     st.markdown(f"### {APP_ICON} {APP_NAME}")
     st.button("🏠 Home", key="nav_home", **FIT,
-              disabled=section == "home", on_click=go_to, args=("home",))
+              disabled=section == HOME, on_click=go_to, args=(HOME,))
     # Grouped as on the home page, under the same coloured titles, drawn by
     # the same function so the two cannot drift apart. The group title is
     # larger than the section buttons beneath it, which is the hierarchy.
@@ -368,15 +229,18 @@ with st.sidebar:
     st.divider()
     # The manual and the reference tables sit below the divider rather than in
     # SECTIONS: they are what you consult, not what you run, they belong to no
-    # group, and the home page cards are built from SECTIONS.
-    st.button("📖 Manual", key="nav_manual", **FIT,
-              disabled=section == "manual", on_click=go_to, args=("manual",))
-    st.button("📐 Reference", key="nav_reference", **FIT,
-              disabled=section == "reference", on_click=go_to,
-              args=("reference",))
+    # group, and the home page cards are built from SECTIONS. They are listed
+    # in `shell.UTILITIES` all the same, so that the router reaches them the
+    # same way it reaches a section.
+    for key, (icon, label) in UTILITIES.items():
+        st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
+                  disabled=section == key, on_click=go_to, args=(key,))
 
     st.divider()
 
+    # The settings are only drawn where they have a visible effect, and a
+    # screen that does not draw them gets the defaults rather than whatever
+    # the analysis screen was last left on: see `Settings.defaults`.
     if section == "analysis":
         st.markdown("#### Settings")
         ph = st.slider("pH for net charge", 3.0, 10.0, vc.DEFAULTS["ph"], 0.1,
@@ -393,10 +257,9 @@ with st.sidebar:
         st.caption(f"ANARCI: "
                    f"{'available' if has_anarci else 'not installed, regex only'}")
         st.divider()
+        settings = Settings(ph=ph, window=window, method=method)
     else:
-        ph = vc.DEFAULTS["ph"]
-        window = vc.DEFAULTS["profile_window"]
-        method = "auto"
+        settings = Settings.defaults()
 
     with st.expander("🔒 How your sequences are handled"):
         st.markdown(f"""
@@ -419,132 +282,15 @@ requirements.txt`, `streamlit run app.py`, and nothing ever leaves your computer
 
 
 # --------------------------------------------------------------------------- #
-# Home
+# The screen
 # --------------------------------------------------------------------------- #
 
-if section == "home":
-    sections_home.render()
-    footer()
-    st.stop()
-
-
-# --------------------------------------------------------------------------- #
-# Manual
-# --------------------------------------------------------------------------- #
-
-if section == "manual":
-    sections_manual.render()
-    footer()
-    st.stop()
-
-
-# --------------------------------------------------------------------------- #
-# Reference
-# --------------------------------------------------------------------------- #
-
-if section == "reference":
-    sections_reference.render()
-    footer()
-    st.stop()
-
-
-# --------------------------------------------------------------------------- #
-# Sanger sequencing
-# --------------------------------------------------------------------------- #
-
-# --------------------------------------------------------------------------- #
-# Structure
-# --------------------------------------------------------------------------- #
-# Everything here is cached on the raw file bytes rather than on a parsed model,
-# because a DataFrame pickles cleanly and a Bio.PDB entity is awkward to hash.
-# Re-parsing inside each cached function costs a few milliseconds; the SASA
-# computation it protects costs seconds.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if section == "structure":
-    sections_structure.render(method)
-    footer()
-    st.stop()
-
-
-if section == "bench":
-    sections_bench.render(ph, method)
-    footer()
-    st.stop()
-
-if section == "buffers":
-    sections_buffers.render()
-    footer()
-    st.stop()
-
-if section == "phage":
-    sections_phage.render()
-    footer()
-    st.stop()
-
-if section == "sequencing":
-    sections_sequencing.render()
-    footer()
-    st.stop()
-
-
-# --------------------------------------------------------------------------- #
-# In-silico cloning
-# --------------------------------------------------------------------------- #
-
-
-
-
-
-
-
-# --------------------------------------------------------------------------- #
-# Gene diagnosis
-# --------------------------------------------------------------------------- #
-
-if section == "genes":
-    sections_genes.render()
-    footer()
-    st.stop()
-
-
-# --------------------------------------------------------------------------- #
-# Sequence library
-# --------------------------------------------------------------------------- #
-
-if section == "library":
-    sections_library.render()
-    footer()
-    st.stop()
-
-
-if section == "cloning":
-    sections_cloning.render()
-    footer()
-    st.stop()
-# Everything that is not one of the sections above is the analysis screen.
-sections_analysis.render(ph, window, method)
+SCREENS[section].render(settings)
 
 # The page is now fully built, so the status line under the Analyze button can
 # be replaced with the figure the user actually experienced. A placeholder can be
-# rewritten later in the same run, which is exactly what this relies on.
+# rewritten later in the same run, which is exactly what this relies on. Only
+# the analysis screen sets these; on every other screen both pops return None.
 _slot = st.session_state.pop("_status_slot", None)
 _parts = st.session_state.pop("_status_parts", None)
 if _slot is not None and _parts is not None:

@@ -885,6 +885,19 @@ deletion. Insertions and deletions are reported as such rather than dropped, in
 a
 CDR3 they are usually the most interesting difference there is.
 
+**This is the one view in the app with no fallback.** Only ANARCI produces an
+IMGT number for every residue, and ANARCI shells out to HMMER, a binary that
+no `pip install` brings in: on Community Cloud it comes from `packages.txt`,
+and on your own machine from `apt-get install hmmer`, `brew install hmmer` or
+`conda install -c bioconda hmmer`. Everywhere else in the app the regex
+anchors take over when ANARCI is unavailable, because boundaries are all those
+screens need; a position-by-position comparison needs the numbering itself. So
+when either half is missing, this view says which one and what to install
+rather than comparing. It used to let the failure through instead, and what
+reached the screen was the operating system's own message about a file called
+`hmmscan`, which is accurate and tells nobody what to do. The sidebar of the
+analysis screen reports ANARCI's availability on every run.
+
 One honest caveat, visible in the app: IMGT places insertions at the *centre*
 of a
 loop, so adding a residue to CDR3 can shift a couple of its neighbours. Those
@@ -2608,7 +2621,13 @@ somewhere other than Community Cloud.
 - Every physico-chemical value is theoretical. Confirm pI and ε280 experimentally.
 - Secondary structure is a propensity estimate, not a prediction.
 - CDR boundaries depend on the method; IMGT and the regex anchors give different CDR1
-  and CDR2 lengths, so always say which you used.
+  and CDR2 lengths, so always say which you used. The regex annotator assumes a
+  canonical VHH scaffold, so where both methods run, a disagreement between ANARCI
+  and the anchors usually means a non-canonical framework: worth looking at rather
+  than ignoring.
+- The reference comparison is the one view with no fallback. It matches positions by
+  IMGT number, which only ANARCI produces, so it needs ANARCI *and* the HMMER binary
+  ANARCI calls; without them it says so instead of comparing.
 - The hallmark score is indicative. IMGT 49 is shared with VH3.
 - Germline identity is not an immunogenicity prediction.
 - Liability motifs and developability flags are triage heuristics with hand-set
@@ -2758,10 +2777,12 @@ df, annotations, errors = vc.analyze({"MyNb": "EVQLVESGGG..."})
 The interface is the second layer: `app.py` routes, `shell.py` holds the
 chrome,
 `compute.py` holds every cached call, and `sections/` holds one module per
-screen, each a `render()` function that draws and computes nothing. `app.py`
-was a
-single 3 911-line script before those screens were pulled out of it; the README
-lists the files and the two rules that keep it from growing back.
+screen, each a `render(settings)` function that draws and computes nothing.
+Every screen has that same signature, which is what lets `app.py` work out the
+whole set of screens from `shell.SECTIONS` instead of listing them: adding a
+section is one entry there and one file in `sections/`. `app.py` was a single
+3 911-line script before those screens were pulled out of it; the README lists
+the files and the three rules that keep it from growing back.
 
 There is a test suite: `pip install -r requirements.txt -r requirements-dev.txt`
 then `pytest`. It also needs HMMER, which is a binary rather than a Python

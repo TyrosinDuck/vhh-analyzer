@@ -17,15 +17,23 @@ command that fixes it.
 This warns rather than skips. A suite that quietly skipped the annotator tests
 on a machine without HMMER would pass on the one machine where the app's
 default annotator is never exercised.
+
+`HAS_HMMER` is here rather than recomputed in each test file so that the
+warning above and the tests that branch on it cannot disagree. A test that
+branches on it must assert something in *both* branches: without HMMER the
+reference comparison is expected to say what it needs, and a test that merely
+skipped there would hide the day that message stops being drawn.
 """
 
 from __future__ import annotations
 
 import shutil
 
+HAS_HMMER = shutil.which("hmmscan") is not None
+
 
 def pytest_configure(config):
-    if shutil.which("hmmscan"):
+    if HAS_HMMER:
         return
     message = (
         "HMMER is not installed (no `hmmscan` on PATH), so ANARCI cannot run "

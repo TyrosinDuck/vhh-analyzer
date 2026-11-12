@@ -614,3 +614,107 @@ def test_the_contact_address_agrees_with_the_citation_file(citation):
     assert citation["authors"][0].get("email") == shell.CONTACT_EMAIL, (
         f"shell.CONTACT_EMAIL is {shell.CONTACT_EMAIL!r} but CITATION.cff "
         f"says {citation['authors'][0].get('email')!r}")
+
+
+def test_every_screen_is_reachable_and_version_checked():
+    """A screen the router can draw but has not version-checked, or the reverse.
+
+    `app.py` builds its dispatch table from `shell.screen_keys()` by looking
+    each key up in the dict it has just version-checked, so a section added to
+    `SECTIONS` without a line in `REQUIRED_MODULES` is a `KeyError` on the
+    click that opens it, long after the page loaded. This is that click, run
+    as a test: it reads the dict out of the source rather than importing
+    `app.py`, which would need a Streamlit runtime.
+    """
+    import ast
+
+    import shell
+
+    tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+    required = next(
+        ast.literal_eval(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(getattr(t, "id", "") == "REQUIRED_MODULES" for t in node.targets))
+
+    missing = [key for key in shell.screen_keys()
+               if f"sections.{key}" not in required]
+    assert not missing, (
+        "these screens are reachable from the sidebar but not in "
+        f"REQUIRED_MODULES, so opening one raises: {missing}")
+
+    orphans = [name[len("sections."):] for name in required
+               if name.startswith("sections.")
+               and name[len("sections."):] not in shell.screen_keys()]
+    assert not orphans, (
+        "these screen modules are version-checked but no longer reachable: "
+        f"{orphans}")
+
+
+def test_every_screen_renders_through_the_same_signature():
+    """One signature is what lets the router hold no list of the screens.
+
+    `app.py` calls `render(settings)` on whichever module the section resolves
+    to. A screen that takes something else fails on the click that opens it
+    and nowhere earlier, which is the whole class of break the old `if` per
+    section used to hide: it passed each screen its own arguments, so a
+    mismatch was invisible until someone navigated there.
+    """
+    import importlib
+    import inspect
+
+    import shell
+
+    wrong = {}
+    for key in shell.screen_keys():
+        module = importlib.import_module(f"sections.{key}")
+        render = getattr(module, "render", None)
+        if render is None:
+            wrong[key] = "no render()"
+            continue
+        parameters = list(inspect.signature(render).parameters)
+        if parameters != ["settings"]:
+            wrong[key] = f"render({', '.join(parameters)})"
+    assert not wrong, (
+        "every screen must be render(settings), these are not: " +
+        ", ".join(f"{key}: {how}" for key, how in sorted(wrong.items())))
+
+
+def test_the_settings_a_screen_gets_are_not_writable():
+    """A screen must not be able to change what the next screen sees.
+
+    The settings belong to the sidebar that collected them. Frozen, so that
+    the one screen that reads all three cannot hand a modified set onward by
+    accident, which a plain object passed to every screen invites.
+    """
+    import dataclasses
+
+    import shell
+
+    settings = shell.Settings.defaults()
+    assert dataclasses.is_dataclass(settings)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        settings.ph = 9.0
+
+
+def test_the_readme_section_table_is_generated_and_current():
+    """The README's section table drifted from `SECTIONS` for several releases.
+
+    It is now written by `tools/readme_sections.py` between two markers, and
+    this fails when the file on disk is not what the tool would write, which
+    is the only thing that makes "derive it, do not copy it" hold for a file
+    nothing imports.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "readme_sections", ROOT / "tools" / "readme_sections.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert tool.START in text and tool.END in text, \
+        "the README lost the markers around its generated section table"
+    assert tool.current(text) == tool.block(), (
+        "the README section table is stale, regenerate it with "
+        "`python tools/readme_sections.py`")

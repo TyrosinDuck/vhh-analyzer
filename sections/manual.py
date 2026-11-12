@@ -15,15 +15,20 @@ from __future__ import annotations
 import streamlit as st
 
 from compute import manual_sections
-from shell import FIT, footer, load_manual
+from shell import FIT, Settings, load_manual
 
-__version__ = "2026.10.29b"
+__version__ = "2026.11.12a"
 
 WHOLE = "Everything, in one page"
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     manual = load_manual()
     sections = manual_sections(manual)
 

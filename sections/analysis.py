@@ -47,10 +47,10 @@ from compute import (aggregation_for, analyze_with_progress, annotations,
     proteases_for, rarity_tables, rep, repairs_for, repertoire_stats, st,
     tempfile, tg, triage_for, vc)
 from shell import (APP_NAME, AUTHOR, CACHE_TTL, EXAMPLE, FIT, VERSION,
-                   anarci_status, current_sequences, fig_to_png, footer, go_to,
-                   usage_prompt)
+                   Settings, anarci_requirement, anarci_status,
+                   current_sequences, fig_to_png, footer, go_to, usage_prompt)
 
-__version__ = "2026.11.10f"
+__version__ = "2026.11.12a"
 
 
 @dataclass
@@ -1028,6 +1028,28 @@ def _compare(r: Run) -> None:
                 st.info("Paste a reference sequence to compare against.")
             elif not others:
                 st.info("Nothing to compare, submit another sequence.")
+            elif not anarci_status():
+                # This view is the one place in the app with no fallback, and
+                # it used to say so by letting the failure out: the reference
+                # sequence is numbered outside the per-sequence `try` in
+                # `compare_to_reference`, so a missing binary reached the page
+                # as `Could not compare: [Errno 2] No such file or directory:
+                # 'hmmscan'`. That is accurate and tells nobody what to
+                # install, and it is exactly what someone following this app's
+                # own advice gets: the privacy notice sends confidential work
+                # to a local clone, `pip install -r requirements.txt` brings
+                # in ANARCI, and HMMER is not a Python package.
+                comp = None
+                st.info(
+                    "This view matches positions by **IMGT number**, which "
+                    "needs ANARCI and the HMMER binary it calls: "
+                    f"{anarci_requirement()}. Everywhere else the app falls "
+                    "back to the regex anchors, but a position-by-position "
+                    "comparison cannot: the anchors give CDR boundaries, not "
+                    "a number for every residue. Install HMMER with "
+                    "`apt-get install hmmer`, `brew install hmmer` or "
+                    "`conda install -c bioconda hmmer`; the deployed app gets "
+                    "it from `packages.txt`.", icon="📐")
             else:
                 try:
                     comp = comparison_for(ref_seq, others, ref_name)
@@ -1640,8 +1662,15 @@ def _outputs(r: Run) -> None:
         st.dataframe(df.drop(columns=["sequence"]), hide_index=True, **FIT)
 
 
-def render(ph: float, window: int, method: str) -> None:
-    """Draw the Sequence analysis screen."""
+def render(settings: Settings) -> None:
+    """Draw the Sequence analysis screen.
+
+    This is the one screen that draws the sidebar settings, so it is the one
+    that reads all three of them. They arrive in a single frozen `Settings`
+    rather than as three parameters of their own, which is what lets the
+    router dispatch every screen through the same call; see `shell.Settings`.
+    """
+    ph, window, method = settings.ph, settings.window, settings.method
 
     # --------------------------------------------------------------------------- #
     # Sequence analysis

@@ -16,9 +16,9 @@ import pandas as pd
 import streamlit as st
 
 import reference as rf
-from shell import FIT, embed_html, follow_app_theme, go_to
+from shell import FIT, Settings, embed_html, follow_app_theme, go_to
 
-__version__ = "2026.11.05a"
+__version__ = "2026.11.12a"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 
@@ -27,8 +27,13 @@ VIEWS = ["🧬 Genetic code", "🔤 Amino acids"]
 CARD_HEIGHT = 250
 
 
-def render() -> None:
-    """Draw the Reference screen."""
+def render(settings: Settings) -> None:
+    """Draw the Reference screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title("📐 Reference")
     st.markdown(
         "The two tables you look up rather than work out. Neither is typed in: "

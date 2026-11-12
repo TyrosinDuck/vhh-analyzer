@@ -12,12 +12,12 @@ import html
 import streamlit as st
 
 from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
-                   ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION,
-                   current_sequences, embed_html, footer, go_to,
-                   follow_app_theme, group_header_html, report_url,
-                   sections_by_group, usage_mailto, usage_url)
+                   ISSUES_URL, LICENCE, REPO_URL, SECTIONS, VERSION, Settings,
+                   current_sequences, embed_html, go_to, follow_app_theme,
+                   group_header_html, report_url, sections_by_group,
+                   usage_mailto, usage_url)
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 # Drawn as inline SVG rather than with a diagramming library: it is a few boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -274,8 +274,13 @@ def _card(key: str, height: str = "content") -> None:
                   type="primary", **FIT, on_click=go_to, args=(key,))
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title(f"{APP_ICON} {APP_NAME}")
     st.markdown(
         "A workbench for single-domain antibodies: characterize them, pull them out "

@@ -15,9 +15,9 @@ import streamlit as st
 
 import buffers as bf
 from compute import load_buffers_cached
-from shell import FIT, SECTIONS
+from shell import FIT, SECTIONS, Settings
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 V_RECIPE = "📖 From a recipe"
 V_CUSTOM = "🧪 Compose one"
@@ -28,8 +28,13 @@ VIEWS = [V_RECIPE, V_CUSTOM]
 CUSTOM_UNITS = ["mM", "M", "uM", "g/L", "mg/mL", "ug/mL", "% w/v", "% v/v"]
 
 
-def render() -> None:
-    """Draw the Buffers & media screen (key "buffers")."""
+def render(settings: Settings) -> None:
+    """Draw the Buffers & media screen (key "buffers").
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     icon, label, *_ = SECTIONS["buffers"]
     st.title(f"{icon} {label}")
     st.markdown(

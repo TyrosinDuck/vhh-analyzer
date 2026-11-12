@@ -13,9 +13,9 @@ import pandas as pd
 import streamlit as st
 
 import bench as bn
-from shell import FIT, SECTIONS
+from shell import FIT, SECTIONS, Settings
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.12d"
 
 V_TITRE = "🧪 Titre"
 V_ENRICHMENT = "📈 Enrichment"
@@ -39,8 +39,13 @@ D_FACTOR = "the factor (1000 = 10^-3)"
 DILUTION_MODES = [D_POWER, D_FACTOR]
 
 
-def render() -> None:
-    """Draw the Phage & panning screen (key "phage")."""
+def render(settings: Settings) -> None:
+    """Draw the Phage & panning screen (key "phage").
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     icon, label, *_ = SECTIONS["phage"]
     st.title(f"{icon} {label}")
     st.markdown(

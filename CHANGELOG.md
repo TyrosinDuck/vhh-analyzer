@@ -125,6 +125,62 @@ ran, from its Zenodo record.
 
 ### Changed
 
+- **`app.py` is a router again, and holds no list of the screens.** It had
+  one: an `if section == ...` block per section, each calling that screen's
+  `render` with its own arguments, which made it a second list beside
+  `shell.SECTIONS`. Adding a section meant editing both, nothing checked the
+  router, and a section missing from it is a section that cannot be opened.
+  Every screen is now `render(settings)`, one frozen `shell.Settings` carrying
+  the pH, the profile window and the annotation method, so the router looks
+  the section up in the same dict it has just version-checked and calls it.
+  The set of screens comes from `shell.screen_keys()`, which reads `SECTIONS`
+  and the new `shell.UTILITIES` (the manual and the reference tables, which
+  belong to no group and used to be written out in the sidebar). Adding a
+  section is one entry in `SECTIONS`, one file in `sections/` and one line in
+  `REQUIRED_MODULES`; three tests fail if a screen is unreachable, missing
+  from the version check, or has drifted from the signature.
+  The same pass removed what the screens left behind when they moved out of
+  `app.py` in the first place: 89 of its 116 imported names were unused,
+  including all 62 pulled from `compute`, and about 150 lines of comments
+  describing code that is no longer there, under headings like "Cached
+  workers" followed by nothing. The file is 559 lines of which 215 were blank.
+  No behaviour changed, with one exception worth naming: a `section` key that
+  no longer exists, which can only come from a session older than a rename,
+  now lands on the home page instead of falling through to the analysis
+  screen.
+
+- **The Structure screen no longer computes in the drawing layer.** It called
+  `structure.load_structure` directly three times, once in the liability view
+  and twice in the 3D view, and annotated the liabilities itself, while
+  `compute.py` exists to hold exactly that and cache it. Two cached helpers,
+  `st_liabilities` and `st_viewer_html`, now serve both views, so the
+  liability view and the viewer's "exposed liabilities" highlight share one
+  table instead of each building it. Measured, on a CA-only 128-residue
+  synthetic PDB, one parse is 1.37 ms: the parse was never the expensive part
+  and this is a consistency fix, not a speed one. The annotation on the same
+  screen is a different matter. It ran `classify` and `annotate` on every
+  rerun, which under the default "auto" means ANARCI, which means an HMMER
+  subprocess for every widget touched on that screen; both now go through
+  `classify_cached` and the new `annotation_for`.
+
+- **The README is a front door rather than a second manual.** It carried its
+  own account of the in-silico cloning, the Sanger workflow, the synthetic
+  generator, what every tab reports and the caveats, all of which `MANUAL.md`
+  documents, and the two had drifted: the tab table still described six tabs
+  that had become families and said nothing of the four sections added since,
+  and the caveat list named neither the structure section nor the buffers nor
+  a panning enrichment. Those sections are now a short table of what to read
+  where, keeping the two things that are about the repository rather than
+  about using the app: how to add a Sanger vector, and the PLAbDab-nano
+  attribution. What stays in the README stays because nothing else carries
+  it.
+  Its file table also kept a line count per file, typed by hand, of which
+  eleven of thirteen were wrong, `shell.py` by 478 lines; the column is gone.
+  The section table is now generated from `shell.SECTIONS` by
+  `tools/readme_sections.py` between two markers, with a test that fails when
+  it is stale, so the descriptions a reader of the README sees are the ones
+  the home page and the sidebar show, in the same words.
+
 - **Both extinction coefficients in Sequence analysis, and the mass in Da.**
   The Properties table showed only the extinction coefficient with every
   cysteine reduced, and the A280 factor derived from it, while Batch & QC
@@ -162,6 +218,33 @@ ran, from its Zenodo record.
   time; on 1500 random pairs, in 966. Both definitions are kept.
 
 ### Fixed
+
+- **The reference comparison said `[Errno 2] No such file or directory:
+  'hmmscan'`.** It is the one view in the app with no fallback: positions are
+  matched by IMGT number, only ANARCI produces one per residue, and ANARCI
+  shells out to HMMER, which no `pip install` brings in. The reference's own
+  numbering happens outside the per-sequence `try` in `compare_to_reference`,
+  so a missing binary did not become a per-sequence warning, it reached the
+  page as the operating system's message about a file nobody has heard of.
+  The view now checks first and says which half is missing, the package or
+  the binary, with the command for each platform, and that the rest of the
+  app falls back to the regex anchors while a position-by-position comparison
+  cannot. `shell.anarci_requirement()` is what tells the two apart, including
+  the case where both are installed and numbering still fails, which usually
+  means ANARCI's germline HMM files are absent.
+  The person most likely to have met this is the one who followed the app's
+  own privacy notice: it sends confidential work to a local clone, and
+  `pip install -r requirements.txt` installs ANARCI without HMMER. The suite
+  now asserts in both directions, from `conftest.HAS_HMMER`: with HMMER the
+  comparison must still compute, without it the screen must name what to
+  install. Checked both ways, by running the suite with HMMER installed and
+  again with `hmmscan` moved out of the path.
+
+- **A broken bullet in the README's data-handling section.** An edit had
+  folded the alignment and the uploads entries into one another, parenthesis
+  and all, leaving a sentence that read as neither. The cache knobs it names
+  were also still said to live in `app.py`; they have been in `shell.py`
+  since the chrome moved there.
 
 - **The PDF summary table could put a header over the wrong column.** It
   cut its list of headers to the number of columns present, so a missing

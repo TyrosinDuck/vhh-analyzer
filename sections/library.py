@@ -13,13 +13,18 @@ import streamlit as st
 
 import library as lib
 from compute import load_library_cached
-from shell import FIT, footer, go_to
+from shell import FIT, Settings, go_to
 
-__version__ = "2026.10.28c"
+__version__ = "2026.11.12a"
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title("📚 Sequence library")
     st.markdown(
         "The sequences you come back to, kept as a file in the repository so "

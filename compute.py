@@ -44,7 +44,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -64,6 +64,18 @@ def _analyze_one(name: str, seq: str, ph: float, method: str):
 def classify_cached(seq: str, method: str):
     """What kind of sequence this is, ANARCI numbering, so worth caching."""
     return vc.classify(seq, method=method)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
+def annotation_for(seq: str, method: str):
+    """CDR/framework annotation for one sequence, and the method used.
+
+    Same reason as `classify_cached`: under "auto" or "anarci" this runs
+    ANARCI, which shells out to HMMER, so a screen that annotates its sequence
+    on every rerun pays a subprocess for every widget the user touches. The
+    structure screen did exactly that.
+    """
+    return vc.annotate(seq, method)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
@@ -548,6 +560,50 @@ def st_patches(raw: bytes, name: str, chain: str, min_rel: float,
     return stx.surface_patches(stx.load_structure(raw, name), chain,
                                min_rel_sasa=min_rel, contact=contact,
                                min_size=min_size)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_liabilities(raw: bytes, name: str, chain: str, chain_seq: str,
+                   target_seq: str, annotation: dict | None) -> pd.DataFrame:
+    """The sequence's liability motifs, placed on the model and scored buried
+    or exposed.
+
+    The liabilities themselves come from the sequence, which is why the whole
+    app can flag them; what the model adds is whether each one is actually on
+    the surface. Two views want exactly this table, the liability view and the
+    viewer's "exposed liabilities" highlight, and they used to compute it
+    themselves inside the screen, which is both the cache this file exists to
+    hold and the only computation the screen was doing.
+    """
+    return stx.annotate_liabilities(vc.find_liabilities(target_seq, annotation),
+                                    stx.load_structure(raw, name), chain,
+                                    chain_seq, target_seq)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_viewer_html(raw: bytes, name: str, chain: str, colour_by: str,
+                   highlight: tuple[int, ...], surface: bool) -> str:
+    """The 3Dmol.js page for one structure, one colouring and one selection.
+
+    Keyed on what the viewer is actually showing rather than on the tables it
+    needs: the exposure and confidence frames are fetched from their own
+    cached helpers in here, so a rerun that changes neither the colouring nor
+    the selection, which is every rerun caused by another widget on the page,
+    rebuilds no HTML and re-parses no structure.
+
+    `highlight` is a tuple and not a list because a cached function's
+    arguments have to hash, and because the selection is a value here, not
+    something to be appended to.
+    """
+    return stx.viewer_html(
+        stx.load_structure(raw, name),
+        raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw,
+        colour_by=colour_by, chain_id=chain,
+        exposure=(st_exposure(raw, name, chain)
+                  if colour_by == "exposure" else None),
+        confidence=(st_confidence(raw, name, chain)
+                    if colour_by == "confidence" else None),
+        highlight=list(highlight) or None, surface=surface)
 
 
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=2)

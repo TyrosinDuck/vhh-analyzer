@@ -12,13 +12,18 @@ import streamlit as st
 
 import sanger as sg
 from compute import png_quality, process_ab1
-from shell import FIT, footer, go_to
+from shell import FIT, Settings, go_to
 
-__version__ = "2026.10.28c"
+__version__ = "2026.11.12a"
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title("🧪 Sanger sequencing")
     st.markdown(
         "Upload the chromatograms from a screening run. Each read is quality-trimmed, "

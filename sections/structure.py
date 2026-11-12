@@ -17,24 +17,27 @@ import streamlit as st
 import af3
 import structure as stx
 import vhh_core as vc
-from compute import (st_af3_full, st_af3_index, st_af3_member, st_confidence, st_disulfides, st_exposure,
-                     st_identity_map, st_interface, st_interface_summary,
-                     st_load, st_patches, st_resnum_map)
-from shell import FIT, current_sequences, embed_html, footer
+from compute import (annotation_for, classify_cached, st_af3_full,
+                     st_af3_index, st_af3_member, st_confidence, st_disulfides,
+                     st_exposure, st_identity_map, st_interface,
+                     st_interface_summary, st_liabilities, st_load, st_patches,
+                     st_resnum_map, st_viewer_html)
+from shell import FIT, Settings, current_sequences, embed_html, footer
 
-__version__ = "2026.11.04b"
+__version__ = "2026.11.12a"
 
 
-def render(method: str) -> None:
+def render(settings: Settings) -> None:
     """Draw the Structure screen.
 
-    ``method`` is the CDR annotation method from the sidebar. It is passed in
-    rather than read from a global: this screen used to live in `app.py`'s
-    module scope, where its own ``kinds`` assignment silently overwrote the
-    analysis screen's variable of the same name. Nothing broke, because two
-    screens never render in the same run - but a function scope removes the
-    whole class of accident rather than the one instance of it.
+    ``settings.method`` is the CDR annotation method from the sidebar. It is
+    passed in rather than read from a global: this screen used to live in
+    `app.py`'s module scope, where its own ``kinds`` assignment silently
+    overwrote the analysis screen's variable of the same name. Nothing broke,
+    because two screens never render in the same run - but a function scope
+    removes the whole class of accident rather than the one instance of it.
     """
+    method = settings.method
     st.title("🧊 Structure")
     st.markdown(
         "Every other section of this app reasons from sequence alone, because a "
@@ -210,11 +213,14 @@ behalf would mean this server making requests that look like they came from you.
         else:
             st.caption(message)
 
+    # Cached, both of them: under "auto" these run ANARCI, which shells out to
+    # HMMER, and this block runs on every rerun of the screen, which means
+    # every widget the user touches on it.
     annotation = None
     try:
-        kinds = vc.classify(target_seq)
+        kinds = classify_cached(target_seq, method)
         if kinds.get("full_analysis"):
-            annotation, _ = vc.annotate(target_seq, method)
+            annotation, _ = annotation_for(target_seq, method)
     except Exception:
         annotation = None
 
@@ -400,17 +406,15 @@ behalf would mean this server making requests that look like they came from you.
             "is on the surface or packed into the core. A buried motif is "
             "largely inert. An exposed one in a CDR is a real problem.")
         try:
-            liab = vc.find_liabilities(target_seq, annotation)
+            joined = st_liabilities(raw, fname, chain, chain_seq, target_seq,
+                                    annotation)
         except Exception as exc:
             st.error(f"Liabilities could not be computed: {exc}")
-            liab = None
-        if liab is not None:
-            if not len(liab):
+            joined = None
+        if joined is not None:
+            if not len(joined):
                 st.success("No liability motifs were found in the sequence.")
             else:
-                model = stx.load_structure(raw, fname)
-                joined = stx.annotate_liabilities(liab, model, chain,
-                                                  chain_seq, target_seq)
                 order = {"exposed": 0, "intermediate": 1,
                          "buried": 2, "not modelled": 3}
                 joined = joined.assign(
@@ -633,11 +637,11 @@ behalf would mean this server making requests that look like they came from you.
                     highlight = [int(re.sub(r"\D", "", token))
                                  for token in patches.iloc[0]["residues"].split(", ")]
             elif highlight_what == "exposed liabilities":
-                # annotate_liabilities already carries the model's own residue
-                # numbers, which is exactly what the viewer selects on.
-                joined = stx.annotate_liabilities(
-                    vc.find_liabilities(target_seq, annotation),
-                    stx.load_structure(raw, fname), chain, chain_seq, target_seq)
+                # st_liabilities already carries the model's own residue
+                # numbers, which is exactly what the viewer selects on, and it
+                # is the same cached table the liability view draws.
+                joined = st_liabilities(raw, fname, chain, chain_seq,
+                                        target_seq, annotation)
                 highlight = [int(n) for n, e in zip(joined["resnum"],
                                                     joined["exposure"])
                              if e == "exposed" and n is not None]
@@ -645,16 +649,8 @@ behalf would mean this server making requests that look like they came from you.
             st.caption(f"Nothing to highlight ({exc}).")
 
         try:
-            html = stx.viewer_html(
-                stx.load_structure(raw, fname),
-                raw.decode("utf-8", errors="replace") if isinstance(raw, bytes)
-                else raw,
-                colour_by=colour_by, chain_id=chain,
-                exposure=st_exposure(raw, fname, chain)
-                if colour_by == "exposure" else None,
-                confidence=st_confidence(raw, fname, chain)
-                if colour_by == "confidence" else None,
-                highlight=highlight or None, surface=surface)
+            html = st_viewer_html(raw, fname, chain, colour_by,
+                                  tuple(highlight), surface)
             embed_html(html, height=540)
         except Exception as exc:
             st.error(f"The 3D view could not be rendered: {exc}")

@@ -4,16 +4,25 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23742269.svg)](https://doi.org/10.5281/zenodo.23742269)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-A web front-end for sequence-level characterization of VHH / single-domain
-antibodies:
-physico-chemical descriptors, CDR/framework annotation (ANARCI or regex
-anchors),
-plots and multiple sequence alignment.
+A web application for working with VHH / single-domain antibodies, from the
+sequences a panning campaign ends with to the tube the purified protein ends
+up in: physico-chemical descriptors, CDR/framework annotation (ANARCI or regex
+anchors), developability liabilities, alignment and clonal families, measured
+properties from a structure you upload, codon-optimised DNA and in-silico
+cloning, and the bench arithmetic around a batch (concentration from an A280,
+buffers, phage titres, a batch sheet).
 
 ```
-vhh_webapp/
-├── vhh_core.py        all analysis logic, no Streamlit, no notebook dependency
-├── app.py             Streamlit front-end
+vhh-analyzer/
+├── app.py             the router: version check, sidebar, one call per screen
+├── shell.py           the chrome shared by every screen, and the cache policy
+├── compute.py         every cached computation, and nothing that draws
+├── sections/          one module per screen; a screen draws, it does not compute
+├── vhh_core.py        the analysis, importable without Streamlit
+├── structure.py  bench.py  buffers.py  cloning.py  codons.py  ...  the rest of it
+├── data/              the sequence library, codon usage, buffer recipes, reference SVGs
+├── tests/             pytest, including smoke tests that drive the whole app
+├── paper/             the JOSS manuscript draft and its bibliography
 ├── requirements.in    pip dependencies, as ranges: the file you edit
 ├── requirements.txt   generated from it by pip-compile, every version pinned
 ├── packages.txt       apt dependencies (HMMER, the ANARCI backend)
@@ -22,9 +31,10 @@ vhh_webapp/
     └── config.toml
 ```
 
-`vhh_core.py` is the single source of truth. The notebook and the web app both
-import
-it, so a fix to a descriptor propagates to both instead of drifting apart.
+The analysis modules are the single source of truth. A notebook and the web app
+both import them, so a fix to a descriptor propagates to both instead of
+drifting apart, and that is also why changing a `vhh_core.py` signature is a
+MAJOR release even when the app looks identical.
 
 ## Documentation
 
@@ -48,36 +58,45 @@ floor on codon substitutions, and the back-translation preference order.
 
 ## Files
 
-| File | Lines | What it is |
-|---|---|---|
-| `app.py` | 459 | the router: version check, sidebar, and one call per screen |
-| `shell.py` | 170 | the chrome: identity, navigation, `footer()`, caching policy |
-| `compute.py` | 508 | every cached computation, and nothing that draws |
-| `sections/analysis.py` | 1804 | the Sequence analysis screen, six families |
-| `sections/structure.py` | 619 | the Structure screen |
-| `sections/bench.py` | ~330 | the Batch & QC screen |
-| `sections/buffers.py` | ~240 | the Buffers & media screen |
-| `buffers.py` | ~470 | recipe loading and checking, formulas, molar masses, preparation arithmetic |
-| `sections/phage.py` | ~320 | the Phage & panning screen |
-| `sections/cloning.py` | 331 | the In-silico cloning screen |
-| `sections/genes.py` | 273 | the Gene diagnosis screen |
-| `sections/sequencing.py` | 150 | the Sanger screen |
-| `sections/library.py` | 145 | the Sequence library screen |
-| `sections/home.py`, `sections/manual.py` | 100 | the landing page and the manual |
+| File | What it is |
+|---|---|
+| `app.py` | the router: version check, sidebar, and one call per screen |
+| `shell.py` | the chrome: identity, navigation, `footer()`, caching policy |
+| `compute.py` | every cached computation, and nothing that draws |
+| `sections/analysis.py` | the Sequence analysis screen, six families |
+| `sections/structure.py` | the Structure screen |
+| `sections/bench.py` | the Batch & QC screen |
+| `sections/buffers.py` | the Buffers & media screen |
+| `sections/phage.py` | the Phage & panning screen |
+| `sections/cloning.py` | the In-silico cloning screen |
+| `sections/genes.py` | the Gene diagnosis screen |
+| `sections/sequencing.py` | the Sanger screen |
+| `sections/library.py` | the Sequence library screen |
+| `sections/home.py`, `sections/manual.py`, `sections/reference.py` | the landing page, the manual and the reference tables |
 
-Plus the science, which the screens only arrange: `vhh_core.py` (2821),
-`cloning.py` (1157), `structure.py` (1041), `codons.py` (775), `bench.py`,
-`repertoire.py`,
-`sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`.
+Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
+`structure.py`, `codons.py`, `bench.py`, `buffers.py`, `repertoire.py`,
+`sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`,
+`reference.py`, `af3.py`.
+
+This table used to carry a line count per file, typed in by hand. It drifted,
+which is what a hand-kept count of something the repository already knows does:
+eleven of its thirteen numbers were wrong, `shell.py` by 478 lines. `wc -l` is
+one command and is never out of date.
 
 `app.py` was a single 3 911-line script until the screens were pulled out of
 it.
-Two rules keep it from growing back:
+Three rules keep it from growing back:
 
 - **A screen module draws; it does not compute.** Anything cached belongs in
   `compute.py`, where the whole caching policy can be read in one file instead
 of
-  found in fifty-seven decorators spread through three thousand lines of UI.
+  found in a few dozen decorators spread through three thousand lines of UI.
+- **The router holds no list of the screens.** Every screen is
+  `render(settings)`, one signature, so `app.py` dispatches by looking the
+  section up rather than by an `if` per section. It used to carry one, which
+  made it a second list beside `shell.SECTIONS`: adding a section meant
+  editing the router too, and nothing checked the router.
 - **Nothing reads a global from another screen.** Every screen is a `render()`
   function, which is not tidiness: in the old module-scope version the
 Structure
@@ -98,19 +117,27 @@ and
 
 The app opens on a home page with nine sections in three groups, Protein,
 DNA and Bench, also reachable from the sidebar, which carries a **Home**
-button on every screen:
+button on every screen. The table below is generated from `shell.SECTIONS`,
+which is also what the home page cards and the sidebar read, by
+`python tools/readme_sections.py`; a test fails when it is stale, so do not
+edit it by hand. Every screen is documented at length in `MANUAL.md`, §2 for
+getting around and one section each after that.
+
+<!-- generated: sections, by tools/readme_sections.py -->
 
 | Group | Section | What it does |
 |---|---|---|
-| **Protein** | **Sequence analysis** | any protein is accepted and classified; generic characterization for all, antibody analyses for VHH and VH, CDR/framework annotation, hallmarks, humanness, liabilities and suggested repairs, disulfides, aggregation-prone regions, alignment and logo, clonal families, codon-optimised DNA, construct builder, PDF report |
-| | **Structure** | upload a PDB, mmCIF or AlphaFold model: measured SG–SG disulfides, relative solvent accessibility, which flagged liabilities are actually exposed, hydrophobic surface patches, the ΔSASA interface and epitope of a complex, and a 3Dmol.js viewer |
-| | **Sequence library** | a curated list kept in `data/library.csv`: filter it, then send proteins to the analysis or DNA to gene diagnosis. Read-only in the app and public in the repo, by design |
-| **DNA** | **Sanger sequencing** | extract VHHs from .ab1 chromatograms, then send the selected clones to the analysis section |
-| | **Gene diagnosis** | paste coding sequences that already exist, several at once: frame and stop checks, rare codons and their clusters, GC stretches, homopolymers, CAI against the measured *E. coli* usage table, plus synonymous swaps that lower GC without touching the protein, floored on real codon usage |
-| | **In-silico cloning** | backbone + insert → restriction enzymes that fit, primers that actually bind, plasmid map |
-| **Bench** | **Batch & QC** | the arithmetic between a purified protein and the next experiment: concentration from a measured A280 with the sequence's own extinction coefficient, whether a measured mass is the protein you think it is and what the difference would be, how much labelling reagent to add with the volumes you can actually pipette, a purification balance step by step, and a one-page batch sheet with a JSON record that reloads it |
-| | **Buffers & media** | what to weigh for a buffer or a medium at any volume and concentration factor, with the hydrate you have: molar masses derived from the formulas with the CIAAW atomic weights. The recipes are the laboratory's own, in `data/buffers/`, read-only in the app like the library, or composed on the spot from the compounds |
-| | **Phage & panning** | the titre of a phage stock from an A260, by two routes shown side by side, the volume a round of panning takes, and the enrichment of a round from the colony counts of its + and - plates, each with its own dilution |
+| **Protein** | **🔬 Sequence analysis** | Characterize VHHs you provide: physico-chemical properties, CDR/framework annotation, hallmarks and germline, liabilities, alignment, codon-optimised DNA and a PDF report. |
+|  | **🧊 Structure** | Upload a PDB, mmCIF or AlphaFold model and replace the sequence-based guesses with measurements: which cysteines actually pair, which liabilities are buried and which are exposed, where the hydrophobic surface is, and, for a complex, which residues contact the antigen. |
+|  | **📚 Sequence library** | The sequences you come back to, kept in the repository and one click away: send the proteins to the analysis section or the DNA to gene diagnosis, instead of pasting them again. |
+| **DNA** | **🧪 Sanger sequencing** | Upload .ab1 chromatograms from a screening run, extract the VHH sequences from the expression cassette, spot frameshifts and duplicates, then send the clones you want to the analysis. |
+|  | **🔧 Gene diagnosis** | Paste coding sequences that are already in a plasmid and ask what might be wrong with them: frame and stop checks, documented rare codons and their clusters, GC stretches, plus synonymous swaps that lower GC without touching the protein. |
+|  | **🧬 In-silico cloning** | Load a backbone and an insert, and get the restriction enzymes that open the vector in the right place without cutting the VHH, plus which of your primers actually bind. |
+| **Bench** | **⚗️ Batch & QC** | The arithmetic between a purified protein and the next experiment: concentration from a measured A280, whether the measured mass is the protein you think it is, how much labelling reagent to add, what each purification step recovered, and the batch sheet that leaves with the tube. |
+|  | **🧂 Buffers & media** | What to weigh for a buffer or a medium at any volume and concentration factor, with the hydrate of each salt you actually have: the mass follows from its formula. The recipes are the laboratory's own, kept in the repository. |
+|  | **🦠 Phage & panning** | The phage stocks that go into each round of panning: the titre from an A260, by two routes shown side by side, and how much stock a solid-phase or liquid-phase round takes. No sequence needed. |
+
+<!-- /generated: sections -->
 
 They share one sequence list: what you load in the analysis section is what the
 cloning section offers as an insert, the sequencing section writes into it, the
@@ -244,12 +271,13 @@ to a third party**. They are parsed into memory and analysed there. Precisely:
 - **Result cache**: `@st.cache_data` keeps results in the server process memory, keyed
   on the input. It is shared by the whole process rather than per session, so
 it is
-  capped at 8 entries and 10 minutes (`CACHE_TTL` / `CACHE_MAX_ENTRIES` in
-`app.py`).
-  Set `CACHE_TTL = 0` to disable caching entirely; the analysis takes well
-under a
+  capped at 8 entries and 10 minutes (`CACHE_TTL` and `CACHE_MAX_ENTRIES` in
+  `shell.py`, which every cached function in `compute.py` reads). Set
+  `CACHE_TTL = 0` to disable caching entirely; the analysis takes well under a
   second, so the only cost is slightly less snappy sidebar controls.
-- **Alignment** (`pymsaviz` reads from a path, so the aligned FASTA is written to a `TemporaryDirectory` that is deleted as soon as the figure is rendered. - **Uploads**) handled in memory by Streamlit, never written to disk by this app.
+- **Alignment**: `pymsaviz` reads from a path, so the aligned FASTA is written
+  to a `TemporaryDirectory` that is deleted as soon as the figure is rendered.
+- **Uploads**: handled in memory by Streamlit, never written to disk by this app.
 - **Hosting**: on Community Cloud the app runs on third-party infrastructure. Traffic
   is encrypted and nothing is stored, but the data does transit a server you do
 not own.
@@ -284,161 +312,46 @@ def _my_descriptor(seq, ctx):
 
 A feature that raises returns `NaN` rather than breaking the run.
 
-## In-silico cloning
+## What each screen does
 
-One screen, three steps: pick the recipient vector, paste the donor DNA, read
-the
-plan.
+`MANUAL.md` documents every screen, what each number means and how far to
+trust it, and the app renders it from the same file, so there is one text and
+not two. It used to be summarised here as well, screen by screen, and the two
+drifted: by this release the summary still described six tabs that had become
+families, and said nothing of the four sections added since.
 
-Five vectors ship with the app (pMECS, pMES3, pMES4, pHEN6, pHEN25) in
-`data/plasmids/`; you can upload your own in SnapGene, GenBank or FASTA. The
-donor is
-either a whole plasmid carrying the VHH (the app then finds the domain, picks
-the primer pair that brackets it and amplifies it in silico) or a fragment
-already
-amplified with primers, which must carry the restriction sites those primers
-added. A
-bare coding sequence cannot be cloned by restriction, and the app says so
-rather than
-failing quietly.
+| For | Read |
+|---|---|
+| what a screen does, field by field | `MANUAL.md` §3 to §12, one per section |
+| what the numbers do not mean | `MANUAL.md` §15, every caveat in one place |
+| how your sequences are handled | `MANUAL.md` §13, and "Data handling" above |
+| running it on your own machine | `MANUAL.md` §14, and "Run locally" above |
+| when something looks wrong | `MANUAL.md` §16, troubleshooting |
 
-The insert always lands between the end of the signal peptide and the first
-tag.
-Every candidate enzyme pair is actually cut, joined and translated, then the
-VHH the
-construct encodes is compared with the VHH in the donor. A pair is only
-recommended
-when the protein survives unchanged *and* nothing annotated in the vector is
-deleted, HindIII + BstEII translates perfectly on pMES3 while removing 120 bp
-that include the
-PelB leader, so it is rejected.
+Two things that live here rather than in the manual, because they are about
+the repository rather than about using the app:
 
-Among the pairs that pass, the one disturbing the vector least is recommended,
-which
-on these vectors is PstI + BstEII.
-
-Three things worth knowing about the protein check:
-
-- A fragment amplified with primers starts at the 5' restriction site, a few codons
-  into FR1, so the first residues of the cloned VHH necessarily come from the
-  recipient. The app reports this as *donor part preserved* and names the
-residues
-  added, rather than calling it a mismatch.
-- The vectors do not all start the domain the same way: **pMECS begins QVQLQ and
-  pHEN25 begins EVQLQ**. Moving a VHH from pMECS into pHEN25 through PstI
-therefore
-  changes residue 1, and that pair is rejected, NcoI + BstEII is proposed
-instead,
-  because its site sits upstream of the difference.
-- There is deliberately no "insert length must be a multiple of 3" test. An empty
-  phage-display vector carries a stuffer, so its downstream tag is usually out
-of
-  frame with the leader until a correctly sized VHH is cloned in. Translating
-the
-  finished construct is the only check that means anything.
-
-The verified construct downloads as GenBank, annotated with the insert and the
-cassette parts, plus a protocol summary. Primers live in `data/primers.csv` (or
-upload
-your own CSV with `name,sequence`); each is tried as written and as its reverse
-complement, because a primer is often noted as the plus-strand sequence of its
-target
-rather than as the oligo that primes back towards the insert.
-
-## Sanger (.ab1) workflow
-
-The panel under the input area takes the chromatograms from a screening run and
-turns
-them into sequences you can analyse:
-
-1. each read is quality-trimmed with Mott's algorithm (the one phred and Staden use);
-2. the PelB–VHH–tag cassette is located in **any strand and any reading frame**, so
-   forward and reverse reads are handled without being told which is which;
-3. the VHH protein and DNA sequences are extracted, with frameshifts, premature stops,
-   missing tags and truncated reads reported rather than silently returned;
-4. identical protein sequences are grouped, so the same colony picked twice shows up as
-   one sequence with a copy count;
-5. you pick the ones you want and send them straight to the analysis above.
-
-Supported vectors are pMES3 and pMECS, they differ only in which tags are
-expected
-after the VHH. Add one in `sanger.VECTORS`, taking the layout from the actual
-plasmid
+**Adding a Sanger vector.** The Sanger screen expects the PelB-VHH-tag
+cassette of pMES3 or pMECS, which differ only in the tags expected after the
+VHH. Add one in `sanger.VECTORS`, taking the layout from the actual plasmid
 map: a wrong tag layout makes the app report missing tags on clones that are
 fine.
 
-Everything is downloadable: the full per-read table as CSV, and the extracted
-VHHs as
-protein or DNA FASTA.
-
-## Synthetic sequence generator
-
-`generator.py` builds VHH sequences whose frameworks are sampled from an IMGT
-position-frequency matrix derived from real data, with random CDRs whose
-lengths come
-from the same reference set. The bundled matrix is built from **PLAbDab-nano**
-(OPIG,
-University of Oxford), 1958 unique VHH sequences, `data/vhh_position_freq.csv`
-and
-`data/vhh_position_meta.json`.
+**The synthetic generator's reference set.** `generator.py` samples frameworks
+from an IMGT position-frequency matrix built from **PLAbDab-nano** (OPIG,
+University of Oxford), 1958 unique VHH sequences, bundled as
+`data/vhh_position_freq.csv` and `data/vhh_position_meta.json`.
 
 > *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
 > literature*, [doi:10.1093/nar/gkae881](https://doi.org/10.1093/nar/gkae881).
 > Its data-availability statement reads: "PLAbDab-nano is freely available to
 > download and query at https://opig.stats.ox.ac.uk/webapps/plabdab-nano/."
 
-Please cite it if you publish work based on the generated sequences. What is
-bundled
-here is an **aggregate frequency matrix**, not the sequences themselves.
-
-Supply your own matrix to mimic your own library instead: same CSV shape, one
-row per
-IMGT position with `region`, `n_residues`, `occupancy` and the 20 amino-acid
-columns.
-
-## What the app reports
-
-| Family | Tab | Contents |
-|---|---|---|
-| (| Sequence type | each input classified from its sequence) VHH, conventional VH, light-chain V domain, a V domain inside a longer protein, or something else. VHH **and** conventional VH get the full heavy-chain analysis, labelled throughout; only the two camelid readings (FR2 hallmarks, extra CDR1–CDR3 disulfide) are flagged as such |
-| 🎯 Triage | Triage | every flag the app raises, one row per sequence, sortable, no composite score, deliberately |
-| 🔍 Identity | Properties | physico-chemical descriptors, developability flags, lysines and primary amines for conjugation planning, custom features |
-| 🔍 Identity | Plots | secondary-structure composition, titration curves, per-residue charge/hydropathy profiles, and a Chou–Fasman predicted-secondary-structure plot with a per-residue state track |
-| 🔍 Identity | CDR / Framework | region table, coloured sequences, both annotation methods explained |
-| 🔍 Identity | Hallmarks & germline | the four FR2 positions (IMGT 42/49/50/52) scored camelid vs VH-like, and the closest alpaca and human germline V/J genes with percent identity |
-| 🔍 Identity | Humanness | framework-only identity to the closest human germline V gene, computed position by position in IMGT numbering, with every divergent position listed and the hallmarks flagged |
-| ⚠️ Developability | Liabilities | N-glycosylation sequons, deamidation, isomerisation, fragmentation, oxidation, extra cysteines and hydrophobic patches, each with its position and region |
-| ⚠️ Developability | Disulfides | the canonical IMGT 23/104 pair, plausible additional CDR1–CDR3 or FR2–CDR3 pairs, and orphan thiols told apart |
-| ⚠️ Developability | Suggested repairs | one conservative substitution per liability, refusing structurally conserved positions, flagging CDR ones, with the repaired sequence and its new score |
-| ⚠️ Developability | Aggregation | per-residue aggregation-propensity profile and the weakest windows, a transparent composite, **not** CamSol or AGGRESCAN |
-| 🔗 Comparison | Alignment | FAMSA alignment with CDR bands, plus full-length and CDR3 identity matrices |
-| 🔗 Comparison | Sequence logo | logomaker logo of the alignment, frequency or bits, adjustable wrap, CDR bands, matrix downloadable as CSV |
-| 🔗 Comparison | vs Reference | positions differing from a chosen reference, matched by IMGT number so an indel reports as one change rather than shifting everything downstream |
-| 🌍 Repertoire | Repertoire | unusual framework residues against 1958 natural VHHs, and the submitted set's CDR lengths and composition against the same reference |
-| 🔗 Comparison | Clonal families | CDR3-based grouping of panning output, with an adjustable identity threshold, complete or average linkage, a dendrogram, and one representative per family |
-| 🧪 Outputs | DNA | back-translation into *E. coli* codon-optimised DNA, with restriction sites and homopolymer runs removed, GC balanced, and a round-trip verification |
-| 🧪 Outputs | Constructs | monovalent, bivalent or biparatopic assemblies with linkers and tags, characterised and back-translated as the finished protein |
-| 🧪 Outputs | Download | CSV, figures as PNG, and a complete PDF report |
-
-Three of these deserve a word of caution. The **Chou–Fasman plot** is a
-composition-based heuristic, roughly 50–60% accurate: it shows where the
-sequence
-tends towards each conformation, it does not predict the fold. The **DNA
-optimiser**
-maximises codon frequency, balances GC and removes cloning-unfriendly motifs,
-but it
-does not model mRNA secondary structure near the ribosome binding site,
-codon-pair
-bias or tRNA availability, run its output through your synthesis vendor's
-checker
-before ordering. Every back-translation is verified by translating it back and
-comparing to the input. The **hallmark score** is indicative: IMGT 49
-is shared with VH3, so 3/4 is common in genuine VHHs, and engineered constructs
-sit
-between the two profiles. **Germline identity** measures similarity to the
-closest
-germline gene, it is a first-pass humanness indicator, not an immunogenicity
-prediction.
+Please cite it if you publish work based on generated sequences. What is
+bundled here is an **aggregate frequency matrix**, not the sequences
+themselves. To mimic your own library instead, supply a matrix of the same CSV
+shape: one row per IMGT position, with `region`, `n_residues`, `occupancy` and
+the twenty amino-acid columns.
 
 ## Tests
 
@@ -743,17 +656,26 @@ and a DOI does not.
 
 ## Caveats
 
-- Every value is **theoretical**, derived from the sequence alone. Confirm pI by IEF or
-  cIEF and the extinction coefficient against a measured A280 before relying on
-them.
-- Secondary-structure fractions are composition-based propensities, **not** a structure
-  prediction. Use DSSP on a model (AlphaFold3, ESMFold) for real secondary
-structure.
-- The regex annotator assumes a canonical VHH scaffold. Where both methods run, a
-  disagreement between ANARCI and the regex anchors usually means a
-non-canonical
-  framework, worth investigating rather than ignoring.
-- The developability flags are triage thresholds, not a verdict. Tune them to your own
-  experimental data in `vhh_core.stability_flags`.
+Every caveat is kept in one place, `MANUAL.md` §15, because a second list of
+them is a list that goes out of date while reading as though it were complete.
+This one did: it carried four entries and never mentioned the structure
+section, the buffers or a panning enrichment.
 
-Built on Biopython (ProtParam), ANARCI, FAMSA (`pyfamsa`) and `pymsaviz`.
+The three that decide whether this tool is the right one at all:
+
+- Every sequence-derived value is **theoretical**. Confirm pI by IEF or cIEF
+  and the extinction coefficient against a measured A280 before relying on
+  either. The app says which of its numbers are measured, derived or
+  theoretical, and that distinction is the point of it.
+- Nothing here **predicts**. Not structure, not affinity, not immunogenicity,
+  not labelling efficiency, not expression. The structure section measures a
+  model you supply; the flags are triage heuristics with hand-set thresholds.
+- Where two methods disagree, the app shows both and does not choose, which is
+  a feature and not an omission: the two extinction coefficients, the two
+  phage-titre routes, ANARCI against the regex anchors.
+
+Built on Biopython (ProtParam), ANARCI, FAMSA (`pyfamsa`), `pymsaviz`,
+logomaker, `dna_features_viewer`, reportlab and 3Dmol.js.
+
+To tune the developability thresholds to your own experimental data, edit
+`vhh_core.stability_flags`.

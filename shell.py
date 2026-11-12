@@ -10,6 +10,7 @@ Nothing in here computes anything about a sequence. That is `compute.py`.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import io
 import re
@@ -33,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.12c"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -341,6 +342,38 @@ def anarci_status() -> bool:
     return vc.anarci_available()
 
 
+def anarci_requirement() -> str:
+    """Which half of the ANARCI requirement is missing, as a clause.
+
+    `anarci_status()` answers whether a sequence can be numbered, which is all
+    a screen needs in order to decide what to draw. It cannot say why not, and
+    the two halves are installed differently: the Python package comes from
+    `requirements.txt`, the HMMER binary it shells out to does not, it comes
+    from `packages.txt` on Community Cloud and from the system package manager
+    anywhere else. Telling someone "ANARCI is unavailable" when the package is
+    sitting there and only `hmmscan` is missing sends them to the wrong file.
+
+    Only worth calling once the probe has already failed. The last case, both
+    halves present and the probe still failing, is not hypothetical: HMMER
+    needs ANARCI's germline HMM files, which a partial install can leave out.
+    """
+    import importlib.util
+    import shutil
+
+    has_package = importlib.util.find_spec("anarci") is not None
+    has_hmmer = shutil.which("hmmscan") is not None
+    if not has_package and not has_hmmer:
+        return ("neither the `anarci` package nor the HMMER binary it calls "
+                "is installed here")
+    if not has_package:
+        return "the `anarci` package is not installed here"
+    if not has_hmmer:
+        return ("the `anarci` package is installed but HMMER is not, so "
+                "`hmmscan` cannot be found")
+    return ("both are installed, but numbering a test sequence still failed, "
+             "which usually means ANARCI's germline HMM files are missing")
+
+
 def go_to(target: str) -> None:
     """Switch section on the next rerun."""
     st.session_state["section"] = target
@@ -591,6 +624,73 @@ SECTIONS = {
               "sequence needed.",
               "Bench"),
 }
+
+# The two screens that belong to no group: what you consult rather than what
+# you run. They are not in SECTIONS because the home page builds a card per
+# section and the grouping covers every section, and these two would have to
+# be excluded from both. They are declared here all the same, rather than
+# written out in the sidebar, so that the router can reach them the same way
+# it reaches a section: `app.py` knows every screen from SECTIONS, UTILITIES
+# and the home page, and holds no list of its own.
+UTILITIES = {
+    "manual": ("📖", "Manual"),
+    "reference": ("📐", "Reference"),
+}
+
+# The key of the landing page. Named rather than spelt out in the three places
+# that need it (the default section, the Home button, the fallback for a
+# section key that no longer exists).
+HOME = "home"
+
+
+def screen_keys() -> list[str]:
+    """Every screen the router can draw, in the order the sidebar lists them.
+
+    This is the whole navigable surface of the app, derived from the three
+    declarations above rather than repeated: a screen is the home page, a
+    section, or a utility. `app.py` imports one module per key in this list,
+    checks its version and calls its `render`, which is why adding a section
+    is one entry in `SECTIONS` plus one file in `sections/` and nothing else.
+    """
+    return [HOME, *SECTIONS, *UTILITIES]
+
+
+@dataclasses.dataclass(frozen=True)
+class Settings:
+    """The analysis settings the sidebar collects, as a single argument.
+
+    Every screen's `render` takes this and nothing else, whether or not it
+    reads any of it. The alternative, each screen taking the arguments it
+    happens to need, is what made the router a second list beside `SECTIONS`:
+    the calls differed, so `app.py` carried one `if` per section, and adding a
+    section meant editing the router too. Nothing checked the router, and a
+    section missing from it is a section that cannot be opened.
+
+    A screen that ignores the argument pays one parameter name for that, which
+    is cheaper than the list. `test_navigation.py` checks that every screen
+    takes exactly this, so a screen whose signature drifts fails a test
+    instead of failing a click.
+
+    Frozen: a screen must not be able to change what the next one sees. These
+    belong to the sidebar that collected them.
+    """
+
+    ph: float
+    window: int
+    method: str
+
+    @classmethod
+    def defaults(cls) -> Settings:
+        """The settings a screen gets when the sidebar is not showing them.
+
+        The sliders are only drawn on the analysis screen, where they matter
+        and where their effect is visible. Every other screen that reads a pH
+        or an annotation method reads the same defaults `vhh_core` uses, so a
+        value never depends on whether the analysis screen was opened first.
+        """
+        return cls(ph=vc.DEFAULTS["ph"],
+                   window=vc.DEFAULTS["profile_window"],
+                   method=vc.DEFAULTS["annotation_method"])
 
 
 def sections_by_group() -> dict[str, list[str]]:

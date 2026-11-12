@@ -12,9 +12,9 @@ import streamlit as st
 import codons as cdn
 import vhh_core as vc
 from compute import diagnose_gene, gc_fix_for, gene_summary, png_gc_comparison, png_gene_diagnosis
-from shell import EXAMPLE, FIT, footer, go_to
+from shell import EXAMPLE, FIT, Settings, go_to
 
-__version__ = "2026.10.28c"
+__version__ = "2026.11.12a"
 
 
 def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
@@ -170,8 +170,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
         "values would give a number that looks precise and means nothing.")
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title("🔧 Gene diagnosis")
     st.markdown(
         "The reverse of designing a gene: paste coding sequences that already "

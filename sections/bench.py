@@ -22,10 +22,10 @@ import streamlit as st
 import bench as bn
 import vhh_core as vc
 from compute import analyze_one
-from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, current_sequences,
-                   footer, usage_prompt)
+from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
+                   current_sequences, usage_prompt)
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.12b"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -45,8 +45,14 @@ VIEWS = [V_QUANTIFY, V_MASS, V_CONJUGATE, V_BALANCE, V_BATCH]
 # view before asking for a sequence, through an early return in render().
 
 
-def render(ph: float, method: str) -> None:
-    """Draw the Batch & QC screen (key "bench")."""
+def render(settings: Settings) -> None:
+    """Draw the Batch & QC screen (key "bench").
+
+    Reads the pH and the annotation method, which decide the net charge and
+    the CDR annotation of the sequence the screen pulls properties from. The
+    profile window belongs to the analysis profiles and is ignored here.
+    """
+    ph, method = settings.ph, settings.method
     # From SECTIONS rather than written out, so the title follows a rename.
     icon, label, *_ = SECTIONS["bench"]
     st.title(f"{icon} {label}")

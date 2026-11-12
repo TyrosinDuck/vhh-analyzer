@@ -51,9 +51,16 @@ FASTA = "".join(f">Nb{i}\n{_FRAME.format(cdr3='DRGYSSSWYD' + last)}\n"
 # but not here would have been left out of every smoke test without a sound.
 import shell  # noqa: E402
 
+from conftest import HAS_HMMER  # noqa: E402
+
 SECTION_BUTTONS = [f"{icon} {label}"
                    for icon, label, *_ in shell.SECTIONS.values()]
-NAV = SECTION_BUTTONS + ["📖 Manual", "📐 Reference", "🏠 Home"]
+# The manual and the reference tables come from `shell.UTILITIES` for the same
+# reason: they were written out here, and a third screen added beside them
+# would have been navigated to by nothing.
+UTILITY_BUTTONS = [f"{icon} {label}"
+                   for icon, label in shell.UTILITIES.values()]
+NAV = SECTION_BUTTONS + UTILITY_BUTTONS + ["🏠 Home"]
 
 
 def _labels(app):
@@ -260,6 +267,45 @@ def test_identity_heatmap_selector_and_cdr3_note(app):
     assert any("**Alignment**" in n for n in notes), \
         "Clonal families should carry the same note"
     [r for r in app.radio if r.key == "id_view"][0].set_value("Full-length").run()
+
+
+def test_the_reference_comparison_says_what_it_needs_without_hmmer(app):
+    """Without HMMER this view used to show the operating system's errno.
+
+    `compare_to_reference` numbers the reference outside the per-sequence
+    `try`, so a missing `hmmscan` left the screen reading `Could not compare:
+    [Errno 2] No such file or directory: 'hmmscan'`. It is the only view in
+    the app with no regex fallback, and the person most likely to meet it is
+    the one who followed the privacy notice and cloned the repository, where
+    `pip install -r requirements.txt` brings in ANARCI and nothing brings in
+    HMMER.
+
+    Both branches assert: with HMMER the comparison must still compute, and
+    without it the screen must name what to install. A test that skipped here
+    would let that message disappear unnoticed on the only machines that see
+    it.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    selector = [r for r in app.radio if r.label == "Section"][0]
+    comparison = [o for o in selector.options if "Comparison" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(comparison).run()
+    _no_failure(app, "Comparison family")
+
+    said = " ".join(str(info.value) for info in app.info)
+    if HAS_HMMER:
+        assert "ANARCI" not in said, \
+            f"nothing is missing, so nothing should be explaining itself: {said!r}"
+        tables = [getattr(d.value, "data", d.value) for d in app.dataframe]
+        assert any({"name", "n_differences"} <= set(t.columns) for t in tables), \
+            "the reference comparison summary did not render"
+    else:
+        assert "ANARCI" in said and "HMMER" in said, \
+            f"the view did not say what it needs, it said: {said!r}"
+        assert "install hmmer" in said, \
+            "the message should carry the command that fixes it"
 
 
 @pytest.mark.parametrize("with_cf", [False, True])

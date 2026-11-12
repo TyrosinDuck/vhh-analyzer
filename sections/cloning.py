@@ -17,13 +17,18 @@ import streamlit as st
 import cloning as cl
 import sanger as sg
 from compute import load_plasmid_cached, plan_cloning_cached, png_plasmid_map, primer_report_cached
-from shell import FIT, footer
+from shell import FIT, Settings, footer
 
-__version__ = "2026.10.28c"
+__version__ = "2026.11.12a"
 
 
-def render() -> None:
-    """Draw the screen."""
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
     st.title("🧬 In-silico cloning")
     st.markdown(
         "Pick the recipient vector, paste the donor DNA, and the app works out which "
