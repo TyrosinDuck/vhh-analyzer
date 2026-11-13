@@ -1,0 +1,23 @@
+{
+ "schema": "vhh-toolbox-session/1",
+ "created_with": "1.1.0 (build 20261113.d981165)",
+ "created_utc": "2026-11-13T09:31:31Z",
+ "release": "1.1.0",
+ "build": "20261113",
+ "code": "d981165",
+ "runtime": {
+  "Python": "3.14.6",
+  "Streamlit": "1.66.1",
+  "Biopython": "1.88",
+  "ANARCI": "2026.2.13.2"
+ },
+ "settings": {
+  "ph": 7.4,
+  "window": 9,
+  "annotation_method": "auto",
+  "annotation_used": "ANARCI / IMGT"
+ },
+ "sequences": {
+  "Nb1": "QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKGRFTISRDNAKNTVYLQMNSLKPEDTAVYYCAADRGYSSSWYDWGQGTQVTVSS"
+ }
+}

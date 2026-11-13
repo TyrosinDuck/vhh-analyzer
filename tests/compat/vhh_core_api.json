@@ -1,0 +1,728 @@
+{
+ "release_major": 1,
+ "taken_at_release": "1.1.0",
+ "names": {
+  "APR_THRESHOLD": {
+   "callable": false
+  },
+  "CONSERVED_IMGT": {
+   "callable": false
+  },
+  "DEFAULTS": {
+   "callable": false
+  },
+  "FAMILY_DEFAULTS": {
+   "callable": false
+  },
+  "FEATURE_REGISTRY": {
+   "callable": false
+  },
+  "HEAVY_KINDS": {
+   "callable": false
+  },
+  "KIND_AMBIGUOUS": {
+   "callable": false
+  },
+  "KIND_FUSION": {
+   "callable": false
+  },
+  "KIND_OTHER": {
+   "callable": false
+  },
+  "KIND_VH": {
+   "callable": false
+  },
+  "KIND_VHH": {
+   "callable": false
+  },
+  "KIND_VL": {
+   "callable": false
+  },
+  "LIABILITY_REPAIRS": {
+   "callable": false
+  },
+  "MIN_LENGTH": {
+   "callable": false
+  },
+  "REGIONS": {
+   "callable": false
+  },
+  "REGION_COLORS": {
+   "callable": false
+  },
+  "SOLUBILITY_WEIGHTS": {
+   "callable": false
+  },
+  "VHH_KINDS": {
+   "callable": false
+  },
+  "aggregation_profile": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ph",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "window",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "weights",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "aggregation_regions": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "profile",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "threshold",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "min_length",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "aggregation_summary": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "profile",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "regions",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "analyze": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ph",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "method",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "anarci_available": {
+   "callable": true,
+   "parameters": []
+  },
+  "annotate": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "method",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "annotate_anarci": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "scheme",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "annotate_regex": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "apply_repairs": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "substitutions",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "characterize": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "name",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ph",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "classify": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "method",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "classify_all": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "method",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "clean_sequence": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "cluster_families": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotations",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "cutoff",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "linkage_method",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "require_same_length",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "region",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "compare_to_reference": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "reference",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "reference_name",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "compute_features": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ctx",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "disulfides": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "human_germlines": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "family",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "humanness": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "family",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "imgt_numbering": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "imgt_region": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "num",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "lysine_sites": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "pairwise_scores": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "a",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "b",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "parse_input": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "text",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "max_sequences",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "max_length",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_aggregation": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "profile",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "threshold",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "title",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_charge": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "df",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ph",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_differences": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "result",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "region_colors",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_family_dendrogram": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "result",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "title",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_logo": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotations",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "to_type",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "wrap_length",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "color_scheme",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "workdir",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "figwidth",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_msa": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotations",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "workdir",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "wrap_length",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_profiles": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seqs",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotations",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "window",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "plot_secondary_structure": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "df",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "protein_aligner": {
+   "callable": true,
+   "parameters": []
+  },
+  "region_of": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "position",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "register_feature": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "name",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "description",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "seq_id": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    }
+   ]
+  },
+  "stability_flags": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "row",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "ph",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "suggest_repairs": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "seq",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "liabilities",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "include_cdr",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  },
+  "weakest_windows": {
+   "callable": true,
+   "parameters": [
+    {
+     "name": "profile",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": false
+    },
+    {
+     "name": "annotation",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "n",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    },
+    {
+     "name": "width",
+     "kind": "POSITIONAL_OR_KEYWORD",
+     "default": true
+    }
+   ]
+  }
+ }
+}

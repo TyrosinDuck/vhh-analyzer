@@ -1,0 +1,5 @@
+# A sequence library as release 1.1 reads it, frozen for tests/test_public_api.py.
+# Lines starting with # are comments.
+name,protein,dna,tags,note
+NbX,QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKGRFTISRDNAKNTVYLQMNSLKPEDTAVYYCAAGSTYYDYWGQGTQVTVSS,,example;vhh,"protein only, with a comma in the note"
+pelB leader,,ATGAAATACCTGCTGCCGACCGCTGCTGCTGGTCTGCTGCTCCTCGCTGCCCAGCCGGCGATGGCC,signal peptide,DNA only

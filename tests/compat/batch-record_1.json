@@ -1,0 +1,98 @@
+{
+ "schema": "vhh-toolbox-batch-record/1",
+ "created_with": "1.1.0 (build 20261113.d981165)",
+ "created_utc": "2026-11-13T09:31:31Z",
+ "name": "NbX",
+ "sequence": "QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKGRFTISRDNAKNTVYLQMNSLKPEDTAVYYCAAGSTYYDYWGQGTQVTVSS",
+ "cystines_formed": true,
+ "fields": {
+  "lot": "JV-2026-07",
+  "prepared_by": "JV",
+  "date": "",
+  "host": "",
+  "purification": "",
+  "buffer": "",
+  "storage": "",
+  "notes": ""
+ },
+ "measured": {
+  "a280": 0.84,
+  "dilution": 10.0,
+  "path_cm": 1.0,
+  "volume_ul": 600.0,
+  "measured_da": 13650.2,
+  "mg_per_ml": null,
+  "method": null
+ },
+ "rendered": {
+  "measured": [
+   [
+    "A280",
+    "0.840 (diluted 10x)"
+   ],
+   [
+    "Volume",
+    "600 uL"
+   ],
+   [
+    "Measured mass",
+    "13650.2 Da"
+   ]
+  ],
+  "derived": [
+   [
+    "Concentration",
+    "4.885 mg/mL"
+   ],
+   [
+    "Concentration, molar",
+    "348.9 uM"
+   ],
+   [
+    "Total protein",
+    "2.931 mg"
+   ],
+   [
+    "Mass minus the sequence",
+    "-349.8 Da"
+   ]
+  ],
+  "theoretical": [
+   [
+    "Length",
+    "117 residues"
+   ],
+   [
+    "Molar mass",
+    "14000.0 Da"
+   ],
+   [
+    "pI",
+    "7.20"
+   ],
+   [
+    "eps 280, cystines formed",
+    "24075 /M/cm"
+   ],
+   [
+    "eps 280, reduced",
+    "23950 /M/cm"
+   ],
+   [
+    "A280 of 1 mg/mL",
+    "1.720"
+   ],
+   [
+    "Cysteines",
+    "2"
+   ],
+   [
+    "Primary amines",
+    "5"
+   ]
+  ],
+  "derivation_notes": [
+   "The concentration is the A280 divided by the extinction coefficient predicted from the sequence, 24075 /M/cm with cystines formed, and converted to a molarity with the predicted molar mass of 14000.0 Da. Both are predictions, so this is not a measured concentration."
+  ]
+ }
+}

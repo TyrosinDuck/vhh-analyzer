@@ -3112,6 +3112,17 @@ under the batch sheet (§5.5), the two places where the app has just given you
 something to keep; there the links also say which screen they came from.
 Either is optional, and either decides what gets improved next.
 
+**The files you keep stay readable.** Since the app stores nothing, three
+files are the only memory of your work: a batch record (§5.5), a session file
+(§3.16) and your own library (§10.4). Each carries its format, and a file
+written by any 1.x release is read by every later 1.x release; a release that
+stopped reading one would be numbered 2.0, and its changelog would say so.
+What is not promised is that the numbers recomputed from a file stay the same:
+the app recomputes rather than restores, so a corrected calculation gives the
+corrected value, and the record and the session file say which version wrote
+them so that a difference can be traced. A file from a newer release than the
+one you are running may be refused, with the reason.
+
 ---
 
 ## 14. Running it on your own machine

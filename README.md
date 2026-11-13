@@ -34,7 +34,8 @@ vhh-analyzer/
 The analysis modules are the single source of truth. A notebook and the web app
 both import them, so a fix to a descriptor propagates to both instead of
 drifting apart, and that is also why changing a `vhh_core.py` signature is a
-MAJOR release even when the app looks identical.
+MAJOR release even when the app looks identical (see *Public API and
+versioning*).
 
 ## Documentation
 
@@ -625,13 +626,50 @@ redeployable. If it lapses, every published link breaks, including any in a
 paper. Keep auto-renew on, and make sure the card behind it is one that will
 still exist next year.
 
-## Releases
+## Public API and versioning
 
-Versions follow `MAJOR.MINOR.PATCH`. The major number is not hypothetical here:
-the analysis modules are importable from a notebook, so changing the signature
-of
-a `vhh_core` function breaks somebody's notebook even when the app looks
-identical.
+Versions follow `MAJOR.MINOR.PATCH`, and the number says one thing: whether
+someone already using the tool can update without checking anything. It does
+not measure how much changed. A release that adds three sections and breaks
+nothing is a MINOR; renaming one parameter of a public function is a MAJOR.
+
+**What is public**, and therefore kept working across every 1.x release:
+
+- **The names in `vhh_core.__all__`.** None is removed, and every call that
+  worked keeps working: no parameter is removed, renamed, reordered, changes
+  kind or loses its default, and a new parameter comes with a default. The
+  values of constants and defaults may change, with an entry in the changelog.
+- **The files the app writes for you to keep and reads back:** the batch
+  record (`bench.BATCH_RECORD_SCHEMA`), the session file
+  (`session.SESSION_SCHEMA`) and a sequence library CSV (`library.COLUMNS`,
+  the format of `data/library.csv` and of a private library). A file written
+  by any 1.x release is read by every later 1.x release. A new format number
+  is a MINOR release only if the old one is still read.
+
+**What is not**: every other module, even though all of them import from a
+notebook (`bench`, `cloning`, `structure`, `library` beyond its file format,
+and the rest), the screens, and the layout of the PDFs. They can change in
+any MINOR release. Import them if they are useful, and pin the exact version.
+
+**Corrected results.** Fixing a calculation that was wrong is a fix, PATCH or
+MINOR, even though the numbers it gives move. The changelog says which
+numbers move and why, so a result computed before can be compared.
+
+**Retiring something public** goes through a deprecation: the old name or
+parameter keeps working, with a `DeprecationWarning`, for at least one MINOR
+release, and is removed at the next MAJOR. Breaks are gathered into one MAJOR
+rather than spread over several.
+
+The promise is checked rather than stated. `tests/test_public_api.py`
+compares `vhh_core` against a snapshot of its public signatures in
+`tests/compat/vhh_core_api.json`, and reads back a frozen example of each kept
+file from `tests/compat/`. The snapshot is written by
+`python3 tools/public_api.py`, never by hand, and is refreshed only after a
+MAJOR release or to protect what a MINOR release added, not to make a failing
+test pass. When a format number moves, a file in the old format stays in
+`tests/compat/`, so the old format keeps being tested.
+
+## Releases
 
 To cut a release:
 

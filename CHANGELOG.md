@@ -18,6 +18,24 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **What a 1.x release promises not to break is written down and tested.**
+  The README's new *Public API and versioning* section declares public the
+  names in `vhh_core.__all__` and the three files the app writes for a user to
+  keep and reads back: the batch record, the session file and a sequence
+  library CSV. Breaking any of them is a MAJOR release; every other module,
+  importable as it is, may change in a MINOR one. Until now the rule named
+  only `vhh_core` signatures, while the private library and the session file
+  had put two more formats into users' hands. `tests/test_public_api.py`
+  checks `vhh_core` against a snapshot of its 57 public names and their
+  parameters, written by `tools/public_api.py`, and reads back a frozen batch
+  record, session file and library from `tests/compat/`. Verified by breaking
+  each promise on purpose on a copy: a default removed, parameters reordered,
+  one renamed, a required one added, a name dropped from `__all__`, the batch
+  record's format number moved without reading the old one, and a library
+  column renamed each fail the suite; adding a parameter with a default does
+  not. The manual says the same to users in §13, including what is not
+  promised: values recomputed from a kept file can change when a calculation
+  is corrected.
 - **My library: a private sequence library, held in the browser session.** The
   Sequence library screen now has two tabs. **Public library** is the file in
   the repository, unchanged. **My library** loads a CSV in the same format,
