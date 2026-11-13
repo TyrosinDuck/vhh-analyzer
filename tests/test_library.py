@@ -197,3 +197,46 @@ def test_compute_does_not_cache_the_private_library():
 def test_the_library_screen_caches_nothing_itself():
     names = _calls_in(ROOT / "sections" / "library.py")
     assert not {"cache_data", "cache_resource"} & names
+
+
+# --------------------------------------------------------------------------- #
+# Comments: whole lines only
+# --------------------------------------------------------------------------- #
+
+def test_a_hash_inside_a_row_is_data_not_a_comment():
+    """Regression. The reader used `pd.read_csv(comment="#")`, which ends a
+    line at any `#`: `NbNAMPT_cluster#1-(18)` lost everything after the `#`,
+    sequence included, and two clusters ended up with the same name. Found
+    on a real private library converted from a spreadsheet."""
+    data = (b"name,protein,dna,tags,note\n"
+            b"# a comment line\n"
+            b"   # an indented one\n"
+            b"Nb_cluster#1-(18),QVQLQESGGGLVQAGG,,,see # 4\n"
+            b"Nb_cluster#2-(5),QVQLQESGGGLVQAGK,,,\n")
+    table, problems = lib.read_library_bytes(data, "mine.csv")
+    assert not problems
+    assert list(table["name"]) == ["Nb_cluster#1-(18)", "Nb_cluster#2-(5)"]
+    assert list(table["protein"]) == ["QVQLQESGGGLVQAGG", "QVQLQESGGGLVQAGK"]
+    assert table.loc[0, "note"] == "see # 4"
+
+
+def test_a_name_with_a_hash_survives_a_download_and_reload():
+    frame = _frame([["Nb#7", "QVQLQESGG", "", "a#b", "c # d"]])
+    table, problems = lib.read_library_bytes(lib.library_csv(frame).encode())
+    assert not problems
+    assert list(table.iloc[0][lib.COLUMNS]) == ["Nb#7", "QVQLQESGG", "",
+                                                 "a#b", "c # d"]
+
+
+@pytest.mark.parametrize("name", ["NA", "None", "null", "NaN", "N/A"])
+def test_a_name_pandas_would_read_as_missing_is_kept(name):
+    data = f"name,protein,dna,tags,note\n{name},QVQLQESGG,,,\n".encode()
+    table, problems = lib.read_library_bytes(data)
+    assert not problems and table.loc[0, "name"] == name
+
+
+def test_the_public_file_still_skips_its_comment_header():
+    text = lib.LIBRARY_FILE.read_text(encoding="utf-8")
+    assert text.startswith("#"), "the test assumes the file opens with comments"
+    table, problems = lib.load_library()
+    assert not problems and not any(n.startswith("#") for n in table["name"])

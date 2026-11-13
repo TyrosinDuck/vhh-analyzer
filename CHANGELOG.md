@@ -39,6 +39,19 @@ ran, from its Zenodo record.
   which cannot load a file or type into the editor; those two were not
   driven by a test.
 
+### Fixed
+
+- **A `#` inside a library row no longer cuts the row.** The library was read
+  with pandas' `comment="#"`, which ends a line at any `#`, not only at the
+  start. A name such as `NbNAMPT_cluster#1-(18)` became `NbNAMPT_cluster`,
+  the sequence after it was lost, the row was reported as having no usable
+  sequence, and two clusters collided on the same name. Only lines that
+  start with `#` are comments now, as the header of `data/library.csv`
+  always said. The same reader no longer turns a cell reading `NA`, `None`,
+  `null` or `N/A` into an empty one, which would have erased a sequence
+  named that way. Found on a real private library; the public file had no
+  `#` in its rows and reads the same as before.
+
 ### Changed
 
 - **The provenance register now covers every constant, and says so because it

@@ -51,7 +51,7 @@ __all__ = [
     "__version__",
 ]
 
-__version__ = "2026.11.13a"
+__version__ = "2026.11.13b"
 
 LIBRARY_FILE = Path(__file__).parent / "data" / "library.csv"
 COLUMNS = ["name", "protein", "dna", "tags", "note"]
@@ -72,6 +72,23 @@ def _clean_dna(dna: str) -> str:
     return dna
 
 
+def _read_csv_text(text: str) -> pd.DataFrame:
+    """Parse library CSV text, ignoring the lines that start with ``#``.
+
+    Only whole lines. This used to be ``pd.read_csv(comment="#")``, which
+    ends a line at *any* ``#``: a name such as ``Nb_cluster#1-(18)`` was cut
+    to ``Nb_cluster``, the sequence after it was lost, and the row was then
+    reported as having no sequence, with nothing pointing at the ``#``.
+
+    A line inside a quoted multi-line cell that happens to start with ``#``
+    would be dropped too; a library cell has no reason to span lines.
+    """
+    kept = "\n".join(line for line in text.splitlines()
+                     if not line.lstrip().startswith("#"))
+    return pd.read_csv(io.StringIO(kept), dtype=str,
+                       keep_default_na=False).fillna("")
+
+
 def load_library(path: str | Path | None = None) -> tuple[pd.DataFrame, list[str]]:
     """Read the library file. Returns ``(table, problems)``.
 
@@ -82,7 +99,7 @@ def load_library(path: str | Path | None = None) -> tuple[pd.DataFrame, list[str
     if not path.exists():
         return blank_library(), [f"{path.name} not found, the library is empty."]
     try:
-        frame = pd.read_csv(path, comment="#", dtype=str).fillna("")
+        frame = _read_csv_text(path.read_text(encoding="utf-8-sig"))
     except Exception as exc:
         return blank_library(), [f"{path.name} could not be read: {exc}"]
     return validate_library(frame, path.name)
@@ -103,7 +120,7 @@ def read_library_bytes(data: bytes, label: str = "the file"
     if not text.strip():
         return blank_library(), [f"{label} is empty."]
     try:
-        frame = pd.read_csv(io.StringIO(text), comment="#", dtype=str).fillna("")
+        frame = _read_csv_text(text)
     except Exception as exc:
         return blank_library(), [f"{label} could not be read: {exc}"]
     return validate_library(frame, label)

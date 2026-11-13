@@ -2665,6 +2665,9 @@ commit, push, the app serves the new version on its next deploy.
 | `tags` | comma-separated, used by the filter |
 | `note` | free text |
 
+A line that starts with `#` is a comment and is skipped. A `#` anywhere
+else is part of the data, so a name such as `Nb_cluster#1` is kept whole.
+
 At least one of `protein` or `dna` is required. An entry may carry both, and
 when
 it does the app checks on load that the DNA translates to the protein and flags
