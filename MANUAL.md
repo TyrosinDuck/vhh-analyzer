@@ -2644,12 +2644,13 @@ published gene**.
 
 Filter by free text over names and notes, by tag, or by whether an entry
 carries
-a protein, DNA, or either. Tick the box at the left of the rows you want and
-send them on: the
+a protein, DNA, or either. Tick the **Send** column for the entries you want,
+the same column as in your own library (§10.4), and send them on: the
 proteins go to the **analysis** section, the DNA to **gene diagnosis**.
-Changing a filter clears the ticks: a selection is kept as row positions, and
-once the filter has moved the rows, the same positions would point at other
-entries. The
+Ticks are kept by entry name, so you can filter, tick, change the filter and
+tick again. An entry hidden by the current filter stays ticked and is sent
+too; the line under the table says how many are hidden. **Untick all** clears
+every tick. The
 buttons say how many of your selection carry each kind, and entries that do not
 carry the requested one are left out rather than treated as an error, selecting
 a protein-only entry and asking for DNA simply sends nothing for it.

@@ -279,3 +279,15 @@ def test_a_row_added_in_the_editor_comes_back_unticked():
     frame = screen.with_send(edited)
     assert frame["send"].tolist() == [True, False]
     assert screen.ticked_names(frame) == ["a"]
+
+
+@pytest.mark.parametrize("ticked, shown, now, expected", [
+    ([], ["a", "b"], ["b"], ["b"]),                       # tick one
+    (["b"], ["a", "b"], [], []),                          # untick it
+    (["x"], ["a", "b"], ["a"], ["x", "a"]),               # hidden tick kept
+    (["x", "a"], ["a"], ["a"], ["x", "a"]),               # no duplicates
+    (["a"], [], [], ["a"]),                               # all filtered out
+])
+def test_merge_ticks_touches_only_the_rows_shown(ticked, shown, now, expected):
+    import sections.library as screen
+    assert screen.merge_ticks(ticked, shown, now) == expected

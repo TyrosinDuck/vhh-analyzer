@@ -956,20 +956,17 @@ def _tab(app, label):
     return next(tab for tab in app.tabs if tab.label == label)
 
 
-def _tick(app, prefix, names):
-    """Tick rows of a library table by name.
+def _tick(app, names):
+    """Tick entries of the public library by name.
 
-    `AppTest` cannot click a row of `st.dataframe`; the selection is put in
-    the widget's state, where a click in the browser would put it. The rows
-    are found by name in the table as drawn, so this goes through the same
-    position-to-name mapping as a real click.
+    `AppTest` cannot click a data editor. The ticks are put where the screen
+    keeps them, by name, and the editor is drawn fresh from them by bumping
+    its generation, as "Untick all" does.
     """
-    table = next(df for df in app.dataframe
-                 if str(df.key).startswith(f"{prefix}_table_"))
-    shown = list(table.value["name"])
-    rows = [shown.index(name) for name in names]
-    app.session_state[table.key] = {"selection": {"rows": rows,
-                                                  "columns": [], "cells": []}}
+    app.session_state["lib_public_ticked"] = list(names)
+    app.session_state["lib_public_gen"] = \
+        app.session_state["lib_public_gen"] + 1 \
+        if "lib_public_gen" in app.session_state else 1
     app.run()
     return app
 
@@ -998,7 +995,7 @@ def test_public_entries_can_be_copied_into_my_library(app):
 
     public, _ = lib.load_library()
     names = list(public["name"][:2])
-    _tick(app, "library", names)
+    _tick(app, names)
     _click(app, "➕ Start my library with these 2")
     _no_failure(app, "copy to my library")
 
@@ -1073,20 +1070,25 @@ def test_my_library_sends_to_analysis_and_closes(app):
     assert "lib_mine_current" not in app.session_state
 
 
-def test_a_filter_clears_the_ticks_rather_than_moving_them(app):
-    """A selection is stored as row positions. Typing a filter changes which
-    entry sits at each position, so the table is drawn under a new key and
-    starts unticked, instead of quietly sending other sequences."""
+def test_a_filter_keeps_the_ticks_on_their_entries(app):
+    """Ticks are kept by name. A filter that hides a ticked entry leaves it
+    ticked, says so, and still sends it; "Untick all" clears everything."""
     import library as lib
     _goto(app, "📚 Sequence library")
     public, _ = lib.load_library()
-    last = public["name"].iloc[-1]
-    _tick(app, "library", [last])
-    assert any(f"Selected: {last}" == c.value for c in app.caption)
+    first, last = public["name"].iloc[0], public["name"].iloc[-1]
+    _tick(app, [last])
+    assert any(c.value == f"Selected: {last}" for c in app.caption)
 
-    app.text_input(key="lib_search").input(public["name"].iloc[0]).run()
+    app.text_input(key="lib_search").input(first).run()
     _no_failure(app, "filtering")
-    assert not any(c.value.startswith("Selected:") for c in app.caption)
-    assert any("Tick the box" in c.value for c in app.caption)
-    app.text_input(key="lib_search").input("").run()
+    assert any(c.value == f"Selected: {last}" for c in app.caption), \
+        "a filter dropped a tick"
+    assert any("hidden by the filter" in c.value for c in app.caption)
+    shown = next(e for e in app.dataframe
+                 if str(e.key).startswith("library_table_")).value
+    assert last not in list(shown["name"])
 
+    app.text_input(key="lib_search").input("").run()
+    _click(app, "Untick all")
+    assert not any(c.value.startswith("Selected:") for c in app.caption)

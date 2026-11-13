@@ -54,16 +54,19 @@ ran, from its Zenodo record.
 
 ### Changed
 
-- **Library entries are picked by ticking them in the table**, instead of
-  from a separate list of names under it. The send buttons still say how
-  many of the ticked entries carry a protein and how many carry DNA. In the
-  public library the tick is Streamlit's row selection, and changing a
-  filter clears it: a selection is recorded as row positions, and once the
-  filter has moved the rows, the same positions would send other sequences
-  without a sign that anything changed. In the private library the tick is
-  a **Send** column of the editor itself, so it belongs to its row and
-  survives edits; it is not written to the downloaded file and does not
-  count as an unsaved change.
+- **Library entries are picked by ticking a Send column in the table**,
+  in both the public and the private library, instead of from a separate
+  list of names under it. The send buttons still say how many of the ticked
+  entries carry a protein and how many carry DNA. In the public library the
+  ticks are kept by entry name, so a filter no longer has any effect on
+  them: an entry it hides stays ticked, is sent with the others, and the
+  line under the table says how many are hidden; **Untick all** clears them.
+  In the private library the tick is a column of the editor, so it belongs
+  to its row and survives edits; it is not written to the downloaded file
+  and does not count as an unsaved change. Checked in Chrome as well as by
+  the tests: an earlier version redrew the public table from the ticks
+  after every click, and the browser then ignored every third click on the
+  same box. The table is now redrawn only when the filter changes.
 
 - **The provenance register now covers every constant, and says so because it
   is checked.** The register listed 26 constants and the manual said it listed

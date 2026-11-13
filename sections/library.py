@@ -18,7 +18,7 @@ import library as lib
 from compute import load_library_cached
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.13c"
+__version__ = "2026.11.13d"
 
 # Everything the private library keeps between reruns lives under keys with
 # this prefix in st.session_state, and nowhere else: not on disk, not in
@@ -112,23 +112,38 @@ def _show_flash(where: str) -> None:
 # --------------------------------------------------------------------------- #
 
 def _table_key(prefix: str, *state) -> str:
-    """Key of a selectable table, changed whenever what it shows changes.
+    """Key of the public table's editor, changed whenever its rows change.
 
-    Streamlit records a selection as row *positions*. If the rows under them
-    changed, a filter typed or a cell edited, the same positions would
-    silently pick other entries; a new key clears the selection instead.
+    The editor records clicks by row *position*. Under another filter the
+    same positions are other entries, so each filter gets its own editor,
+    drawn fresh from the ticked names.
     """
     digest = hashlib.sha256(repr(state).encode()).hexdigest()[:10]
     return f"{prefix}_table_{digest}"
 
 
-def _selectable_table(view, key: str, column_config: dict) -> list[str]:
-    """Draw ``view`` with a tick box on each row; return the ticked names."""
-    event = st.dataframe(view, hide_index=True, **FIT, key=key,
-                         on_select="rerun", selection_mode="multi-row",
-                         column_config=column_config)
-    rows = [r for r in event.selection.rows if 0 <= r < len(view)]
-    return list(view.iloc[rows]["name"])
+_TICKED = "lib_public_ticked"
+_PUBLIC_GEN = "lib_public_gen"
+
+
+def merge_ticks(ticked: list[str], shown: list[str],
+                ticked_now: list[str]) -> list[str]:
+    """The public library's ticked names after a run of its editor.
+
+    The editor only shows the rows the filters leave, so it can only tick or
+    untick those: the ticks of the hidden rows are kept as they were. Names,
+    not row positions, so a filter that moves the rows cannot move a tick
+    onto another entry.
+    """
+    shown_set = set(shown)
+    kept = [n for n in ticked if n not in shown_set]
+    return kept + [n for n in ticked_now if n not in kept]
+
+
+def _untick_all() -> None:
+    st.session_state[_TICKED] = []
+    # The editor keeps its own record of the clicks; a new key forgets it.
+    st.session_state[_PUBLIC_GEN] = st.session_state.get(_PUBLIC_GEN, 0) + 1
 
 
 _COLUMN_CONFIG = {
@@ -141,8 +156,8 @@ _COLUMN_CONFIG = {
 
 
 def _send_block(table, picked: list[str], prefix: str,
-                offer_copy: bool, how: str = "Tick the box at the left of "
-                "one or more rows in the table to send them on.") -> None:
+                offer_copy: bool, how: str = "Tick **Send** on one or more rows "
+                "of the table above to send them on.") -> None:
     """Send the ticked entries of ``table`` to a section, as FASTA, or,
     from the public library, into the private one."""
     st.subheader("Send to a section")
@@ -265,13 +280,48 @@ def _public_tab() -> None:
         elif needs == "DNA":
             view = view[view["has_dna"]]
 
-        picked = _selectable_table(
-            view[["name", "has_protein", "has_dna", "protein_length",
-                  "dna_length", "tags", "note", "issue"]],
-            _table_key("library", search, chosen_tags, needs),
-            _COLUMN_CONFIG)
+        ticked = st.session_state.get(_TICKED, [])
+        # A key per filter: the editor records clicks by row position, and
+        # those positions mean other rows under another filter.
+        key = _table_key("library", search, chosen_tags, needs,
+                         st.session_state.get(_PUBLIC_GEN, 0))
+        # The frame handed to the editor must not change while its key does
+        # not: the editor stacks its clicks on that frame, and redrawing it
+        # from the ticks after every click made the browser drop the next
+        # click on the same box (seen in Chrome: tick, untick, the third
+        # click ignored). So the ticks are frozen when the key is new, or
+        # when Streamlit dropped the editor's state while another screen was
+        # drawn, and the editor's own record carries the clicks after that.
+        if (st.session_state.get(f"{_TICKED}_key") != key
+                or key not in st.session_state):
+            st.session_state[f"{_TICKED}_key"] = key
+            st.session_state[f"{_TICKED}_base"] = list(ticked)
+        shown = view[["name", "has_protein", "has_dna", "protein_length",
+                      "dna_length", "tags", "note", "issue"]].copy()
+        shown.insert(0, SEND, shown["name"].isin(
+            st.session_state[f"{_TICKED}_base"]))
+        edited = st.data_editor(
+            shown, hide_index=True, **FIT, num_rows="fixed", key=key,
+            disabled=[c for c in shown.columns if c != SEND],
+            column_config={
+                SEND: st.column_config.CheckboxColumn(
+                    "Send", width="small",
+                    help="Tick to send this entry with the buttons below."),
+                **_COLUMN_CONFIG})
+        ticked = merge_ticks(ticked, list(shown["name"]),
+                             list(edited.loc[edited[SEND].fillna(False)
+                                             .astype(bool), "name"]))
+        st.session_state[_TICKED] = ticked
+        # Library order, not the order of the clicks.
+        picked = [n for n in table["name"] if n in set(ticked)]
+        hidden = len(set(picked) - set(view["name"]))
         st.caption(f"{len(view)} of {len(table)} entr{'y' if len(table) == 1 else 'ies'} "
-                   "shown. Changing a filter clears the ticks.")
+                   "shown." + (f" {hidden} ticked "
+                               f"entr{'y is' if hidden == 1 else 'ies are'} "
+                               "hidden by the filter and will be sent too."
+                               if hidden else ""))
+        if picked:
+            st.button("Untick all", key="library_untick", on_click=_untick_all)
 
         st.divider()
         _send_block(table, picked, "library", offer_copy=True)
@@ -375,9 +425,7 @@ def _mine_tab() -> None:
 
     if len(table):
         st.divider()
-        _send_block(table, picked, "my_library", offer_copy=False,
-                    how="Tick **Send** on one or more rows of the table above "
-                        "to send them on.")
+        _send_block(table, picked, "my_library", offer_copy=False)
 
     st.divider()
     st.subheader("Save")
