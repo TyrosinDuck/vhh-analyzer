@@ -41,7 +41,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21b"
+__version__ = "2026.11.13a"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -188,15 +188,32 @@ def detect_motifs(record: SeqRecord, circular: bool = True) -> list[dict]:
             if not motif:
                 continue
             for m in re.finditer(f"(?=({re.escape(motif)}))", protein):
+                found, name = motif, label
+                # A motif made of one repeated residue matches at every offset
+                # inside a longer run of it, so a His10 came back as five
+                # separate His6 features, 70-87, 73-90, 76-93, 79-96 and 82-99,
+                # five tags drawn on the map where the vector carries one. The
+                # run is reported once, at the length it actually has: a vector
+                # with ten histidines reads His10 and not His6.
+                if len(set(motif)) == 1:
+                    residue = motif[0]
+                    if m.start() > 0 and protein[m.start() - 1] == residue:
+                        continue                # not the start of the run
+                    end = m.start() + len(motif)
+                    while end < len(protein) and protein[end] == residue:
+                        end += 1
+                    found = protein[m.start():end]
+                    # "His6" names a length, so the name carries the real one
+                    name = re.sub(r"\d+$", "", label) + str(len(found))
                 nt_start = offset + 3 * m.start()
                 if nt_start >= total:           # duplicate from the doubled copy
                     continue
-                s0, s1 = _to_plus(nt_start, 3 * len(motif), strand,
+                s0, s1 = _to_plus(nt_start, 3 * len(found), strand,
                                   len(search) if strand == "-" else total)
-                hits.append({"feature": label, "kind": "motif", "source": "motif scan",
+                hits.append({"feature": name, "kind": "motif", "source": "motif scan",
                              "start": s0 % total + 1, "end": (s1 - 1) % total + 1,
                              "strand": strand, "note": note,
-                             "protein": motif})
+                             "protein": found})
 
         # a VHH is recognised by its own scaffold, not by a fixed motif
         for m2 in VHH_FR4_RE.finditer(protein):

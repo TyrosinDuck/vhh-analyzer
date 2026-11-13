@@ -39,7 +39,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.10.21b"
+__version__ = "2026.11.13a"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -47,19 +47,42 @@ __version__ = "2026.10.21b"
 
 PELB_AA = "MKYLLPTAAAGLLLLAAQPAMA"      # pelB leader (pMES3 / pMECS)
 PELB_CORE = "AAQPAMA"                   # short anchor, survives truncated reads
-HA_AA = "YPYDVPDYA"
+
+# The HA epitope on record is the nine-residue YPYDVPDYA, and that is what this
+# module looked for. pMECS does not carry it: its map annotates `HA-tag` over 24
+# nucleotides, which encode the eight residues YPYDVPDY, and the two codons
+# after them are GS, not A. The nine-residue form appears nowhere in the pMECS
+# map, in any of the six frames, so every correct pMECS clone came back with
+# `missing tag(s): HA`, on the sequencing screen and in the cloning screen's
+# construct check alike. That is the exact failure the comment under VECTORS
+# warned about, and it was sitting in VECTORS.
+#
+# What is searched for is now the eight residues the vector really encodes. They
+# are a prefix of the nine-residue form, so a construct carrying the canonical
+# epitope still matches: the change makes the test accept pMECS without making
+# it reject anything it used to accept. What it cannot tell apart is a cassette
+# that stops after the eighth residue from one that carries the ninth, which for
+# these vectors is the distinction that does not exist.
+#
+# Whether an anti-HA antibody detects YPYDVPDY followed by GS as well as it
+# detects YPYDVPDYA is a question about the antibody, and this module does not
+# answer it. It reports what the vector encodes.
+HA_AA = "YPYDVPDYA"                     # the epitope on record, for reference
+HA_SEARCH = "YPYDVPDY"                  # what pMECS encodes, and a prefix of it
 HIS_AA = "HHHHHH"
 
 VECTORS = {
     "pMES3": {"layout": ["PelB", "VHH", "His6", "stop"],
               "tags": [("His6", HIS_AA)]},
     "pMECS": {"layout": ["PelB", "VHH", "spacer(AAA)", "HA", "spacer(GAA)", "His6", "stop"],
-              "tags": [("HA", HA_AA), ("His6", HIS_AA)]},
+              "tags": [("HA", HA_SEARCH), ("His6", HIS_AA)]},
 }
 
 # To add a vector, take the tag layout from its actual plasmid map rather than
 # from memory: a wrong layout makes the app report missing tags on clones that
-# are perfectly fine.
+# are perfectly fine. `tests/test_vector_layouts.py` now checks every entry
+# above against the map of the same name in `data/plasmids/`, so a layout that
+# disagrees with its vector fails the suite instead of being found at the bench.
 
 # C-terminal FR4 signature delimiting the end of the VHH
 FR4_RE = re.compile(r"[WF]G[A-Z]G[TA][A-Z][VLIMQ]TV[STF][SPAL]")

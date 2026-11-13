@@ -16,6 +16,44 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A correct pMECS clone is no longer reported as missing its HA tag.** The tag
+  sequences in `sanger.VECTORS` are written out by hand beside the plasmid maps
+  the app ships, and the two had drifted apart. The pMECS entry carried the HA
+  epitope on record, the nine residues YPYDVPDYA. The pMECS map annotates its
+  `HA-tag` over 24 nucleotides, which encode the eight residues YPYDVPDY, and
+  the two codons after them are GS, not A: the nine-residue form is in none of
+  the six frames of that map. So every correct pMECS clone came back with
+  *missing tag(s): HA*, on the sequencing screen reading an .ab1 and in the
+  cloning screen's construct check alike, which is exactly the failure the
+  comment under that list warned about.
+  What is searched for is now the eight residues the vector really encodes.
+  They are a prefix of the nine, so a cassette carrying the canonical epitope
+  still matches: the change makes the check accept pMECS without making it
+  reject anything it accepted before. What it can no longer tell apart is a
+  cassette that stops after the eighth residue from one that carries a ninth,
+  a distinction these vectors do not have.
+  Whether an anti-HA antibody detects YPYDVPDY followed by GS as well as it
+  detects YPYDVPDYA is a question about the antibody and the app does not answer
+  it; it reports what the vector encodes.
+  `tests/test_vector_layouts.py` now checks every entry of `VECTORS` against the
+  map of the same name in `data/plasmids/`: each tag sequence has to be found in
+  some frame of its own vector, the HA case is pinned on its own, and a cloned
+  pMECS cassette is read back end to end. Verified by putting the nine-residue
+  value back on a copy, which fails three of those tests with the sequence
+  named. A layout that disagrees with its vector now fails the suite instead of
+  being found at the bench.
+- **A polyhistidine tag longer than six no longer appears several times over.**
+  The His6 motif matches at every offset inside a longer run, so a vector with
+  ten histidines produced five overlapping features, at 70-87, 73-90, 76-93,
+  79-96 and 82-99, all five labelled His6: five tags drawn on the vector map and
+  listed in the feature inventory where the vector carries one. The run is now
+  reported once and named for the length it has, so ten histidines read His10.
+  The five bundled vectors all carry six and still read His6, and the cloning
+  window, which finds the first tag by matching `his` in its label, is unaffected
+  by the new name.
+
 ### Added
 
 - **What a 1.x release promises not to break is written down and tested.**

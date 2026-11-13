@@ -2352,7 +2352,19 @@ being told which is which.
 To add a vector, edit `sanger.VECTORS`, and take the tag layout from the actual
 plasmid map rather than from memory. A wrong layout makes the app report
 missing tags
-on clones that are perfectly fine.
+on clones that are perfectly fine. `tests/test_vector_layouts.py` checks every
+entry against the map of the same name in `data/plasmids/`, so a layout that
+disagrees with its vector fails the test suite.
+
+That had already happened. The pMECS entry carried the HA epitope on record, the
+nine residues YPYDVPDYA, while the pMECS map annotates its HA tag over 24
+nucleotides, which encode the eight residues YPYDVPDY followed by GS. The
+nine-residue form is in none of the six frames of that map, so every correct
+pMECS clone was reported as missing its HA tag, here and in the cloning screen's
+construct check. What is searched for is now the eight residues the vector
+encodes; they are a prefix of the nine, so a cassette carrying the canonical
+epitope still matches. Whether an anti-HA antibody detects the shorter form as
+well is a question about the antibody, and the app does not answer it.
 
 ### 8.3 Reading the results table
 
@@ -2758,7 +2770,8 @@ bare
 FASTA carries only sequence, so the app detects what it can from short protein
 motifs
 (PelB, His6, HA, Myc, FLAG, Strep, protease sites, and the VHH scaffold
-itself). It
+itself). A histidine run is reported once, at the length it actually has, so ten
+histidines read **His10** and not five overlapping His6. It
 deliberately does **not** guess large elements such as gIII, AmpR or the
 origin: doing
 that properly needs a reference database, and a confident wrong annotation on a
