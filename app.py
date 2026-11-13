@@ -148,7 +148,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.10.21b",
                     "sections.cloning": "2026.11.12a",
                     "sections.genes": "2026.11.12b",
                     "sections.home": "2026.11.12c",
-                    "sections.library": "2026.11.13b",
+                    "sections.library": "2026.11.13c",
                     "sections.manual": "2026.11.12a",
                     "sections.sequencing": "2026.11.12a",
                     "sections.structure": "2026.11.12b"}

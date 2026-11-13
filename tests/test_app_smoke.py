@@ -1044,7 +1044,17 @@ def test_my_library_survives_a_visit_to_another_section(app):
 
 def test_my_library_sends_to_analysis_and_closes(app):
     _goto(app, "📚 Sequence library")
-    _tick(app, "my_library", ["mine_only"])
+    # The ticks are a column of the editor, which `AppTest` cannot click.
+    # They are put in what the editor last returned, and the editor is
+    # restarted from it, the same path as coming back from another screen.
+    mine = app.session_state["lib_mine_current"].copy()
+    mine["send"] = mine["name"] == "mine_only"
+    app.session_state["lib_mine_current"] = mine
+    editor = f"lib_mine_editor_{app.session_state['lib_mine_gen']}"
+    if editor in app.session_state:
+        del app.session_state[editor]
+    app.run()
+    assert any(c.value == "Selected: mine_only" for c in app.caption)
     send = [b for b in _tab(app, "My library").button
             if b.label.startswith("🔬 Send 1 protein")]
     assert send, "no send button in the private tab"
@@ -1079,3 +1089,4 @@ def test_a_filter_clears_the_ticks_rather_than_moving_them(app):
     assert not any(c.value.startswith("Selected:") for c in app.caption)
     assert any("Tick the box" in c.value for c in app.caption)
     app.text_input(key="lib_search").input("").run()
+

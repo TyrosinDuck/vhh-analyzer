@@ -240,3 +240,42 @@ def test_the_public_file_still_skips_its_comment_header():
     assert text.startswith("#"), "the test assumes the file opens with comments"
     table, problems = lib.load_library()
     assert not problems and not any(n.startswith("#") for n in table["name"])
+
+
+# --------------------------------------------------------------------------- #
+# The Send column of the private library's editor
+# --------------------------------------------------------------------------- #
+
+def test_a_send_tick_is_neither_saved_nor_a_change():
+    """The Send column lives in the editor only: ticking a row must not mark
+    the library as changed, nor end up in the downloaded file."""
+    import sections.library as screen
+    public, _ = lib.load_library()
+    plain = screen.with_send(public)
+    ticked = plain.copy()
+    ticked.loc[[0, 2], "send"] = True
+    assert lib.library_digest(ticked) == lib.library_digest(plain)
+    assert "send" not in lib.library_csv(ticked).splitlines()[0]
+    assert screen.ticked_names(ticked) == [public["name"].iloc[0],
+                                           public["name"].iloc[2]]
+
+
+def test_a_send_tick_follows_its_row_through_an_edit():
+    import sections.library as screen
+    public, _ = lib.load_library()
+    frame = screen.with_send(public.head(3))
+    frame.loc[1, "send"] = True
+    frame = frame.drop(index=0).reset_index(drop=True)          # delete a row
+    frame.loc[0, "protein"] += "K"                              # edit another
+    again = screen.with_send(frame)
+    assert screen.ticked_names(again) == [public["name"].iloc[1]]
+
+
+def test_a_row_added_in_the_editor_comes_back_unticked():
+    import sections.library as screen
+    edited = pd.DataFrame({"send": [True, None], "name": ["a", "b"],
+                           "protein": ["QVQ", None], "dna": [None, None],
+                           "tags": [None, None], "note": [None, None]})
+    frame = screen.with_send(edited)
+    assert frame["send"].tolist() == [True, False]
+    assert screen.ticked_names(frame) == ["a"]

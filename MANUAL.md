@@ -2731,9 +2731,11 @@ changed. An entry whose name is already in your library is left as it is
 rather than overwritten or added twice, and the screen lists which ones were
 skipped.
 
-**Sending entries on.** Tick rows in the summary table under the editor,
-then use the send buttons, as in the public tab. Editing the library clears
-the ticks, for the same reason a filter does in the public tab.
+**Sending entries on.** Tick the **Send** column of the editor for the
+entries you want, then use the send buttons right under it. The tick belongs
+to its row, so it stays on the right entry when you edit, add or delete other
+rows. It is not part of your library: it is not written to the downloaded
+file, and ticking does not count as an unsaved change.
 
 **Moving between screens.** Your library and its unsaved changes stay while
 you visit other sections in the same tab.

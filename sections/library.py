@@ -11,13 +11,14 @@ from __future__ import annotations
 import hashlib
 import re
 
+import pandas as pd
 import streamlit as st
 
 import library as lib
 from compute import load_library_cached
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.13b"
+__version__ = "2026.11.13c"
 
 # Everything the private library keeps between reruns lives under keys with
 # this prefix in st.session_state, and nowhere else: not on disk, not in
@@ -46,7 +47,7 @@ def _replace_mine(frame, file_name: str | None = None,
     those differences to the wrong rows, so every replacement goes through a
     new key instead.
     """
-    frame = lib.editable_frame(frame)
+    frame = with_send(frame)
     st.session_state[f"{_MINE}base"] = frame
     st.session_state[f"{_MINE}current"] = frame
     st.session_state[f"{_MINE}gen"] = st.session_state.get(f"{_MINE}gen", 0) + 1
@@ -54,6 +55,36 @@ def _replace_mine(frame, file_name: str | None = None,
         st.session_state[f"{_MINE}file"] = file_name
     if saved:
         st.session_state[f"{_MINE}saved"] = lib.library_digest(frame)
+
+
+SEND = "send"
+
+
+def with_send(frame=None):
+    """The private library as the editor shows it: a ``send`` tick box,
+    then the columns of the file.
+
+    The tick belongs to the row, so it follows its entry through an edit.
+    It is not part of the library: `library.editable_frame`, and therefore
+    the download and the unsaved-changes digest, leave it out, so ticking a
+    row neither changes the file nor counts as a change.
+    """
+    ticks = None
+    if frame is not None and SEND in getattr(frame, "columns", []):
+        ticks = frame[SEND].fillna(False).astype(bool).reset_index(drop=True)
+    out = lib.editable_frame(frame)
+    out.insert(0, SEND, ticks if ticks is not None
+               else pd.Series(False, index=out.index, dtype=bool))
+    return out
+
+
+def ticked_names(frame) -> list[str]:
+    """Names of the rows whose ``send`` box is ticked, as the library check
+    will spell them; a ticked row without a name is left out."""
+    if frame is None or SEND not in frame.columns:
+        return []
+    names = frame.loc[frame[SEND].fillna(False).astype(bool), "name"]
+    return [n.strip() for n in names.fillna("").astype(str) if n.strip()]
 
 
 def _close_mine() -> None:
@@ -110,13 +141,13 @@ _COLUMN_CONFIG = {
 
 
 def _send_block(table, picked: list[str], prefix: str,
-                offer_copy: bool) -> None:
+                offer_copy: bool, how: str = "Tick the box at the left of "
+                "one or more rows in the table to send them on.") -> None:
     """Send the ticked entries of ``table`` to a section, as FASTA, or,
     from the public library, into the private one."""
     st.subheader("Send to a section")
     if not picked:
-        st.caption("Tick the box at the left of one or more rows in the "
-                   "table to send them on.")
+        st.caption(how)
         return
     st.caption(f"Selected: {', '.join(picked)}")
 
@@ -322,29 +353,31 @@ def _mine_tab() -> None:
         st.session_state[f"{_MINE}base"], key=_editor_key(),
         num_rows="dynamic", hide_index=True, **FIT,
         column_config={
+            SEND: st.column_config.CheckboxColumn(
+                "Send", default=False, width="small",
+                help="Tick to send this entry with the buttons below. "
+                     "Not saved in the file."),
             "name": st.column_config.TextColumn("name", width="medium"),
             "protein": st.column_config.TextColumn("protein", width="large"),
             "dna": st.column_config.TextColumn("dna", width="large"),
             "tags": st.column_config.TextColumn("tags"),
             "note": st.column_config.TextColumn("note", width="large")})
-    current = lib.editable_frame(edited)
+    current = with_send(edited)
     st.session_state[f"{_MINE}current"] = current
-    st.caption("Click a cell to edit it, the last row to add one, and the "
-               "checkbox at the left of a row then the bin icon to delete it.")
+    picked = ticked_names(current)
+    st.caption("Tick **Send** for the entries to send on. Click a cell to "
+               "edit it, the last row to add one, and the box at the far "
+               "left of a row then the bin icon to delete it.")
 
     table, problems = lib.validate_library(current, "your library")
     for message in problems:
         st.warning(message, icon="⚠️")
-    picked: list[str] = []
+
     if len(table):
-        st.markdown("**Tick the entries to send on.** Editing the table "
-                    "above clears the ticks.")
-        picked = _selectable_table(
-            table[["name", "has_protein", "has_dna", "protein_length",
-                   "dna_length", "issue"]],
-            _table_key("my_library", lib.library_digest(current)),
-            {**_COLUMN_CONFIG,
-             "issue": st.column_config.TextColumn("Problem", width="large")})
+        st.divider()
+        _send_block(table, picked, "my_library", offer_copy=False,
+                    how="Tick **Send** on one or more rows of the table above "
+                        "to send them on.")
 
     st.divider()
     st.subheader("Save")
@@ -373,9 +406,6 @@ def _mine_tab() -> None:
             _close_mine()
             st.rerun()
 
-    if len(table):
-        st.divider()
-        _send_block(table, picked, "my_library", offer_copy=False)
 
 
 def render(settings: Settings) -> None:
