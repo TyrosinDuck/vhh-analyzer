@@ -54,6 +54,14 @@ ran, from its Zenodo record.
 
 ### Changed
 
+- **Library entries are picked by ticking rows in the table**, in both the
+  public and the private library, instead of from a separate list of names
+  under it. The send buttons still say how many of the ticked entries carry
+  a protein and how many carry DNA. Changing a filter, or editing the
+  private library, clears the ticks: Streamlit records a selection as row
+  positions, and once the rows have moved, the same positions would send
+  other sequences without a sign that anything changed.
+
 - **The provenance register now covers every constant, and says so because it
   is checked.** The register listed 26 constants and the manual said it listed
   every constant the app computes with. Those were not the same set. An audit

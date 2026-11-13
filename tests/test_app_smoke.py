@@ -956,6 +956,24 @@ def _tab(app, label):
     return next(tab for tab in app.tabs if tab.label == label)
 
 
+def _tick(app, prefix, names):
+    """Tick rows of a library table by name.
+
+    `AppTest` cannot click a row of `st.dataframe`; the selection is put in
+    the widget's state, where a click in the browser would put it. The rows
+    are found by name in the table as drawn, so this goes through the same
+    position-to-name mapping as a real click.
+    """
+    table = next(df for df in app.dataframe
+                 if str(df.key).startswith(f"{prefix}_table_"))
+    shown = list(table.value["name"])
+    rows = [shown.index(name) for name in names]
+    app.session_state[table.key] = {"selection": {"rows": rows,
+                                                  "columns": [], "cells": []}}
+    app.run()
+    return app
+
+
 def test_the_library_has_a_public_and_a_private_tab(app):
     _goto(app, "📚 Sequence library")
     _no_failure(app, "library")
@@ -980,7 +998,7 @@ def test_public_entries_can_be_copied_into_my_library(app):
 
     public, _ = lib.load_library()
     names = list(public["name"][:2])
-    app.multiselect(key="library_picked").set_value(names).run()
+    _tick(app, "library", names)
     _click(app, "➕ Start my library with these 2")
     _no_failure(app, "copy to my library")
 
@@ -1026,7 +1044,7 @@ def test_my_library_survives_a_visit_to_another_section(app):
 
 def test_my_library_sends_to_analysis_and_closes(app):
     _goto(app, "📚 Sequence library")
-    app.multiselect(key="my_library_picked").set_value(["mine_only"]).run()
+    _tick(app, "my_library", ["mine_only"])
     send = [b for b in _tab(app, "My library").button
             if b.label.startswith("🔬 Send 1 protein")]
     assert send, "no send button in the private tab"
@@ -1043,3 +1061,21 @@ def test_my_library_sends_to_analysis_and_closes(app):
     _click(app, "Close my library")
     _no_failure(app, "close my library")
     assert "lib_mine_current" not in app.session_state
+
+
+def test_a_filter_clears_the_ticks_rather_than_moving_them(app):
+    """A selection is stored as row positions. Typing a filter changes which
+    entry sits at each position, so the table is drawn under a new key and
+    starts unticked, instead of quietly sending other sequences."""
+    import library as lib
+    _goto(app, "📚 Sequence library")
+    public, _ = lib.load_library()
+    last = public["name"].iloc[-1]
+    _tick(app, "library", [last])
+    assert any(f"Selected: {last}" == c.value for c in app.caption)
+
+    app.text_input(key="lib_search").input(public["name"].iloc[0]).run()
+    _no_failure(app, "filtering")
+    assert not any(c.value.startswith("Selected:") for c in app.caption)
+    assert any("Tick the box" in c.value for c in app.caption)
+    app.text_input(key="lib_search").input("").run()

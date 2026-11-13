@@ -2644,8 +2644,12 @@ published gene**.
 
 Filter by free text over names and notes, by tag, or by whether an entry
 carries
-a protein, DNA, or either. Select the entries you want and send them on: the
-proteins go to the **analysis** section, the DNA to **gene diagnosis**. The
+a protein, DNA, or either. Tick the box at the left of the rows you want and
+send them on: the
+proteins go to the **analysis** section, the DNA to **gene diagnosis**.
+Changing a filter clears the ticks: a selection is kept as row positions, and
+once the filter has moved the rows, the same positions would point at other
+entries. The
 buttons say how many of your selection carry each kind, and entries that do not
 carry the requested one are left out rather than treated as an error, selecting
 a protein-only entry and asking for DNA simply sends nothing for it.
@@ -2726,6 +2730,10 @@ none is open). The copies are yours to edit; the public library is not
 changed. An entry whose name is already in your library is left as it is
 rather than overwritten or added twice, and the screen lists which ones were
 skipped.
+
+**Sending entries on.** Tick rows in the summary table under the editor,
+then use the send buttons, as in the public tab. Editing the library clears
+the ticks, for the same reason a filter does in the public tab.
 
 **Moving between screens.** Your library and its unsaved changes stay while
 you visit other sections in the same tab.

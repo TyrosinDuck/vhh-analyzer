@@ -8,6 +8,7 @@ The screen only. Its computations live in `compute.py`; the chrome it uses
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 import streamlit as st
@@ -16,7 +17,7 @@ import library as lib
 from compute import load_library_cached
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.13a"
+__version__ = "2026.11.13b"
 
 # Everything the private library keeps between reruns lives under keys with
 # this prefix in st.session_state, and nowhere else: not on disk, not in
@@ -79,15 +80,45 @@ def _show_flash(where: str) -> None:
 # Shared by both tabs
 # --------------------------------------------------------------------------- #
 
-def _send_block(table, prefix: str, offer_copy: bool) -> None:
-    """Pick entries of ``table`` and send them to a section, as FASTA, or,
+def _table_key(prefix: str, *state) -> str:
+    """Key of a selectable table, changed whenever what it shows changes.
+
+    Streamlit records a selection as row *positions*. If the rows under them
+    changed, a filter typed or a cell edited, the same positions would
+    silently pick other entries; a new key clears the selection instead.
+    """
+    digest = hashlib.sha256(repr(state).encode()).hexdigest()[:10]
+    return f"{prefix}_table_{digest}"
+
+
+def _selectable_table(view, key: str, column_config: dict) -> list[str]:
+    """Draw ``view`` with a tick box on each row; return the ticked names."""
+    event = st.dataframe(view, hide_index=True, **FIT, key=key,
+                         on_select="rerun", selection_mode="multi-row",
+                         column_config=column_config)
+    rows = [r for r in event.selection.rows if 0 <= r < len(view)]
+    return list(view.iloc[rows]["name"])
+
+
+_COLUMN_CONFIG = {
+    "has_protein": st.column_config.CheckboxColumn("Protein"),
+    "has_dna": st.column_config.CheckboxColumn("DNA"),
+    "protein_length": st.column_config.NumberColumn("aa"),
+    "dna_length": st.column_config.NumberColumn("nt"),
+    "note": st.column_config.TextColumn("Note", width="large"),
+    "issue": st.column_config.TextColumn("Problem", width="medium")}
+
+
+def _send_block(table, picked: list[str], prefix: str,
+                offer_copy: bool) -> None:
+    """Send the ticked entries of ``table`` to a section, as FASTA, or,
     from the public library, into the private one."""
     st.subheader("Send to a section")
-    picked = st.multiselect("Entries", list(table["name"]),
-                            key=f"{prefix}_picked")
     if not picked:
-        st.caption("Pick one or more entries to send them on.")
+        st.caption("Tick the box at the left of one or more rows in the "
+                   "table to send them on.")
         return
+    st.caption(f"Selected: {', '.join(picked)}")
 
     chosen = table[table["name"].isin(picked)]
     n_prot = int(chosen["has_protein"].sum())
@@ -203,24 +234,16 @@ def _public_tab() -> None:
         elif needs == "DNA":
             view = view[view["has_dna"]]
 
-        st.dataframe(
+        picked = _selectable_table(
             view[["name", "has_protein", "has_dna", "protein_length",
                   "dna_length", "tags", "note", "issue"]],
-            hide_index=True, **FIT,
-            column_config={
-                "has_protein": st.column_config.CheckboxColumn("Protein"),
-                "has_dna": st.column_config.CheckboxColumn("DNA"),
-                "protein_length": st.column_config.NumberColumn("aa"),
-                "dna_length": st.column_config.NumberColumn("nt"),
-                "note": st.column_config.TextColumn("Note", width="large"),
-                "issue": st.column_config.TextColumn("Problem", width="medium")})
+            _table_key("library", search, chosen_tags, needs),
+            _COLUMN_CONFIG)
         st.caption(f"{len(view)} of {len(table)} entr{'y' if len(table) == 1 else 'ies'} "
-                   "shown.")
+                   "shown. Changing a filter clears the ticks.")
 
         st.divider()
-        # Picks from the filtered view, as before: the multiselect offers
-        # only what the filters leave, the sending uses the full table.
-        _send_block(table.loc[view.index], "library", offer_copy=True)
+        _send_block(table, picked, "library", offer_copy=True)
 
     with st.expander("How to add or remove entries"):
         st.markdown(
@@ -312,17 +335,16 @@ def _mine_tab() -> None:
     table, problems = lib.validate_library(current, "your library")
     for message in problems:
         st.warning(message, icon="⚠️")
+    picked: list[str] = []
     if len(table):
-        st.dataframe(
+        st.markdown("**Tick the entries to send on.** Editing the table "
+                    "above clears the ticks.")
+        picked = _selectable_table(
             table[["name", "has_protein", "has_dna", "protein_length",
                    "dna_length", "issue"]],
-            hide_index=True, **FIT,
-            column_config={
-                "has_protein": st.column_config.CheckboxColumn("Protein"),
-                "has_dna": st.column_config.CheckboxColumn("DNA"),
-                "protein_length": st.column_config.NumberColumn("aa"),
-                "dna_length": st.column_config.NumberColumn("nt"),
-                "issue": st.column_config.TextColumn("Problem", width="large")})
+            _table_key("my_library", lib.library_digest(current)),
+            {**_COLUMN_CONFIG,
+             "issue": st.column_config.TextColumn("Problem", width="large")})
 
     st.divider()
     st.subheader("Save")
@@ -353,7 +375,7 @@ def _mine_tab() -> None:
 
     if len(table):
         st.divider()
-        _send_block(table, "my_library", offer_copy=False)
+        _send_block(table, picked, "my_library", offer_copy=False)
 
 
 def render(settings: Settings) -> None:
