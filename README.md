@@ -65,6 +65,8 @@ not.
 
 `data/library.csv`, the sequence library. Edit it locally, commit and push; the
 app serves it read-only. It is public, so nothing confidential goes in it.
+For your own sequences, the app's **My library** tab loads a file in the same
+format, lets you edit it, and gives it back as a download; it keeps nothing.
 
 `data/ecoli_codon_usage.csv`, *E. coli* codon usage (Kazusa Codon Usage
 Database, taxid 316407), redistributed from the `python-codon-tables` package
@@ -156,7 +158,7 @@ getting around and one section each after that.
 |---|---|---|
 | **Protein** | **🔬 Sequence analysis** | Characterize VHHs you provide: physico-chemical properties, CDR/framework annotation, hallmarks and germline, liabilities, alignment, codon-optimised DNA and a PDF report. |
 |  | **🧊 Structure** | Upload a PDB, mmCIF or AlphaFold model and replace the sequence-based guesses with measurements: which cysteines actually pair, which liabilities are buried and which are exposed, where the hydrophobic surface is, and, for a complex, which residues contact the antigen. |
-|  | **📚 Sequence library** | The sequences you come back to, kept in the repository and one click away: send the proteins to the analysis section or the DNA to gene diagnosis, instead of pasting them again. |
+|  | **📚 Sequence library** | The sequences you come back to, one click away: the public ones kept in the repository, and your own from a file you load, edit and download again. Send the proteins to the analysis section or the DNA to gene diagnosis, instead of pasting them again. |
 | **DNA** | **🧪 Sanger sequencing** | Upload .ab1 chromatograms from a screening run, extract the VHH sequences from the expression cassette, spot frameshifts and duplicates, then send the clones you want to the analysis. |
 |  | **🔧 Gene diagnosis** | Paste coding sequences that are already in a plasmid and ask what might be wrong with them: frame and stop checks, documented rare codons and their clusters, GC stretches, plus synonymous swaps that lower GC without touching the protein. |
 |  | **🧬 In-silico cloning** | Load a backbone and an insert, and get the restriction enzymes that open the vector in the right place without cutting the VHH, plus which of your primers actually bind. |

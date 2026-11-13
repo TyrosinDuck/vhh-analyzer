@@ -23,10 +23,20 @@ Format: one row per molecule, columns ``name``, ``protein``, ``dna``, ``tags``,
 ``note``. At least one of ``protein`` or ``dna`` must be present; an entry may
 carry both, in which case the DNA is checked against the protein when the file
 is loaded.
+
+**A second, private library** can be loaded from a file of the same format, for
+the sequences that must not go into the repository. It is held in the
+browser session only: read from the bytes of an upload, edited in the app,
+written back as a download, and gone when the session ends. Nothing here ever
+writes it to disk, and it must never pass through ``st.cache_data``, which is
+shared between every session on the server. The functions below are plain
+functions for that reason; ``compute.py`` caches only the public library.
 """
 
 from __future__ import annotations
 
+import hashlib
+import io
 import re
 from pathlib import Path
 
@@ -36,10 +46,12 @@ import vhh_core as vc
 
 __all__ = [
     "LIBRARY_FILE", "COLUMNS", "load_library", "library_fasta",
-    "blank_library", "__version__",
+    "blank_library", "validate_library", "read_library_bytes",
+    "editable_frame", "library_csv", "library_digest", "add_entries",
+    "__version__",
 ]
 
-__version__ = "2026.10.28a"
+__version__ = "2026.11.13a"
 
 LIBRARY_FILE = Path(__file__).parent / "data" / "library.csv"
 COLUMNS = ["name", "protein", "dna", "tags", "note"]
@@ -67,28 +79,67 @@ def load_library(path: str | Path | None = None) -> tuple[pd.DataFrame, list[str
     silently loses an entry is worse than one that shows you which line to fix.
     """
     path = Path(path) if path else LIBRARY_FILE
-    problems: list[str] = []
     if not path.exists():
         return blank_library(), [f"{path.name} not found, the library is empty."]
-
     try:
         frame = pd.read_csv(path, comment="#", dtype=str).fillna("")
     except Exception as exc:
         return blank_library(), [f"{path.name} could not be read: {exc}"]
+    return validate_library(frame, path.name)
 
+
+def read_library_bytes(data: bytes, label: str = "the file"
+                       ) -> tuple[pd.DataFrame, list[str]]:
+    """Read a library from the bytes of an upload, same format and same checks
+    as `load_library`. Nothing is written to disk.
+
+    A UTF-8 byte-order mark, which Excel adds when it saves a CSV, is accepted.
+    """
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return blank_library(), [f"{label} is not UTF-8 text. Save it as "
+                                 "\"CSV UTF-8\" and load it again."]
+    if not text.strip():
+        return blank_library(), [f"{label} is empty."]
+    try:
+        frame = pd.read_csv(io.StringIO(text), comment="#", dtype=str).fillna("")
+    except Exception as exc:
+        return blank_library(), [f"{label} could not be read: {exc}"]
+    return validate_library(frame, label)
+
+
+def validate_library(frame: pd.DataFrame, label: str = "the library"
+                     ) -> tuple[pd.DataFrame, list[str]]:
+    """Check a raw table of ``name``, ``protein``, ``dna``, ``tags``, ``note``
+    and return ``(table, problems)``, the table carrying the derived columns.
+
+    Shared by the file in the repository, an uploaded private library and the
+    private library as edited in the app, so that all three are held to the
+    same rules. Line numbers count as in a CSV file: header on line 1.
+    """
+    problems: list[str] = []
+    frame = frame.copy().reset_index(drop=True)
     missing = [c for c in ("name", "protein", "dna") if c not in frame.columns]
     if missing:
         return blank_library(), [
-            f"{path.name} is missing the column(s) {', '.join(missing)}. "
+            f"{label} is missing the column(s) {', '.join(missing)}. "
             f"Expected: {', '.join(COLUMNS)}."]
     for column in COLUMNS:
         if column not in frame.columns:
             frame[column] = ""
+    frame = frame[COLUMNS].astype(object).where(frame[COLUMNS].notna(), "")
+    frame = frame.astype(str)
 
     rows = []
     seen: set[str] = set()
     for index, row in frame.iterrows():
         line = index + 2          # +1 for the header, +1 for 1-based counting
+        if not any(str(row[c]).strip() for c in COLUMNS):
+            # A row with nothing in it, which the in-app editor leaves when a
+            # row is added and not yet filled. Skipped without renumbering,
+            # so the line numbers of the rows after it stay right.
+            continue
         name = (row["name"] or "").strip()
         issue = ""
 
@@ -168,3 +219,66 @@ def all_tags(table: pd.DataFrame) -> list[str]:
     for value in table.get("tags", []):
         tags.update(t.strip() for t in str(value).split(",") if t.strip())
     return sorted(tags)
+
+
+def editable_frame(table: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Only the columns a person edits, as strings, in a fresh index.
+
+    What the private library's editor shows. The derived columns are left out
+    because they are recomputed from these on every change, and a column you
+    could type into but that would be overwritten is a trap.
+    """
+    if table is None or not len(table):
+        return pd.DataFrame({c: pd.Series(dtype=str) for c in COLUMNS})
+    frame = table.copy()
+    for column in COLUMNS:
+        if column not in frame.columns:
+            frame[column] = ""
+    frame = frame[COLUMNS].astype(object).where(frame[COLUMNS].notna(), "")
+    return frame.astype(str).reset_index(drop=True)
+
+
+def library_csv(table: pd.DataFrame) -> str:
+    """The library as CSV text in the format `load_library` reads.
+
+    Rows with nothing in any column, which an editor leaves behind when a row
+    is added and never filled in, are not written.
+    """
+    frame = editable_frame(table)
+    frame = frame[(frame.apply(lambda col: col.str.strip()) != "").any(axis=1)]
+    return frame.to_csv(index=False, lineterminator="\n")
+
+
+def library_digest(table: pd.DataFrame) -> str:
+    """A short hash of what `library_csv` would write.
+
+    Two tables with the same digest save to the same file. Used to tell
+    whether the private library has changed since it was last loaded or
+    downloaded.
+    """
+    return hashlib.sha256(library_csv(table).encode()).hexdigest()[:16]
+
+
+def add_entries(mine: pd.DataFrame, source: pd.DataFrame, names: list[str]
+                ) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """Copy the named entries of ``source`` to the end of ``mine``.
+
+    Returns ``(new_mine, added, skipped)``. An entry whose name is already in
+    ``mine`` is skipped rather than added a second time or overwritten: a
+    duplicate name makes it ambiguous which sequence a later step receives,
+    and overwriting would destroy an edit without asking.
+    """
+    mine = editable_frame(mine)
+    present = set(mine["name"].str.strip())
+    picked = editable_frame(source[source["name"].isin(names)])
+    added, skipped, rows = [], [], []
+    for _, row in picked.iterrows():
+        if row["name"].strip() in present:
+            skipped.append(row["name"])
+            continue
+        present.add(row["name"].strip())
+        added.append(row["name"])
+        rows.append(row)
+    if rows:
+        mine = pd.concat([mine, pd.DataFrame(rows)], ignore_index=True)
+    return mine, added, skipped

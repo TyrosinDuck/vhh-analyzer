@@ -66,7 +66,7 @@ register, available from every screen.
 |---|---|---|
 | **Protein**, the amino-acid sequence and its fold | 🔬 **Sequence analysis** | characterizing VHH sequences you already have |
 | | 🧊 **Structure** | a PDB or AlphaFold model: what is measured rather than guessed |
-| | 📚 **Sequence library** | the sequences you keep coming back to, ready to send to any of the others |
+| | 📚 **Sequence library** | the sequences you keep coming back to, public or your own, ready to send to any of the others |
 | **DNA**, reads, coding sequences and plasmids | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
@@ -2573,9 +2573,11 @@ this tab is still in play.
 
 ## 10. Sequence library
 
-The sequences you come back to, kept as a file in the repository so they are
-one
-click away instead of being pasted again every time.
+The sequences you come back to, one click away instead of being pasted again
+every time. The screen has two tabs. **Public library** is a file kept in the
+repository, the same for everyone, described in §10.1 to §10.3. **My library**
+is a file of your own that you load, edit in the app and download again,
+described in §10.4.
 
 **Read-only from the app, on purpose.** Streamlit Community Cloud rebuilds the
 container from the repository on every reboot, redeploy and wake-from-sleep, so
@@ -2673,6 +2675,57 @@ name, a duplicate, a non-standard residue, a stray character in the DNA. A
 library that silently loses an entry is worse than one that tells you which
 line
 to fix, and the message carries the line number.
+
+### 10.4 My library: your own sequences
+
+For the sequences that must not go into a public repository. Same format as
+`data/library.csv` (§10.3), same checks, and the same buttons to send entries
+to the analysis or to gene diagnosis.
+
+**Load, edit, download.** Load a CSV file, or start an empty library, or build
+one by copying entries from the public library (below). The entries appear in
+an editable table: click a cell to change it, type in the last row to add an
+entry, tick the box at the left of rows and use the bin icon to delete them.
+Under the table, the same checks as the public library run on every change
+and list any problem with its line number, a duplicate name or a stray
+character in the DNA for example, as in the file you will download. To keep
+your changes, click **Download**: you get the whole library back as a CSV,
+under the name of the file you loaded, or `my_library.private.csv` if there was
+none. Next time, load that file.
+
+**Nothing is kept.** The library lives in your browser session only. The app
+never writes it to disk, does not log it, and never puts it in the cache that
+speeds up the other screens, which is shared between everyone using the same
+server. That is also why it does not survive: closing or reloading the tab
+loses it, and on the public site so does the app going to sleep after a period
+without use. The screen says **Changes not downloaded yet** whenever the table
+differs from what was loaded or last downloaded. The app counts a click on the
+download button as a save; it cannot see whether your browser actually kept the
+file, or where. Loading another file while there are such changes, or closing
+the library, asks you first.
+
+**Where it runs matters.** On the public site, the file passes through the
+memory of a server that is not yours, Streamlit Community Cloud, as any
+sequence pasted into the app does. For confidential or unpublished sequences,
+run the app on your own machine (see the README), where nothing leaves your
+computer. Sequences you send on from your library to another section are then
+handled like any sequence typed there.
+
+**Keep the file out of the repository folder.** If you work from a clone, a
+`git add .` would put your library into a public repository. Store it
+elsewhere. As a safety net, `.gitignore` excludes `*.private.csv` and a
+`private/` folder, which is why the default download name ends in
+`.private.csv`; a file named otherwise is not covered.
+
+**Copying from the public library.** In the **Public library** tab, select
+entries and click **Copy to my library** (**Start my library with these** when
+none is open). The copies are yours to edit; the public library is not
+changed. An entry whose name is already in your library is left as it is
+rather than overwritten or added twice, and the screen lists which ones were
+skipped.
+
+**Moving between screens.** Your library and its unsaved changes stay while
+you visit other sections in the same tab.
 
 ---
 

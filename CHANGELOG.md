@@ -16,6 +16,29 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **My library: a private sequence library, held in the browser session.** The
+  Sequence library screen now has two tabs. **Public library** is the file in
+  the repository, unchanged. **My library** loads a CSV in the same format,
+  lets you add, edit and delete entries in the app, and gives the whole
+  library back as a download. Entries go on to the analysis and to gene
+  diagnosis exactly as from the public one, and entries of the public library
+  can be copied into yours; a name already in your library is skipped, not
+  overwritten. Nothing is written to disk or put in the shared cache, so the
+  library ends with the session: the screen says when there are changes you
+  have not downloaded, and asks before loading another file or closing over
+  them. The checks are the ones the public file has always had, now in
+  `library.validate_library`, shared by the file, the upload and the editor;
+  `library.read_library_bytes`, `library_csv`, `library_digest`,
+  `editable_frame` and `add_entries` are new. `load_library` keeps its
+  signature and its behaviour, with one difference: a row with nothing in any
+  column is now skipped instead of reported. `.gitignore` excludes
+  `*.private.csv` and `private/`, as a safety net for a private library saved
+  inside a clone. Tested: the functions, and the screen through `AppTest`,
+  which cannot load a file or type into the editor; those two were not
+  driven by a test.
+
 ### Changed
 
 - **The provenance register now covers every constant, and says so because it

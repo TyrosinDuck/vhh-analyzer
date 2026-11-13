@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.13a"
+__version__ = "2026.11.13b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -581,9 +581,11 @@ SECTIONS = {
                   "complex, which residues contact the antigen.",
                   "Protein"),
     "library": ("📚", "Sequence library",
-                "The sequences you come back to, kept in the repository and one "
-                "click away: send the proteins to the analysis section or the "
-                "DNA to gene diagnosis, instead of pasting them again.",
+                "The sequences you come back to, one click away: the public ones "
+                "kept in the repository, and your own from a file you load, "
+                "edit and download again. Send the proteins to the analysis "
+                "section or the DNA to gene diagnosis, instead of pasting "
+                "them again.",
                 "Protein"),
     "sequencing": ("🧪", "Sanger sequencing",
                    "Upload .ab1 chromatograms from a screening run, extract the VHH "

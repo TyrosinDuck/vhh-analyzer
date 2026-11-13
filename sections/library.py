@@ -1,5 +1,6 @@
 """
-sections.library - The curated sequence library, read-only in the app by design.
+sections.library - The public sequence library, read-only in the app by design,
+and a private one held in the browser session.
 
 The screen only. Its computations live in `compute.py`; the chrome it uses
 (`FIT`, `footer`, navigation) lives in `shell.py`.
@@ -15,22 +16,148 @@ import library as lib
 from compute import load_library_cached
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.13a"
+
+# Everything the private library keeps between reruns lives under keys with
+# this prefix in st.session_state, and nowhere else: not on disk, not in
+# st.cache_data (which every session on the server shares).
+_MINE = "lib_mine_"
 
 
-def render(settings: Settings) -> None:
-    """Draw the screen.
+# --------------------------------------------------------------------------- #
+# The private library's state
+# --------------------------------------------------------------------------- #
 
-    The router gives every screen the same argument. This one reads
-    none of it: see `shell.Settings` for why that is cheaper than a
-    second list of the screens.
+def _has_mine() -> bool:
+    return f"{_MINE}current" in st.session_state
+
+
+def _editor_key() -> str:
+    return f"{_MINE}editor_{st.session_state.get(f'{_MINE}gen', 0)}"
+
+
+def _replace_mine(frame, file_name: str | None = None,
+                  saved: bool = False) -> None:
+    """Make ``frame`` the private library and give the editor a fresh key.
+
+    The editor's own state holds the edits as differences from the frame it
+    was given. Handing it a different frame under the same key would apply
+    those differences to the wrong rows, so every replacement goes through a
+    new key instead.
     """
-    st.title("📚 Sequence library")
-    st.markdown(
-        "The sequences you come back to, kept as a file in the repository so "
-        "they are one click away. Pick what you need and send it to the section "
-        "that will work on it.")
+    frame = lib.editable_frame(frame)
+    st.session_state[f"{_MINE}base"] = frame
+    st.session_state[f"{_MINE}current"] = frame
+    st.session_state[f"{_MINE}gen"] = st.session_state.get(f"{_MINE}gen", 0) + 1
+    if file_name is not None:
+        st.session_state[f"{_MINE}file"] = file_name
+    if saved:
+        st.session_state[f"{_MINE}saved"] = lib.library_digest(frame)
 
+
+def _close_mine() -> None:
+    for key in [k for k in st.session_state if str(k).startswith(_MINE)]:
+        del st.session_state[key]
+
+
+def _mark_saved(digest: str) -> None:
+    st.session_state[f"{_MINE}saved"] = digest
+
+
+def _flash(message: str, kind: str = "success", where: str = "mine") -> None:
+    """A message for the next run, shown in the tab where the action was."""
+    st.session_state[f"{_MINE}flash_{where}"] = (kind, message)
+
+
+def _show_flash(where: str) -> None:
+    flash = st.session_state.pop(f"{_MINE}flash_{where}", None)
+    if flash:
+        getattr(st, flash[0])(flash[1])
+
+
+# --------------------------------------------------------------------------- #
+# Shared by both tabs
+# --------------------------------------------------------------------------- #
+
+def _send_block(table, prefix: str, offer_copy: bool) -> None:
+    """Pick entries of ``table`` and send them to a section, as FASTA, or,
+    from the public library, into the private one."""
+    st.subheader("Send to a section")
+    picked = st.multiselect("Entries", list(table["name"]),
+                            key=f"{prefix}_picked")
+    if not picked:
+        st.caption("Pick one or more entries to send them on.")
+        return
+
+    chosen = table[table["name"].isin(picked)]
+    n_prot = int(chosen["has_protein"].sum())
+    n_dna = int(chosen["has_dna"].sum())
+    send = st.columns(2)
+    with send[0]:
+        if st.button(f"🔬 Send {n_prot} protein(s) to analysis",
+                     type="primary", **FIT, disabled=not n_prot,
+                     key=f"{prefix}_to_analysis"):
+            st.session_state["pending_seq_text"] = lib.library_fasta(
+                table, picked, "protein")
+            go_to("analysis")
+            st.rerun()
+        if n_prot < len(picked):
+            st.caption(f"{len(picked) - n_prot} of the selected entries "
+                       "carry no protein sequence and will be left out.")
+    with send[1]:
+        if st.button(f"🔧 Send {n_dna} DNA sequence(s) to gene diagnosis",
+                     type="primary", **FIT, disabled=not n_dna,
+                     key=f"{prefix}_to_genes"):
+            st.session_state["pending_gene_dna"] = lib.library_fasta(
+                table, picked, "dna")
+            go_to("genes")
+            st.rerun()
+        if n_dna < len(picked):
+            st.caption(f"{len(picked) - n_dna} of the selected entries "
+                       "carry no DNA and will be left out.")
+
+    dl = st.columns(2)
+    dl[0].download_button("Selected proteins (FASTA)",
+                          lib.library_fasta(table, picked, "protein"),
+                          file_name=f"{prefix}_proteins.fasta",
+                          mime="text/plain", disabled=not n_prot,
+                          key=f"{prefix}_dl_protein")
+    dl[1].download_button("Selected DNA (FASTA)",
+                          lib.library_fasta(table, picked, "dna"),
+                          file_name=f"{prefix}_dna.fasta",
+                          mime="text/plain", disabled=not n_dna,
+                          key=f"{prefix}_dl_dna")
+
+    if offer_copy:
+        _show_flash("public")
+        label = (f"➕ Copy {len(picked)} to my library" if _has_mine()
+                 else f"➕ Start my library with these {len(picked)}")
+        if st.button(label, **FIT, key=f"{prefix}_to_mine"):
+            mine = (st.session_state[f"{_MINE}current"] if _has_mine()
+                    else lib.editable_frame())
+            if not _has_mine():
+                # A library that has never been saved: nothing matches it.
+                st.session_state[f"{_MINE}saved"] = ""
+            mine, added, skipped = lib.add_entries(mine, table, picked)
+            _replace_mine(mine)
+            parts = []
+            if added:
+                parts.append(f"Copied to your library: {', '.join(added)}.")
+            if skipped:
+                parts.append("Already in your library under the same name, "
+                             f"left as they were: {', '.join(skipped)}.")
+            _flash(" ".join(parts), "success" if added else "warning",
+                   where="public")
+            st.rerun()
+        st.caption("Copies the entries into the **My library** tab. The public "
+                   "library is not changed; your copy is yours to edit.")
+
+
+# --------------------------------------------------------------------------- #
+# The tabs
+# --------------------------------------------------------------------------- #
+
+def _public_tab() -> None:
     table, problems = load_library_cached()
 
     st.info(
@@ -41,7 +168,8 @@ def render(settings: Settings) -> None:
         "machine, commit and push, and it appears here on the next deploy.\n\n"
         "Because it sits in a public repository it is readable by anyone, "
         "whether or not they open this app. **Nothing unpublished or "
-        "confidential belongs in it.**", icon="📚")
+        "confidential belongs in it.** For your own sequences, use the "
+        "**My library** tab.", icon="📚")
 
     for message in problems:
         st.warning(message, icon="⚠️")
@@ -90,46 +218,9 @@ def render(settings: Settings) -> None:
                    "shown.")
 
         st.divider()
-        st.subheader("Send to a section")
-        picked = st.multiselect("Entries", list(view["name"]), key="lib_picked")
-
-        if not picked:
-            st.caption("Pick one or more entries to send them on.")
-        else:
-            chosen = table[table["name"].isin(picked)]
-            n_prot = int(chosen["has_protein"].sum())
-            n_dna = int(chosen["has_dna"].sum())
-            send = st.columns(2)
-            with send[0]:
-                if st.button(f"🔬 Send {n_prot} protein(s) to analysis",
-                             type="primary", **FIT, disabled=not n_prot):
-                    st.session_state["pending_seq_text"] = lib.library_fasta(
-                        table, picked, "protein")
-                    go_to("analysis")
-                    st.rerun()
-                if n_prot < len(picked):
-                    st.caption(f"{len(picked) - n_prot} of the selected entries "
-                               "carry no protein sequence and will be left out.")
-            with send[1]:
-                if st.button(f"🔧 Send {n_dna} DNA sequence(s) to gene diagnosis",
-                             type="primary", **FIT, disabled=not n_dna):
-                    st.session_state["pending_gene_dna"] = lib.library_fasta(
-                        table, picked, "dna")
-                    go_to("genes")
-                    st.rerun()
-                if n_dna < len(picked):
-                    st.caption(f"{len(picked) - n_dna} of the selected entries "
-                               "carry no DNA and will be left out.")
-
-            dl = st.columns(2)
-            dl[0].download_button("Selected proteins (FASTA)",
-                                  lib.library_fasta(table, picked, "protein"),
-                                  file_name="library_proteins.fasta",
-                                  mime="text/plain", disabled=not n_prot)
-            dl[1].download_button("Selected DNA (FASTA)",
-                                  lib.library_fasta(table, picked, "dna"),
-                                  file_name="library_dna.fasta",
-                                  mime="text/plain", disabled=not n_dna)
+        # Picks from the filtered view, as before: the multiselect offers
+        # only what the filters leave, the sending uses the full table.
+        _send_block(table.loc[view.index], "library", offer_copy=True)
 
     with st.expander("How to add or remove entries"):
         st.markdown(
@@ -147,6 +238,145 @@ def render(settings: Settings) -> None:
             "protein and flags the row if it does not. A malformed row is "
             "shown with its problem rather than dropped, so the library never "
             "loses an entry quietly.")
+
+
+def _mine_tab() -> None:
+    st.info(
+        "**Yours, and held in this browser session only.** Load a CSV in the "
+        "same format as the public library, edit it here, and download it to "
+        "keep it. The app never writes it to disk and never keeps it once the "
+        "session ends: closing or reloading the tab loses it, and so, on the "
+        "public site, does the app going to sleep. **Download before you "
+        "leave.**\n\n"
+        "On the public site the file passes through the memory of a server "
+        "that is not yours, Streamlit Community Cloud. For confidential "
+        "sequences, run the app on your own machine, where nothing leaves "
+        "your computer.", icon="🔒")
+
+    _show_flash("mine")
+
+    upload = st.file_uploader("Load a library (CSV)", type=["csv"],
+                              key=f"{_MINE}upload")
+    if upload is not None and upload.file_id != st.session_state.get(
+            f"{_MINE}upload_id"):
+        dirty = _has_mine() and lib.library_digest(
+            st.session_state[f"{_MINE}current"]) != st.session_state.get(
+                f"{_MINE}saved")
+        if dirty:
+            st.warning(f"Loading **{upload.name}** replaces the library open "
+                       "here, which has changes you have not downloaded.")
+        if not dirty or st.button("Replace it, discarding those changes",
+                                  key=f"{_MINE}replace"):
+            table, problems = lib.read_library_bytes(upload.getvalue(),
+                                                     upload.name)
+            st.session_state[f"{_MINE}upload_id"] = upload.file_id
+            if problems and not len(table):
+                for message in problems:
+                    st.error(message)
+            else:
+                _replace_mine(table, file_name=upload.name, saved=True)
+                _flash(f"Loaded {upload.name}: {len(table)} "
+                       f"entr{'y' if len(table) == 1 else 'ies'}.")
+                st.rerun()
+
+    if not _has_mine():
+        st.caption("No library loaded. Load a file above, start an empty one, "
+                   "or copy entries from the public library in the other tab.")
+        if st.button("Start an empty library", key=f"{_MINE}new"):
+            _replace_mine(lib.editable_frame(), file_name=None)
+            st.session_state[f"{_MINE}saved"] = ""
+            st.rerun()
+        return
+
+    # The editor's own state is dropped by Streamlit whenever this screen is
+    # not drawn, so coming back from another section would show the frame it
+    # was first given, without the edits. What the editor last returned is
+    # kept separately, and becomes its starting point again in that case.
+    if _editor_key() not in st.session_state:
+        st.session_state[f"{_MINE}base"] = st.session_state[f"{_MINE}current"]
+
+    edited = st.data_editor(
+        st.session_state[f"{_MINE}base"], key=_editor_key(),
+        num_rows="dynamic", hide_index=True, **FIT,
+        column_config={
+            "name": st.column_config.TextColumn("name", width="medium"),
+            "protein": st.column_config.TextColumn("protein", width="large"),
+            "dna": st.column_config.TextColumn("dna", width="large"),
+            "tags": st.column_config.TextColumn("tags"),
+            "note": st.column_config.TextColumn("note", width="large")})
+    current = lib.editable_frame(edited)
+    st.session_state[f"{_MINE}current"] = current
+    st.caption("Click a cell to edit it, the last row to add one, and the "
+               "checkbox at the left of a row then the bin icon to delete it.")
+
+    table, problems = lib.validate_library(current, "your library")
+    for message in problems:
+        st.warning(message, icon="⚠️")
+    if len(table):
+        st.dataframe(
+            table[["name", "has_protein", "has_dna", "protein_length",
+                   "dna_length", "issue"]],
+            hide_index=True, **FIT,
+            column_config={
+                "has_protein": st.column_config.CheckboxColumn("Protein"),
+                "has_dna": st.column_config.CheckboxColumn("DNA"),
+                "protein_length": st.column_config.NumberColumn("aa"),
+                "dna_length": st.column_config.NumberColumn("nt"),
+                "issue": st.column_config.TextColumn("Problem", width="large")})
+
+    st.divider()
+    st.subheader("Save")
+    csv = lib.library_csv(current)
+    digest = lib.library_digest(current)
+    if digest == st.session_state.get(f"{_MINE}saved"):
+        st.success("No changes since the file was loaded or last downloaded.")
+    else:
+        st.warning("**Changes not downloaded yet.** They exist only in this "
+                   "browser tab.")
+    file_name = st.session_state.get(f"{_MINE}file") or "my_library.private.csv"
+    save = st.columns([2, 1])
+    save[0].download_button(
+        f"💾 Download {file_name}", csv, file_name=file_name, mime="text/csv",
+        type="primary", **FIT, key=f"{_MINE}download",
+        on_click=_mark_saved, args=(digest,))
+    st.caption("The app counts a click on this button as saved. It cannot see "
+               "whether your browser kept the file, or where.")
+    with save[1]:
+        discard = True
+        if digest != st.session_state.get(f"{_MINE}saved"):
+            discard = st.checkbox("Discard my unsaved changes",
+                                  key=f"{_MINE}discard")
+        if st.button("Close my library", disabled=not discard, **FIT,
+                     key=f"{_MINE}close"):
+            _close_mine()
+            st.rerun()
+
+    if len(table):
+        st.divider()
+        _send_block(table, "my_library", offer_copy=False)
+
+
+def render(settings: Settings) -> None:
+    """Draw the screen.
+
+    The router gives every screen the same argument. This one reads
+    none of it: see `shell.Settings` for why that is cheaper than a
+    second list of the screens.
+    """
+    st.title("📚 Sequence library")
+    st.markdown(
+        "Two libraries. The **public** one is kept in the repository, the "
+        "same for everyone. **Yours** is a file you load, edit here and "
+        "download again; the app does not keep it. Pick what you need and "
+        "send it to the section that will work on it.")
+
+    public, mine = st.tabs(["Public library", "My library"])
+    # Mine first: the public tab's copy button reads the private library as
+    # the editor last returned it, so the editor has to have run already.
+    with mine:
+        _mine_tab()
+    with public:
+        _public_tab()
 
     # No footer() here: the router draws it after render() returns, so
     # that every screen gets exactly one and a new screen cannot forget

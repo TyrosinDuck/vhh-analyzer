@@ -950,3 +950,96 @@ def test_a_pending_setting_reaches_the_sidebar_widget(app):
 
     app.session_state["pending_set_ph"] = before
     app.run()
+
+
+def _tab(app, label):
+    return next(tab for tab in app.tabs if tab.label == label)
+
+
+def test_the_library_has_a_public_and_a_private_tab(app):
+    _goto(app, "📚 Sequence library")
+    _no_failure(app, "library")
+    assert [t.label for t in app.tabs][:2] == ["Public library", "My library"]
+    mine = _tab(app, "My library")
+    assert "Start an empty library" in [b.label for b in mine.button]
+    assert any("held in this browser session only" in i.value
+               for i in mine.info)
+
+
+def test_public_entries_can_be_copied_into_my_library(app):
+    """The copy button creates the private library when there is none, and
+    a second copy of the same name is refused rather than overwriting."""
+    import library as lib
+    _goto(app, "📚 Sequence library")
+    # Start from no private library, whatever an earlier test left.
+    for key in ("lib_mine_current", "lib_mine_base", "lib_mine_saved",
+                "lib_mine_file"):
+        if key in app.session_state:
+            del app.session_state[key]
+    app.run()
+
+    public, _ = lib.load_library()
+    names = list(public["name"][:2])
+    app.multiselect(key="library_picked").set_value(names).run()
+    _click(app, "➕ Start my library with these 2")
+    _no_failure(app, "copy to my library")
+
+    mine = app.session_state["lib_mine_current"]
+    assert list(mine["name"]) == names
+    assert any("Copied to your library" in s.value for s in app.success)
+    assert any("Changes not downloaded yet" in w.value for w in app.warning), \
+        "a library that was never downloaded must say so"
+
+    _click(app, "➕ Copy 2 to my library")
+    assert list(app.session_state["lib_mine_current"]["name"]) == names
+    assert any("left as they were" in w.value for w in app.warning)
+
+
+def test_my_library_survives_a_visit_to_another_section(app):
+    """Coming back to the screen must show the library as last edited.
+
+    Two things can happen to the editor's own state while another screen is
+    drawn. Streamlit documents that it deletes the state of a widget that is
+    not drawn; under `AppTest` with Streamlit 1.66 it was kept instead. If it
+    is kept, the edits are replayed onto the frame they were made against and
+    nothing is lost. If it is deleted, the screen restarts the editor from
+    what it last returned. This test covers the second case, by deleting it
+    as Streamlit says it would; `AppTest` cannot type into a data editor, so
+    the edit is put where the screen stores the editor's last output.
+    """
+    import library as lib
+    _goto(app, "📚 Sequence library")
+    _goto(app, "🔬 Sequence analysis")
+    editor = f"lib_mine_editor_{app.session_state['lib_mine_gen']}"
+    if editor in app.session_state:
+        del app.session_state[editor]
+    edited = lib.editable_frame(app.session_state["lib_mine_current"])
+    # A real sequence, Nb80's, so the analysis it is sent to accepts it.
+    public, _ = lib.load_library()
+    nb80 = public.loc[public["name"] == "Nb80", "protein"].iloc[0]
+    edited.loc[len(edited)] = ["mine_only", nb80, "", "", ""]
+    app.session_state["lib_mine_current"] = edited
+    _goto(app, "📚 Sequence library")
+    _no_failure(app, "back to the library")
+    assert "mine_only" in list(app.session_state["lib_mine_current"]["name"])
+
+
+def test_my_library_sends_to_analysis_and_closes(app):
+    _goto(app, "📚 Sequence library")
+    app.multiselect(key="my_library_picked").set_value(["mine_only"]).run()
+    send = [b for b in _tab(app, "My library").button
+            if b.label.startswith("🔬 Send 1 protein")]
+    assert send, "no send button in the private tab"
+    send[0].click().run()
+    _no_failure(app, "send from my library")
+    assert any(t.value == "🔬 Sequence analysis" for t in app.title)
+
+    _goto(app, "📚 Sequence library")
+    closing = _tab(app, "My library")
+    assert next(b for b in closing.button
+                if b.label == "Close my library").disabled, \
+        "closing with unsaved changes must ask first"
+    app.checkbox(key="lib_mine_discard").check().run()
+    _click(app, "Close my library")
+    _no_failure(app, "close my library")
+    assert "lib_mine_current" not in app.session_state
