@@ -20,7 +20,7 @@ import streamlit as st
 import provenance as pv
 from shell import FIT, REPO_URL, Settings, usage_prompt
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.13a"
 
 VIEWS = ["📋 By constant", "⚖️ By standing"]
 
@@ -45,7 +45,13 @@ def render(settings: Settings) -> None:
         "decides how much weight a result can carry.", icon="⚖️")
 
     entries = pv.entries()
-    st.caption(f"{len(entries)} constants on the register.")
+    st.caption(
+        f"{len(entries)} constants on the register, and "
+        f"{len(pv.NOT_SCIENTIFIC)} more declared to carry no scientific "
+        f"claim: guard rails, cache settings, figure sizes, widget defaults "
+        f"and unit conversions. The test suite walks the app's modules and "
+        f"fails on a public constant that is in neither set, so this page "
+        f"covers all of them rather than the ones somebody remembered to add.")
 
     view = st.radio("View", VIEWS, horizontal=True, key="pv_view",
                     label_visibility="collapsed")

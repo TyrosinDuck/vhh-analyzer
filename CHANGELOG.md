@@ -16,6 +16,60 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Changed
+
+- **The provenance register now covers every constant, and says so because it
+  is checked.** The register listed 26 constants and the manual said it listed
+  every constant the app computes with. Those were not the same set. An audit
+  of the modules found a dozen numbers that change what a user reads and were
+  on no page: the lower ipTM band (while the upper one was registered), the
+  per-residue charges behind the charge profile and the charge term of the
+  aggregation score, the weights combining that score's four terms, the
+  liability base scores and their Low/Medium/High bands, the protease
+  per-site scores, the coverage a V domain must span before a sequence is
+  called a fusion, the rarity threshold and minimum reference support in the
+  repertoire comparison, the CDR3 identity at which two sequences become one
+  family, the minimum size of a surface patch, the GC synthesis band and the
+  rare-codon cluster window, the Sanger trimming and quality thresholds, the
+  pLDDT colouring bands, and the mass-difference modifications. The register
+  now holds 50 entries.
+
+  Most of the new entries are **conventions**, which is the point: a number
+  somebody chose, defensible and arbitrary, is exactly what a reader cannot
+  tell apart from a measurement by looking at it. Two are worth naming. The
+  per-residue charge table hands histidine a fractional charge as a stand-in
+  for partial protonation near pH 7.4, which has no source and is now
+  labelled as having none; nothing quantitative rests on it, since the net
+  charge and pI the app reports come from ProtParam. And the liability scores
+  come from an in-house notebook that weights each motif by solvent exposure
+  and pLDDT, neither of which this sequence-only module applies, so the bands
+  compress upward and the ranking between sequences carries more than the band
+  any one sequence lands in. That was already written in the code and is now
+  on the page.
+
+  **Completeness is a test, not a promise.** `provenance.NOT_SCIENTIFIC`
+  names the constants that carry no scientific claim, each with its reason:
+  guard rails, cache settings, figure sizes, widget defaults, and unit
+  conversions exact by definition. The suite walks the modules `app.py`
+  requires, finds every public constant holding a numeric literal (tuple
+  assignment included, which is how both ends of the GC band had stayed
+  invisible), and fails on one that is neither registered nor declared. A new
+  threshold now has to be classified before the suite passes. What the test
+  cannot check is whether a classification is honest; it can only make the
+  decision explicit. MANUAL.md §12b.
+
+- **The library generator reads the FR2 hallmark tetrad from `vhh_core`
+  instead of keeping its own copy.** `generator.HALLMARK_POSITIONS` and
+  `generator.VH_LIKE` were literals listing the same four positions as
+  `vhh_core.HALLMARK_POSITIONS`. They agreed, which is why nothing reported
+  them, and that is the failure mode this project has already hit twice: a
+  generator enforcing one reading of the tetrad while the analysis screen
+  applies another would produce sequences the app then calls VH-like, with
+  nothing pointing at the cause. They are now derived, the derived values
+  were checked against the literals they replaced, and a test in
+  `test_regressions.py` compares them to those literals rather than to
+  `vhh_core`, which would pass whatever the derivation did.
+
 ### Added
 
 - **Closest structure: has anything like this already been solved?** A new tab

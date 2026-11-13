@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.13a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -72,7 +72,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261112"
+BUILD = "20261113"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked

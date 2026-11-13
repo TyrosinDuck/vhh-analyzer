@@ -31,12 +31,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import vhh_core as vc
+
 __all__ = [
     "AA", "REGION_BOUNDS", "load_matrix", "load_meta", "sample_cdr_length",
     "generate", "generate_many", "matrix_report", "__version__",
 ]
 
-__version__ = "2026.10.21b"
+__version__ = "2026.11.13a"
 
 AA = list("ACDEFGHIKLMNPQRSTVWY")
 
@@ -51,9 +53,17 @@ META_FILE = DATA_DIR / "vhh_position_meta.json"
 
 # The four FR2 hallmark positions and the residues that make a framework
 # camelid rather than VH-like. Used only when the caller asks for enforcement.
-HALLMARK_POSITIONS = {42: set("FYLH"), 49: set("EQDG"), 50: set("RCLP"),
-                      52: set("FGLSW")}
-VH_LIKE = {42: "V", 49: "G", 50: "L", 52: "W"}
+#
+# Derived from `vhh_core.HALLMARK_POSITIONS` rather than written out again.
+# These two dicts were a second copy of that table until November 2026: they
+# agreed, which is exactly why nothing would have reported it had they stopped
+# agreeing, and a generator enforcing one reading of the tetrad while the
+# analysis screen applies another is a disagreement no test could see.
+HALLMARK_POSITIONS = {imgt: residues
+                      for imgt, _kabat, residues, _vh, _note
+                      in vc.HALLMARK_POSITIONS}
+VH_LIKE = {imgt: vh for imgt, _kabat, _residues, vh, _note
+           in vc.HALLMARK_POSITIONS}
 
 
 def load_matrix(path: str | Path | None = None) -> pd.DataFrame:

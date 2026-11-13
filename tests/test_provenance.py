@@ -164,6 +164,101 @@ def test_the_observed_constants_name_what_they_were_observed_on():
                 f"{entry.key} does not say what it was observed on"
 
 
+def _required_modules() -> list[str]:
+    """The modules `app.py` requires, which is the set the register covers.
+
+    Parsed from `app.py` rather than listed here: a second list of the app's
+    modules is the mistake this project has already made twice, and a module
+    missing from it would silently leave its constants unaudited, which is the
+    exact failure these tests exist to prevent. Screens in `sections/` are
+    skipped: a screen draws and holds no constant, and `REQUIRED_MODULES`
+    names them with a dot.
+    """
+    import re
+
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    block = re.search(r"REQUIRED_MODULES\s*=\s*\{(.*?)\}", source, re.S)
+    assert block, "REQUIRED_MODULES not found in app.py"
+    names = [name for name, _version
+             in re.findall(r'"([\w.]+)":\s*"([^"]+)"', block.group(1))
+             if "." not in name]
+    assert len(names) > 10, "REQUIRED_MODULES parsed as almost empty"
+    return names
+
+
+def test_the_register_is_complete():
+    """Every public constant is either registered or declared non-scientific.
+
+    This is the test the register was missing until November 2026. Without it
+    the page listed what somebody had remembered to add, while the manual
+    claimed it listed every constant the app computes with, and the two were
+    not the same set: the lower ipTM band, the per-residue charges, the
+    liability scores, the rarity thresholds and nine others were nowhere on
+    it, each of them a number a user reads off a screen.
+
+    What this cannot check is whether a classification is honest: somebody can
+    always declare a threshold a guard rail. What it does make impossible is
+    adding one without saying which it is.
+    """
+    missing = pv.unclassified(_required_modules())
+    assert not missing, (
+        "these constants are neither on the register nor declared in "
+        "NOT_SCIENTIFIC:\n" + "\n".join(
+            f"  {key} (line {line})" for key, line in sorted(missing.items()))
+        + "\nRegister it in provenance.py with what its value is worth and "
+          "where it came from, or name it in NOT_SCIENTIFIC with the reason "
+          "it carries no scientific claim.")
+
+
+def test_nothing_is_declared_non_scientific_and_registered_too():
+    """One constant, one classification, or the register contradicts itself."""
+    registered = {f"{entry.where[0]}.{entry.where[1]}"
+                  for entry in pv.entries()}
+    both = registered & set(pv.NOT_SCIENTIFIC)
+    assert not both, f"classified twice: {sorted(both)}"
+
+
+def test_the_declarations_do_not_outlive_their_constants():
+    """A renamed or deleted constant leaves a declaration behind.
+
+    Which matters more than it sounds: a stale entry in `NOT_SCIENTIFIC` is a
+    standing exemption for a name, and the next constant to be given that name
+    would inherit it without anybody choosing that.
+    """
+    for key in pv.NOT_SCIENTIFIC:
+        module, _dot, constant = key.rpartition(".")
+        assert module, f"{key} does not name a module"
+        found = pv.scan_module(module)
+        assert constant in found, (
+            f"{key} is declared non-scientific but {module}.py no longer has "
+            f"a public constant by that name")
+
+
+def test_the_declarations_say_why():
+    """The reason is the whole value of the declaration.
+
+    "Not scientific" asserted without a reason is the same claim the register
+    was built to stop: a number somebody vouched for in passing.
+    """
+    for key, reason in pv.NOT_SCIENTIFIC.items():
+        assert len(reason.strip()) > 20, f"{key}: {reason!r}"
+
+
+def test_the_scan_sees_both_shapes_of_assignment():
+    """`GC_LOW, GC_HIGH = 0.30, 0.70` is two constants, not none.
+
+    The first version of this scan read single-name assignments only and
+    reported the codon module as fully classified while both ends of the GC
+    synthesis band were invisible to it. Tuple assignment is rare enough in
+    this app to be exactly the kind of thing an audit misses.
+    """
+    found = pv.scan_module("codons")
+    for constant in ("GC_LOW", "GC_HIGH", "CLUSTER_WINDOW", "MIN_USAGE"):
+        assert constant in found, constant
+    assert "STOPS" not in found, "a set of strings holds no number"
+    assert all(line > 0 for line in found.values())
+
+
 def test_the_basis_vocabulary_is_explained_on_the_page():
     """Every kind carries a sentence, because the label alone decides nothing.
 

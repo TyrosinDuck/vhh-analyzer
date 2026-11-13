@@ -2942,6 +2942,24 @@ sat beside a comment in the source saying what it had been checked against, and
 a user deciding whether to trust a number had to find the right caption on the
 right screen or read the code. The register puts all of it on one page.
 
+**"Every constant" is now checked rather than claimed.** It was not true when
+this section first said it: the register listed the constants somebody had
+thought to add, and a dozen numbers that change what you read were not among
+them, including the lower ipTM band, the per-residue charges behind the charge
+profile, the liability base scores and the rarity thresholds in the repertoire
+comparison. The register now carries a second list beside it, of the constants
+that hold no scientific claim: guard rails that stop a container being killed,
+cache settings, figure sizes, widget defaults and unit conversions that are
+exact by definition. Each is named with the reason. The test suite walks the
+modules the app requires, finds every public constant holding a number, and
+fails if one is in neither list, so a new threshold cannot reach the app
+without somebody saying which of the two it is. The page shows both counts.
+
+What that check cannot do is force an honest classification. Somebody can
+always call a threshold a guard rail, and nothing but reading the code catches
+it. What it makes impossible is adding a number silently, which is what
+happened to the dozen above.
+
 **The values on that page are read from the modules that own them while the
 page is drawn.** No constant is typed into the register, and the test suite
 parses the file and fails if a number appears in it. So the page cannot show a

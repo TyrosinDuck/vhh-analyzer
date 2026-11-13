@@ -157,6 +157,33 @@ def test_triage_leaves_antibody_columns_empty_for_a_non_antibody(lysozyme,
         "the VHH lost its hallmark score, the gate is too strict"
 
 
+def test_the_generator_reads_the_hallmark_tetrad_from_vhh_core():
+    """The library generator must not keep its own copy of the tetrad.
+
+    It did until November 2026: `generator.HALLMARK_POSITIONS` and
+    `generator.VH_LIKE` were written out as literals beside the same four
+    positions in `vhh_core.HALLMARK_POSITIONS`. They agreed, which is why
+    nothing reported it, and that is the whole problem: a generator enforcing
+    one reading of the tetrad while the analysis screen applies another
+    produces sequences the app then calls VH-like, with no symptom pointing at
+    the cause. They are now derived, and this test says so rather than leaving
+    it to be undone by the next edit.
+
+    The values are checked against the literals they replaced, not against
+    `vhh_core` again, which would pass whatever the derivation did.
+    """
+    import generator as gn
+
+    assert gn.HALLMARK_POSITIONS == {42: set("FYLH"), 49: set("EQDG"),
+                                     50: set("RCLP"), 52: set("FGLSW")}
+    assert gn.VH_LIKE == {42: "V", 49: "G", 50: "L", 52: "W"}
+
+    positions = [imgt for imgt, _kabat, _residues, _vh, _note
+                 in vc.HALLMARK_POSITIONS]
+    assert sorted(gn.HALLMARK_POSITIONS) == sorted(positions)
+    assert sorted(gn.VH_LIKE) == sorted(positions)
+
+
 # --------------------------------------------------------------------------- #
 # 3. Repairs must not break the fold
 # --------------------------------------------------------------------------- #
