@@ -73,9 +73,17 @@ ran, from its Zenodo record.
   sequence both accept. **A sequence whose CDRs cannot be placed keeps its row
   and gets no score**, with the reason in the row, including one ambiguity no
   regex can settle: where the residue opening the FR3 anchor is a threonine,
-  the authors' numbering assigns it to CDR2 about half the time.
+  the authors' numbering assigns it to CDR2 about half the time. The length
+  limits that catch a misplaced anchor are the range of the solved single
+  domains in `data/sabdab/`, and they are **not** applied to an ANARCI
+  annotation: a numbering is not a guess, ANARCI gives ten of those domains a
+  CDR1 longer than twelve residues, and the first version of this refused to
+  score them with a note blaming anchors that had not run. On that diverse set
+  the anchors accept only a third of the sequences, against two thirds of the
+  model authors' single-framework library, and §3.8c now says both figures:
+  without HMMER, expect a third of a varied set to be scored.
 
-- 22 tests in `tests/test_specificity.py`, against a fixture of 150 sequences
+- 23 tests in `tests/test_specificity.py`, against a fixture of 150 sequences
   taken from the model authors' released pools, carrying their own CDR
   annotation and their own published score, so the ground truth comes from
   outside this repository. Two of them exist to stop a composite index growing

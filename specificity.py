@@ -382,16 +382,41 @@ def cdrs_regex(seq: str) -> CdrSet:
 def _implausible(cdr1: str, cdr2: str, cdr3: str) -> str:
     """Length checks that catch an anchor that matched in the wrong place.
 
-    The ranges are those of the authors' own library, widened: it is the
-    nonsense that has to be caught here, a CDR1 of two residues or a CDR3 of
-    sixty, not an unusual but real loop.
+    Only for the anchors. A length is evidence about a regex match and nothing
+    at all about an IMGT numbering: when ANARCI says a CDR1 is nineteen
+    residues long it is nineteen residues long, and this function used to
+    refuse to score such a sequence with a note blaming anchors that had not
+    run. Measured over the 1 352 single domains of the SAbDab snapshot in
+    `data/sabdab/`, ANARCI gives CDR1 lengths of 13, 14, 15, 17 and 19 to ten
+    of them, every one of them a solved structure.
+
+    The ranges below are therefore the observed range of those real domains,
+    not the narrow range of the authors' library, which would reject a long
+    CDR1 as nonsense: 4 to 19 for CDR1, 6 to 14 for CDR2, 3 to 64 for CDR3.
+    What has to be caught here is a match in the wrong place, which produces a
+    CDR of one or two residues or one that swallows a framework, and the
+    anchors' agreement with the IMGT CDRs is unchanged by the widening, see
+    `tools/polyreactivity/build.py`.
     """
-    for name, cdr, lo, hi in (("CDR1", cdr1, 5, 12), ("CDR2", cdr2, 5, 14),
-                              ("CDR3", cdr3, 3, 40)):
+    for name, cdr, lo, hi in (("CDR1", cdr1, 4, 19), ("CDR2", cdr2, 6, 14),
+                              ("CDR3", cdr3, 3, 64)):
         if not (lo <= len(cdr) <= hi):
             return (f"{name} came out {len(cdr)} residues long, outside the "
-                    f"plausible {lo} to {hi}, so the anchors matched in the "
-                    f"wrong place")
+                    f"{lo} to {hi} seen in solved single domains, so the "
+                    f"anchors matched in the wrong place")
+    return ""
+
+
+def _unusable(cdr1: str, cdr2: str, cdr3: str) -> str:
+    """The only thing that makes an IMGT annotation unusable: a missing CDR.
+
+    No ceiling and no floor beyond emptiness. A sequence numbered by ANARCI
+    has the CDRs the numbering gives it, and if one of them is empty there is
+    nothing to featurise rather than something implausible.
+    """
+    for name, cdr in (("CDR1", cdr1), ("CDR2", cdr2), ("CDR3", cdr3)):
+        if not cdr:
+            return f"{name} is empty in the IMGT numbering, so there is nothing to score"
     return ""
 
 
@@ -428,7 +453,7 @@ def cdrs_from_annotation(annotation: dict | None) -> CdrSet:
                       note="no FR2, so IMGT 55 is missing and the model's CDR2 "
                            "cannot be assembled")
     cdr2 = fr2[-1] + cdr2
-    bad = _implausible(cdr1, cdr2, cdr3)
+    bad = _unusable(cdr1, cdr2, cdr3)
     if bad:
         return CdrSet(annotator="ANARCI / IMGT", note=bad)
     return CdrSet(cdr1, cdr2, cdr3, annotator="ANARCI / IMGT", ok=True)

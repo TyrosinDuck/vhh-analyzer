@@ -196,6 +196,31 @@ def test_anarci_and_the_anchors_agree_where_anarci_runs(pool):
     assert agree == compared
 
 
+def test_a_long_cdr1_is_scored_rather_than_called_implausible():
+    """An IMGT numbering is not a guess, so its lengths are not checked.
+
+    This VHH is PDB 7dss chain A, from the SAbDab snapshot this repository
+    ships: ANARCI gives it a 13-residue CDR1, and the plausibility ceiling
+    written for the regex anchors used to refuse it with a note blaming
+    anchors that had never run. Ten of the 1 352 single domains in that
+    snapshot have a CDR1 longer than 12, and every one of them is a solved
+    structure.
+    """
+    if not vc.anarci_available():
+        pytest.skip("ANARCI cannot run here")
+    # Read out of the snapshot rather than pasted in here: a sequence copied
+    # into a test is a second copy of data the repository already holds, and
+    # the one time it was pasted it was pasted wrong.
+    snapshot = pd.read_csv(Path(__file__).parent.parent / "data" / "sabdab"
+                           / "single_domain.csv")
+    row = snapshot[snapshot["structures"].astype(str).str.contains("7dss")]
+    assert len(row) == 1, "7dss is no longer in the SAbDab snapshot"
+    got = sp.cdrs_from_annotation(vc.annotate_anarci(str(row["sequence"].iloc[0])))
+    assert got.ok, got.note
+    assert len(got.cdr1) >= 13
+    assert 0.0 <= sp.polyreactivity_percentile(sp.polyreactivity([got.cdrs]))[0] <= 100.0
+
+
 def test_the_anarci_path_reproduces_the_authors_cdrs(pool):
     """Including their CDR2, which is one residue wider than the app's.
 

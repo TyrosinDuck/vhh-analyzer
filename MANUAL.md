@@ -859,6 +859,16 @@ sequence at 95 is more polyreactive than 95% of the clones that survived their
 selection for cleanliness. The app flags at 90, which is their own default and
 a convention, not a measured threshold; the provenance screen lists it as one.
 
+**A length is evidence about an anchor and nothing about a numbering.** The
+anchors refuse a CDR whose length falls outside the range of solved single
+domains, 4 to 19 for CDR1, 6 to 14 for CDR2 and 3 to 64 for CDR3, because a
+regex that matched in the wrong place usually produces one. Those limits are
+**not** applied to an ANARCI annotation, where the only thing that makes a
+sequence unscorable is an empty CDR: ANARCI gives ten of the single domains in
+the SAbDab snapshot a CDR1 longer than twelve residues, up to seventeen, and
+every one of them is a solved structure. A sequence with an unusually long
+CDR1 is scored, not refused.
+
 **Only IMGT CDRs are scored, and the screen says which annotator produced
 them.** The model was trained on IMGT boundaries, with one wrinkle: its CDR2 is
 IMGT 55 to 65, one residue wider at the N-terminus than the CDR2 shown
@@ -882,6 +892,15 @@ worth knowing:
   those reasons is an ambiguity nothing in the sequence can settle: where the
   residue that opens the FR3 anchor is a threonine, the authors' numbering puts
   it in CDR2 about half the time and in the framework the other half.
+
+  Their library is one synthetic framework, so that acceptance rate is the
+  optimistic one. On the 1 354 single domains of the SAbDab snapshot in
+  `data/sabdab/`, which are solved structures from every source including
+  engineered and humanised frameworks and VNARs, the anchors accept 32.6%:
+  two thirds of those sequences carry no recognisable FR2-end or FR3-start
+  motif and are refused. **On a server without HMMER, expect a third of a
+  diverse set to be scored and the rest to carry a reason.** With ANARCI,
+  1 351 of the 1 352 that it numbers are scored.
 
 Where ANARCI does run, the two paths agree on every sequence both accept, and
 the ANARCI path reproduces the authors' CDRs for 96% of the sequences of the
