@@ -46,7 +46,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.16c"
+__version__ = "2026.11.16d"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -226,6 +226,18 @@ def png_chou_fasman(name, seq, window, ann):
 def generator_matrix():
     """The position-frequency matrix and its provenance, loaded once."""
     return gn.load_matrix(), gn.load_meta()
+
+
+@st.cache_resource
+def repertoire_reference():
+    """What the bundled reference set is, for the captions that state it.
+
+    A cache over `repertoire.reference_report` and nothing more. The report
+    itself is defined once, in the module a notebook imports; this layer exists
+    because it reads both data files and the Repertoire tab draws it on every
+    rerun.
+    """
+    return rep.reference_report()
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=8)

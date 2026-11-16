@@ -1,9 +1,10 @@
 """
 repertoire, compare sequences against the natural VHH repertoire.
 
-The app already ships an IMGT position-frequency matrix built from 1958 real
-VHHs (PLAbDab-nano), used so far only to *generate* synthetic sequences. Turned
-around, the same table answers two questions about sequences you actually have:
+The app already ships an IMGT position-frequency matrix built from real VHHs
+(PLAbDab-nano, by `tools/plabdab/build_matrix.py`), used so far only to
+*generate* synthetic sequences. Turned around, the same table answers two
+questions about sequences you actually have:
 
 * **Is any framework residue unusual?** A position carrying a residue seen in
   under a percent or two of the natural repertoire is worth a second look, it
@@ -16,9 +17,9 @@ around, the same table answers two questions about sequences you actually have:
 Two cautions are built into the output rather than left to the reader.
 
 *Support matters.* A frequency computed from 30 sequences is not a frequency
-computed from 1900. Every rarity call carries the ``n_residues`` behind it, and
-positions below a minimum support are reported separately instead of being
-called rare.
+computed from the whole reference set. Every rarity call carries the
+``n_residues`` behind it, and positions below a minimum support are reported
+separately instead of being called rare.
 
 *Rare is not wrong.* A residue absent from the reference set may be a genuine
 novelty, a germline this set under-samples, or the very mutation you selected
@@ -34,15 +35,26 @@ import generator as gn
 import vhh_core as vc
 
 __all__ = [
-    "rare_residues", "rarity_table", "plot_rarity", "cdr_length_comparison", "cdr_length_context", "MIN_FOR_BARS",
+    "reference_report", "rare_residues", "rarity_table", "plot_rarity", "cdr_length_comparison", "cdr_length_context", "MIN_FOR_BARS",
     "plot_cdr_lengths", "composition_comparison", "plot_composition",
     "RARE_THRESHOLD", "MIN_SUPPORT", "__version__",
 ]
 
-__version__ = "2026.10.27a"
+__version__ = "2026.11.16a"
 
 RARE_THRESHOLD = 0.02      # frequency at or below this counts as unusual
 MIN_SUPPORT = 100          # positions backed by fewer reference sequences are set aside
+
+
+def reference_report() -> dict:
+    """What the bundled reference is, for any screen that needs to say so.
+
+    A thin pass-through to ``generator.matrix_report`` over the bundled files,
+    so that a caller does not have to know that the repertoire reference and the
+    synthetic generator read the same two files. Both screens state the size of
+    the reference set, and both get it from here.
+    """
+    return gn.matrix_report(_matrix(), _meta())
 
 
 def _matrix():

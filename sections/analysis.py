@@ -48,7 +48,8 @@ from compute import (aggregation_for, analyze_with_progress, annotation_for,
     png_identity, png_liability_map, png_liability_profile, png_logo,
     png_msa, png_profile_one, png_profiles, png_rarity,
     png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
-    proteases_for, rarity_tables, rep, repairs_for, repertoire_stats,
+    proteases_for, rarity_tables, rep, repairs_for,
+    repertoire_reference, repertoire_stats,
     sabdab_closest, st,
     tempfile, tg, tnp_profile_for, triage_for, vc)
 import session as ses
@@ -57,7 +58,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    anarci_requirement, anarci_status, current_sequences,
                    fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 
 @dataclass
@@ -127,11 +128,15 @@ _FAMILIES = {
                       "How your sequences compare with each other: alignment "
                       "and sequence logo, differences from a reference, clonal "
                       "families."),
+    # The size of the reference set is deliberately absent from this sentence.
+    # This dict is read at import time, before any data file is opened, so a
+    # number here could only be a hand-written copy of what the matrix holds;
+    # the tab itself states it, from `repertoire.reference_report`.
     "🌍 Repertoire": ("repertoire", ["Repertoire", "Closest structure"],
                       "How they compare with what is already known: unusual "
                       "framework residues, CDR lengths and composition "
-                      "against 1958 real VHHs, and the nearest solved "
-                      "structures."),
+                      "against a reference set of real VHHs, and the nearest "
+                      "solved structures."),
     "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download", "Session"],
                    "What you make from them: codon-optimised DNA, fusion "
                    "constructs, CSV, figures, the PDF report, and the session "
@@ -1362,10 +1367,21 @@ def _repertoire(r: Run) -> None:
 
     # --- Repertoire ------------------------------------------------------------- #
     with tabs["Repertoire"]:
+        ref = repertoire_reference()
+        prov = ref.get("provenance") or {}
         st.markdown(
             "Your sequences against the natural VHH repertoire, the same "
             "position-frequency matrix the synthetic generator samples from, used "
             "here the other way round.")
+        st.caption(
+            f"Reference: **{ref['source']}**, {ref['n_sequences']} unique VHH "
+            f"sequences over {ref['n_positions']} IMGT positions, median support "
+            f"{ref['median_support']} sequences per position"
+            + (f". Newest sequence in the download it was built from: "
+               f"{prov['latest_entry']}." if prov.get("latest_entry") else ".")
+            + " These are nanobodies from patents and the literature, not a naive "
+              "immune repertoire: they are biased towards what somebody thought "
+              "worth publishing.")
         if not heavy_only_notice("Repertoire comparison"):
             pass
         else:
@@ -1391,7 +1407,12 @@ def _repertoire(r: Run) -> None:
                                          float(rep.RARE_THRESHOLD), step=0.001,
                                          format="%.3f")
                 with rc[1]:
-                    min_sup = st.slider("Minimum support", 0, 1900,
+                    # The slider ends at the best-supported position in the
+                    # matrix, read from it rather than written here: a hand-set
+                    # ceiling of 1900 was a copy of one matrix's maximum, and
+                    # would silently cut the range short on a bigger reference.
+                    min_sup = st.slider("Minimum support", 0,
+                                        int(ref["max_support"]),
                                         int(rep.MIN_SUPPORT), step=50,
                                         help="Positions backed by fewer reference "
                                              "sequences than this are set aside "
@@ -2152,10 +2173,14 @@ def render(settings: Settings) -> None:
             "Frameworks are sampled position by position from a real IMGT "
             "position-frequency matrix, so they look like natural frameworks. CDRs are "
             "drawn at random, with lengths taken from the same reference set.")
+        gprov = report.get("provenance") or {}
         st.caption(
             f"Reference: **{report['source']}**, {report['n_sequences']} unique VHH "
             f"sequences, {report['n_positions']} IMGT positions, median support "
-            f"{report['median_support']} sequences per position.")
+            f"{report['median_support']} sequences per position."
+            + (f" Built by `{gprov['built_by']}` from a download whose newest "
+               f"sequence dates from {gprov['latest_entry']}."
+               if gprov.get("latest_entry") else ""))
         st.caption(
             f"*{gmeta.get('source_title', '')}*, "
             f"[doi:{gmeta.get('source_doi', '')}]"
@@ -2224,7 +2249,8 @@ def render(settings: Settings) -> None:
             "a combination that never co-occurs in nature can come out, the hallmark "
             "tetrad is the usual casualty, which is why it is enforced by default. And "
             "**a frequency is only as good as its support**: a position seen in 30 "
-            "reference sequences carries far less information than one seen in 1900. "
+            f"reference sequences carries far less information than one seen in "
+            f"{report['max_support']}. "
             "These are synthetic sequences for controls and benchmarks; nothing here "
             "predicts that they fold or bind anything.")
 

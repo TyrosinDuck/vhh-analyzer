@@ -7,8 +7,11 @@ drawn at random, with lengths taken from the empirical distribution of the same
 reference set.
 
 The bundled matrix comes from **PLAbDab-nano** (OPIG, University of Oxford),
-1958 unique VHH sequences numbered with ANARCI against the alpaca germlines.
-You can supply your own matrix instead, a panning campaign of your own gives a
+numbered with ANARCI against the alpaca germlines and built by
+`tools/plabdab/build_matrix.py`, which records in the metadata which download
+it came from and how many sequences survived its filters. How many that is, is
+read from the file by ``matrix_report`` and never written out here. You can
+supply your own matrix instead, a panning campaign of your own gives a
 generator that mimics your library rather than the literature.
 
 Two honest limitations, both inherent to sampling a position-frequency matrix:
@@ -19,7 +22,7 @@ Two honest limitations, both inherent to sampling a position-frequency matrix:
   usual casualty, which is why ``generate`` can enforce it.
 * **A frequency is only as good as its support.** The ``n_residues`` column says
   how many real sequences back each position; a position seen in 30 sequences
-  carries far less information than one seen in 1900.
+  carries far less information than one backed by the whole reference set.
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ __all__ = [
     "generate", "generate_many", "matrix_report", "__version__",
 ]
 
-__version__ = "2026.11.13a"
+__version__ = "2026.11.16a"
 
 AA = list("ACDEFGHIKLMNPQRSTVWY")
 
@@ -92,7 +95,20 @@ def load_meta(path: str | Path | None = None) -> dict:
 
 
 def matrix_report(matrix: pd.DataFrame, meta: dict | None = None) -> dict:
-    """What the matrix is made of, shown to the user before they trust it."""
+    """What the matrix is made of, shown to the user before they trust it.
+
+    Every screen that states how large the reference set is reads it from here
+    rather than carrying the number itself. The size of the reference changes
+    whenever the matrix is rebuilt from a newer download, and a caption that
+    said 1958 while the file held something else would be a second copy of a
+    fact that is in the file: `max_support` is here for the same reason, since
+    the Repertoire screen's support slider has to end somewhere and that
+    somewhere is a property of the matrix.
+
+    ``provenance`` is whatever `tools/plabdab/build_matrix.py` recorded about
+    the download the matrix came from, and is empty for a matrix built before
+    that script existed or supplied by a user.
+    """
     meta = meta or {}
     by_region = (matrix.groupby("region")["n_residues"]
                  .agg(["count", "min", "max"]).rename(
@@ -104,7 +120,9 @@ def matrix_report(matrix: pd.DataFrame, meta: dict | None = None) -> dict:
         "n_positions": int(len(matrix)),
         "median_support": int(matrix["n_residues"].median()),
         "min_support": int(matrix["n_residues"].min()),
+        "max_support": int(matrix["n_residues"].max()),
         "by_region": by_region,
+        "provenance": dict(meta.get("provenance") or {}),
     }
 
 

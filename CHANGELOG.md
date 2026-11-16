@@ -16,7 +16,44 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **The reference repertoire matrix has a build script, and therefore a
+  provenance.** `data/vhh_position_freq.csv` is what the Repertoire screen calls
+  a residue unusual against and what the synthetic generator samples frameworks
+  from, and until now it was simply present in the repository: PLAbDab-nano was
+  named and cited, but nothing recorded which download it came from, when, or
+  what had been filtered out to produce it. It could not be rebuilt and it could
+  not be checked. `tools/plabdab/build_matrix.py` is the missing derivation, and
+  it reproduces the committed matrix byte for byte from the April 2024
+  PLAbDab-nano VHH download, which is the only evidence that the filters it
+  applies are the ones originally applied: they were recovered by reproducing
+  the output rather than read off a note. Run it with `--check` to compare a
+  rebuild against the committed files. `data/vhh_position_meta.json` now carries
+  a `provenance` block naming the script, the download, the date of its newest
+  entry, the length cut-off and the count of every sequence dropped at each
+  step, so both screens can say where their reference comes from. One thing is
+  not known and is marked as such in the script: any cut-off from 99 to 101
+  residues separates the seven fragments in that download from the 1958
+  sequences kept, so the original value is somewhere in that range and
+  `MIN_LENGTH` is set to 99, the low end. `MANUAL.md` §3.11c covers all of it,
+  including why rebuilding this matrix is less pressing than refreshing the
+  structure index, and what has to be re-examined when it is rebuilt.
+
 ### Changed
+
+- **Both screens read the size of the reference set out of the file instead of
+  stating it.** The number 1958 was written into the Repertoire family's
+  description, the generator's caption and three explanatory captions, and the
+  support slider's ceiling of 1900 was one matrix's maximum support copied by
+  hand. Rebuilding the matrix from a newer download would have left every one of
+  them describing a reference set the app was no longer using, silently, which
+  is the duplicated-list failure this repository has had twice before. They now
+  come from `repertoire.reference_report`, over `generator.matrix_report`, which
+  gained `max_support` and the metadata's `provenance` for the purpose. The
+  Repertoire screen also now states what the reference actually is: nanobodies
+  from patents and the literature, biased towards what somebody thought worth
+  publishing, and not a naive immune repertoire.
 
 - **The recipient vector is drawn where you choose it.** The map and the feature
   inventory sat at the foot of the in-silico cloning screen, behind the stop

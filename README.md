@@ -378,10 +378,19 @@ to keep in step with it. `sanger.VECTORS` is what `cloning.derive_layout`
 returns for the bundled maps, and `tests/test_derive_layout.py` pins what the
 five of them derive to.
 
-**The synthetic generator's reference set.** `generator.py` samples frameworks
-from an IMGT position-frequency matrix built from **PLAbDab-nano** (OPIG,
-University of Oxford), 1958 unique VHH sequences, bundled as
-`data/vhh_position_freq.csv` and `data/vhh_position_meta.json`.
+**The reference repertoire.** `generator.py` samples synthetic frameworks from
+an IMGT position-frequency matrix built from **PLAbDab-nano** (OPIG, University
+of Oxford), and the Repertoire screen reads the same matrix the other way round
+to say which residues in a submitted sequence are rare. It is bundled as
+`data/vhh_position_freq.csv` and `data/vhh_position_meta.json`, derived from
+PLAbDab-nano's own VHH download by `tools/plabdab/build_matrix.py` and never
+edited by hand; the metadata records which download, its newest entry, and the
+count of every sequence the filters dropped. Rebuild it by downloading a fresh
+copy and rerunning that script, or run it with `--check` to confirm that the
+committed files are what a given download produces. As shipped in November 2026
+the matrix holds 1958 unique sequences from a download whose newest entry is
+from April 2024; `MANUAL.md` §3.11c says why updating it is less pressing than
+for the structure index, and what to re-examine when it is updated.
 
 > *PLAbDab-nano: a database of camelid and shark nanobodies from patents and
 > literature*, [doi:10.1093/nar/gkae881](https://doi.org/10.1093/nar/gkae881).

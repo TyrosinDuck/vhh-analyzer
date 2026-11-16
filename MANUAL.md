@@ -131,7 +131,7 @@ top. Each family answers one question:
 | 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
 | ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b) |
 | 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
-| 🌍 **Repertoire** | How do they compare with what is known? (§3.11, 3.11b) |
+| 🌍 **Repertoire** | How do they compare with what is known? (§3.11, 3.11b, 3.11c) |
 | 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
 
 Only the selected family executes. That is the whole point of a selector rather
@@ -158,8 +158,8 @@ you
 only pay for it when you ask for it, and the cost has stopped being silent.
 
 Repertoire sits in its own family rather than inside Comparison for the same
-reason: it is a different question (your sequences against 1958 natural VHHs
-rather
+reason: it is a different question (your sequences against a reference set of
+natural VHHs rather
 than against each other), and keeping it separate takes Comparison from 14 s to
 9 s.
 
@@ -238,11 +238,12 @@ position-frequency matrix built from real VHHs. CDRs are drawn at random, with
 lengths taken from the same reference set.
 
 **The reference set.** The bundled matrix comes from **PLAbDab-nano** (OPIG,
-University of Oxford): 1958 unique VHH sequences, numbered with ANARCI against
-the
-alpaca germlines, giving 212 IMGT positions with a median support of 1890
-sequences
-per position. The panel states this, along with the support, because a
+University of Oxford), numbered with ANARCI against the
+alpaca germlines by `tools/plabdab/build_matrix.py` (§3.11c). As shipped in
+November 2026 it holds 1958 unique VHH sequences over 212 IMGT positions with a
+median support of 1890 sequences per position, from a download whose newest
+sequence dates from April 2024. The panel states all of it, read from the file
+so that it stays true across a rebuild, because a
 frequency is
 only as good as the number of sequences behind it.
 
@@ -977,8 +978,10 @@ you want when checking whether a clone kept its binding site.
 
 Your sequences against the natural VHH repertoire. This is the same IMGT
 position-frequency matrix the synthetic generator samples from (§3.1b,
-PLAbDab-nano,
-1958 VHHs), used the other way round.
+PLAbDab-nano), used the other way round. The screen states the size of the
+reference set, how many IMGT positions it covers and the date of the newest
+sequence behind it, read from the file rather than written into the caption, so
+rebuilding the matrix changes what the screen says about it (§3.11c).
 
 **Unusual framework residues.** For each sequence, the framework positions whose
 residue is rare in the reference. This is what catches a Sanger miscall, a PCR
@@ -997,9 +1000,10 @@ would bury the framework signal that actually matters.
 Two guards are built in rather than left to you. The *minimum support* slider
 sets
 aside positions backed by too few reference sequences instead of calling them
-rare, a frequency from 30 sequences is not a frequency from 1900, and every row
-carries
-its support. And the wording stays "unusual", never "error": **rare is not
+rare, a frequency from 30 sequences is not a frequency from the full reference
+set, and every row carries
+its support. The slider ends at the best-supported position in the matrix,
+which is a property of the file and not a number set here. And the wording stays "unusual", never "error": **rare is not
 wrong**.
 A residue absent from the reference may be a genuine novelty, a germline this
 set
@@ -1106,6 +1110,70 @@ IMGT windows this app annotates with. Twenty-five entries were compared
 residue for residue and all three CDRs agreed on every one, and a test keeps
 checking a sample, because the CDR3 identity column would otherwise be
 comparing two different substrings.
+
+### 3.11c Where the reference matrix comes from, and rebuilding it
+
+Two screens read the same two files: `data/vhh_position_freq.csv`, the IMGT
+position-frequency matrix, and `data/vhh_position_meta.json`, its metadata and
+the CDR length distributions. The Repertoire screen calls a residue unusual
+against them, and the synthetic generator (§3.1b) samples frameworks from them.
+
+**They are built by a script, which they were not before November 2026.** Until
+then the matrix was simply in the repository: the source was named and the paper
+was cited, but nothing recorded which download it came from, on what date, or
+what had been filtered out to get it. It could not be rebuilt and it could not
+be checked, which for the file that decides what counts as an unusual residue is
+the wrong state for it to be in.
+
+`tools/plabdab/build_matrix.py` is that derivation. Download the **VHH
+sequences** file from
+<https://opig.stats.ox.ac.uk/webapps/plabdab-nano/> and run
+
+    python tools/plabdab/build_matrix.py <vhh_sequences.csv.gz> --downloaded 2026-11-16
+
+It keeps distinct sequences only, drops any carrying a residue outside the
+twenty standard ones, drops fragments shorter than `MIN_LENGTH`, numbers the
+rest with ANARCI in the IMGT scheme against the alpaca germlines, and writes
+both files with every count of what it dropped recorded in the metadata. The
+position order, the region boundaries and the amino-acid alphabet are imported
+from `generator.py` rather than restated, since that module reads the file this
+script writes.
+
+**It reproduces the matrix that was already committed, byte for byte**, from the
+April 2024 download, and that is the only evidence that the filters above are
+the ones originally applied: they were recovered by reproducing the output, not
+read off a note. One thing remains unknown and is marked as such in the script.
+Any length cut-off from 99 to 101 residues separates the seven fragments in that
+download from the 1958 sequences that were kept, so the original value is
+somewhere in that range and cannot be pinned down further. `MIN_LENGTH` is set
+to 99, the low end.
+
+Run the script with `--check` to compare a rebuild against the committed files
+without writing anything; it exits non-zero on any difference. That check is
+not in the test suite, because the download is a 2 MB file that is not in the
+repository and numbering two thousand sequences takes about half a minute. What
+the suite checks instead is in `tests/test_position_matrix.py`: that the
+committed matrix and metadata are internally consistent, that the two screens
+read their captions out of the file rather than restating them, and that the
+script's filtering and aggregation do what this section says.
+
+**Updating it is not urgent, and that is a real difference from SAbDab.** The
+closest-structure index (§3.11b) goes out of date in a way that matters, because
+one new entry can be exactly your best hit, which is why the app warns when that
+snapshot is old. This matrix answers a question about a population instead: what
+residues natural VHHs carry at each position, and in what proportion. Those
+frequencies are stable at this sample size, so there is no staleness warning on
+this screen and none is wanted. What would change on a rebuild from a larger
+download is the handful of residues sitting near `repertoire.RARE_THRESHOLD`,
+which is why that constant's entry in the provenance register says it has to be
+re-examined against the new matrix rather than carried over.
+
+**What this reference is, and is not.** These are nanobodies collected from
+patents and the academic literature. They are not a naive immune repertoire:
+they are biased towards sequences somebody thought worth publishing or
+protecting, and a newer download would carry the same bias. "Natural
+repertoire" on the Repertoire screen means this reference set, which the screen
+names, and the caption says so.
 
 ### 3.12 Clonal families
 

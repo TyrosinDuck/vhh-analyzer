@@ -66,5 +66,20 @@
  "source_doi": "10.1093/nar/gkae881",
  "source_title": "PLAbDab-nano: a database of camelid and shark nanobodies from patents and literature",
  "source_availability": "PLAbDab-nano is freely available to download and query at https://opig.stats.ox.ac.uk/webapps/plabdab-nano/",
- "derived": "Aggregate position-frequency matrix derived from the VHH subset; the sequences themselves are not redistributed here."
+ "derived": "Aggregate position-frequency matrix derived from the VHH subset; the sequences themselves are not redistributed here.",
+ "provenance": {
+  "built_by": "tools/plabdab/build_matrix.py",
+  "built_from": "vhh_sequences.csv",
+  "downloaded": "2026-11-16",
+  "latest_entry": "2024-04-10",
+  "earliest_entry": "1990-09-15",
+  "n_entries": 4457,
+  "n_distinct_sequences": 1975,
+  "n_positions": 212,
+  "min_length": 99,
+  "dropped_nonstandard_alphabet": 10,
+  "dropped_shorter_than_min_length": 7,
+  "dropped_not_numbered": 0,
+  "undated_entries": 0
+ }
 }

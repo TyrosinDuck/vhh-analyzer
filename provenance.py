@@ -477,12 +477,17 @@ _REGISTRY = (
         where=("repertoire", "RARE_THRESHOLD"),
         unit="fraction of the reference sequences at that position",
         basis="convention",
-        source="Hand set against the bundled PLAbDab-nano position matrix. "
-               "It is a frequency in that reference repertoire and not a "
-               "probability of anything: a residue below it may be a Sanger "
-               "miscall, a PCR artefact or a genuine novelty, and the app "
-               "reports the frequency beside the flag rather than deciding "
-               "which. A slider in the app.",
+        source="Hand set against the bundled PLAbDab-nano position matrix, "
+               "the one `tools/plabdab/build_matrix.py` builds, whose "
+               "provenance block names the download behind it. It is a "
+               "frequency in that reference repertoire and not a probability "
+               "of anything: a residue below it may be a Sanger miscall, a "
+               "PCR artefact or a genuine novelty, and the app reports the "
+               "frequency beside the flag rather than deciding which. A "
+               "slider in the app. Rebuilding the matrix from a larger "
+               "download does not carry this value over untested: it was set "
+               "against one reference set, and what it flags has to be "
+               "compared before and after rather than assumed to hold.",
         used_for="Repertoire: which positions are flagged as carrying an "
                  "unusual residue.",
     ),

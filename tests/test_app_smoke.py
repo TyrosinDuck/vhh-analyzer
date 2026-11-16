@@ -317,6 +317,46 @@ def test_the_reference_comparison_says_what_it_needs_without_hmmer(app):
             "the message should carry the command that fixes it"
 
 
+def test_the_repertoire_screen_states_the_reference_it_actually_uses(app):
+    """The caption's numbers come from the matrix, not from the source.
+
+    They were written into the source until November 2026, so rebuilding the
+    matrix from a newer PLAbDab-nano download would have left the screen
+    describing a reference set it was no longer comparing against, with nothing
+    to report it. Here the caption is read back and checked against the file,
+    which is the only way that stays true across a rebuild.
+    """
+    import generator as gn
+
+    report = gn.matrix_report(gn.load_matrix(), gn.load_meta())
+
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    family = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+              if "Repertoire" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(family).run()
+    _no_failure(app, "Repertoire family")
+
+    # The generator's own caption is on the same page, above the analysis, and
+    # also names the reference set. "over" is what distinguishes this one.
+    captions = [str(c.value) for c in app.caption]
+    said = [c for c in captions if "unique VHH sequences over" in c]
+    assert said, f"the Repertoire screen did not say what its reference is: {captions}"
+    caption = said[0]
+    assert str(report["n_sequences"]) in caption, \
+        f"the caption does not state the matrix's own sequence count: {caption!r}"
+    assert str(report["n_positions"]) in caption
+    assert "patents" in caption, \
+        "the caption should say the reference is not a naive immune repertoire"
+
+    sliders = [s for s in app.slider if s.label == "Minimum support"]
+    assert sliders, "the support slider did not render"
+    assert sliders[0].max == report["max_support"], \
+        "the slider's ceiling is not the matrix's best-supported position"
+
+
 @pytest.mark.parametrize("with_cf", [False, True])
 def test_the_pdf_report_builds(app, with_cf):
     """The PDF report raised ``NameError`` on every press of its button.
