@@ -24,11 +24,12 @@ from __future__ import annotations
 import pandas as pd
 
 import repertoire as rp
+import specificity as sp
 import vhh_core as vc
 
 __all__ = ["triage_table", "COLUMN_GROUPS", "FLAG_COLUMNS", "__version__"]
 
-__version__ = "2026.10.26a"
+__version__ = "2026.11.16a"
 
 # For the UI, so a column can be shown or hidden by theme rather than one by one
 COLUMN_GROUPS = {
@@ -39,12 +40,18 @@ COLUMN_GROUPS = {
     "Repertoire": ["n_unusual", "rarest"],
     "Cysteines": ["n_cys", "n_orphan_cys", "extra_disulfide"],
     "Antibody": ["hallmark_score", "humanness", "closest_human"],
+    # The plastic resemblance score of `specificity.py` is deliberately absent.
+    # This table is read as a table of flags, every column in it is calibrated
+    # against something, and an uncalibrated percentile sitting between two
+    # that are not would be read as one of them. It has its own tab, where the
+    # caveat is in front of the number.
+    "Specificity": ["polyreactivity_pct"],
 }
 
 # Boolean columns, so the table can be filtered down to "show me only what has
 # something wrong with it"
 FLAG_COLUMNS = ["has_high_risk", "has_orphan_cys", "has_unusual_residue",
-                "has_apr", "liab_in_CDR"]
+                "has_apr", "liab_in_CDR", "polyreactive"]
 
 
 def _safe(fn, default=None):
@@ -58,13 +65,20 @@ def triage_table(seqs: dict[str, str], annotations: dict,
                  kinds: dict | None = None, ph: float | None = None,
                  include_added: bool = True,
                  rare_threshold: float = rp.RARE_THRESHOLD,
-                 min_support: int = rp.MIN_SUPPORT) -> pd.DataFrame:
+                 min_support: int = rp.MIN_SUPPORT,
+                 annotation_is_imgt: bool = False) -> pd.DataFrame:
     """Every per-sequence metric the app computes, one row each.
 
     ``kinds`` is the classification map; without it the ``type`` column reads
     "unknown". Anything that cannot be computed for a given sequence, a
     non-antibody has no hallmark score, comes back as ``None`` rather than
     raising, so one awkward sequence never empties the table.
+
+    ``annotation_is_imgt`` says whether ``annotations`` came from ANARCI. The
+    polyreactivity column needs IMGT CDRs and takes them from the annotation
+    when it can; otherwise `specificity` re-annotates from its own anchors and
+    leaves the cell empty when they do not hold. The regex annotation of
+    `vhh_core` is never used for it, see the comment in `specificity.py`.
     """
     rows = []
     for name, seq in seqs.items():
@@ -138,7 +152,20 @@ def triage_table(seqs: dict[str, str], annotations: dict,
             "closest_human": (hum or {}).get("gene"),
         })
 
+        # Polyreactivity, on the IMGT CDRs only. A sequence that is not a
+        # variable domain has none, and one whose CDRs could not be placed
+        # keeps an empty cell: `polyreactive` then reads False, which says "not
+        # flagged", not "clean". The tab is where the reason is given.
+        poly = None
+        if is_domain:
+            cdrs = sp.model_cdrs(seq, ann, annotation_is_imgt)
+            if cdrs.ok:
+                poly = float(sp.polyreactivity_percentile(
+                    sp.polyreactivity([cdrs.cdrs]))[0])
+        row["polyreactivity_pct"] = round(poly, 1) if poly is not None else None
+
         row.update({
+            "polyreactive": bool(poly is not None and poly >= sp.FLAG_PERCENTILE),
             "has_high_risk": bool(row["n_high_risk"]),
             "has_orphan_cys": bool(row["n_orphan_cys"]),
             "has_unusual_residue": bool(row["n_unusual"]),

@@ -82,6 +82,7 @@ try:
     import reference
     import repertoire
     import sanger
+    import specificity
     import session
     import shell
     import structure
@@ -125,18 +126,19 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # AttributeError; this turns that into a message naming the stale file.
 REQUIRED_MODULES = {"vhh_core": "2026.11.16a", "sanger": "2026.11.16b",
                     "session": "2026.11.12a",
-                    "provenance": "2026.11.16a",
+                    "provenance": "2026.11.16b",
                     "sections.provenance": "2026.11.13a",
                     "cloning": "2026.11.16b", "generator": "2026.11.16a",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.11.16a",
-                    "triage": "2026.10.26a", "codons": "2026.11.12a",
+                    "triage": "2026.11.16a", "codons": "2026.11.12a",
                     "library": "2026.11.13b", "structure": "2026.11.16a",
-                    "shell": "2026.11.16a", "compute": "2026.11.16d",
+                    "shell": "2026.11.16a", "compute": "2026.11.16e",
                     "af3": "2026.11.04a",
                     "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.16b",
+                    "sections.analysis": "2026.11.16c",
+                    "specificity": "2026.11.16a",
                     "tnp": "2026.11.12a",
                     "sabdab": "2026.11.12a",
                     "elsewhere": "2026.11.12b",

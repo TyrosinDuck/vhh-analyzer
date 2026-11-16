@@ -55,3 +55,29 @@ Two bundled data files are not MIT either, and keep the terms they came with:
                       CC0-1.0, a public-domain dedication.
 
 Neither affects the licence of the code.
+
+---
+
+One bundled data file is MIT, but somebody else's MIT, and carries their
+notice:
+
+  data/specificity/harvey_lr3mer_cdrs.npz
+  data/specificity/polyreactivity_quantiles.npz
+
+                      The fitted weights of the polyreactivity logistic
+                      regression of Harvey et al., Nat Commun 13, 7554 (2022),
+                      and the score distribution of their low-polyreactivity
+                      pool, both extracted from their released model and data
+                      by tools/polyreactivity/build.py.
+
+                      MIT License, Copyright (c) 2022 Debora Marks Lab,
+                      github.com/debbiemarkslab/nanobody-polyreactivity. The
+                      permission notice above applies to these files with that
+                      copyright line in place of this project's, which is what
+                      their licence asks for when a substantial portion is
+                      redistributed.
+
+  data/specificity/plastic_quantiles.npz
+
+                      Derived from the CDRs of the same pool by this project,
+                      and so also covered by that notice.

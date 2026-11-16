@@ -18,6 +18,69 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **Polyreactivity, as a published predictor, in the Developability family.**
+  A new tab scores the CDRs with the logistic regression of Harvey et al., Nat
+  Commun 13:7554 (2022), and reports the score, its percentile against their
+  low-polyreactivity pool of 69 702 sequences, and a flag at their default
+  90th percentile. Only their fitted coefficients are shipped, as the 791
+  non-zero weights of 8420 in an `.npz`, so scoring needs numpy alone: no
+  scikit-learn, no pickle, nothing that breaks on a version bump, and 90 kB of
+  data files in total. The percentile also appears in the triage table under a
+  new `Specificity` column group, with a `polyreactive` flag.
+
+  Two things are negated or widened relative to their publication, and both are
+  stated in the interface because they change the number. Their decision
+  function is positive for *low* polyreactivity, and it is flipped here so
+  higher means more polyreactive, like every other flag in this app. And their
+  CDR2 is IMGT 55 to 65, one residue wider at the N-terminus than the CDR2 this
+  app displays; the model is fed their definition, rebuilt from the same
+  annotation.
+
+  `tools/polyreactivity/build.py` is the derivation of all three data files,
+  from their MIT-licensed repository, and it is also the check: on every run it
+  verifies that this implementation reproduces the scores they published for
+  all 69 702 sequences of their clean pool, which it does to a maximum
+  difference of 1.8e-15. Their copyright notice is in `LICENSE`. `MANUAL.md`
+  §3.8c has the caveats, which are the point: one synthetic library, one
+  framework, CDRs only, and a pre-screen ranking rather than a measurement.
+
+- **A plastic resemblance score, labelled uncalibrated everywhere it appears.**
+  A second tab reports how much the CDRs look like published
+  polystyrene-binding peptides, in two modes, as a percentile against the same
+  naive library. It is **not** a predictor and the interface says so before
+  showing a number: no dataset labels VHHs for adsorption on polystyrene, the
+  weights were set by hand in this project to reproduce the composition of each
+  published class, and every row carries `calibrated = False`. The two modes
+  are never added to each other or to the polyreactivity score, and the plastic
+  columns are deliberately absent from the triage table, which is read as a
+  table of flags. `provenance.py` gained a basis word, `unfitted`, for exactly
+  this kind of number, and both weight sets are registered under it.
+
+  The reference set is twelve peptides, each row carrying its own citation.
+  Nine peptides from the draft this module came from were dropped: their only
+  attribution was a review table whose text does not contain them, and the data
+  file names them and says why. §3.8d covers the rest.
+
+- **CDR annotation for the model, separate from the app's own, because the two
+  are not interchangeable.** `specificity.py` carries its own IMGT anchors for
+  servers without HMMER. This looks like a duplicate of `vhh_core`'s regex
+  annotator and is not: measured against the model authors' own annotation of
+  14 192 of their sequences, the app's display boundaries reproduce none of
+  their CDR sets, move the percentile by a median of 9 points and would place
+  the flag differently on 8.45% of sequences. The new anchors accept 66.6% of
+  their 141 204 annotated sequences and reproduce the IMGT CDRs exactly for
+  99.2% of what they accept; where ANARCI runs, the two paths agree on every
+  sequence both accept. **A sequence whose CDRs cannot be placed keeps its row
+  and gets no score**, with the reason in the row, including one ambiguity no
+  regex can settle: where the residue opening the FR3 anchor is a threonine,
+  the authors' numbering assigns it to CDR2 about half the time.
+
+- 22 tests in `tests/test_specificity.py`, against a fixture of 150 sequences
+  taken from the model authors' released pools, carrying their own CDR
+  annotation and their own published score, so the ground truth comes from
+  outside this repository. Two of them exist to stop a composite index growing
+  and to stop the runtime acquiring scikit-learn.
+
 - **The reference repertoire matrix has a build script, and therefore a
   provenance.** `data/vhh_position_freq.csv` is what the Repertoire screen calls
   a residue unusual against and what the synthetic generator samples frameworks

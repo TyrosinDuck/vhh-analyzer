@@ -35,6 +35,7 @@ import constructs as ctm
 import generator as gn
 import repertoire as rep
 import sabdab
+import specificity as sp
 import tnp
 import triage as tg
 import vhh_core as vc
@@ -50,7 +51,7 @@ from compute import (aggregation_for, analyze_with_progress, annotation_for,
     png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
     proteases_for, rarity_tables, rep, repairs_for,
     repertoire_reference, repertoire_stats,
-    sabdab_closest, st,
+    sabdab_closest, specificity_for, specificity_reference, st,
     tempfile, tg, tnp_profile_for, triage_for, vc)
 import session as ses
 from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
@@ -58,7 +59,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    anarci_requirement, anarci_status, current_sequences,
                    fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 
 @dataclass
@@ -117,12 +118,14 @@ _FAMILIES = {
                     "profiles, CDR and framework annotation, hallmarks and "
                     "humanness."),
     "⚠️ Developability": ("risk", ["Liabilities", "Aggregation",
-                                    "Clinical context"],
+                                    "Clinical context", "Polyreactivity",
+                                    "Plastic resemblance"],
                           "Whether it will behave: chemical liabilities, "
                           "cysteines and disulfides, suggested repairs, "
-                          "aggregation-prone regions, and where the CDR "
-                          "lengths sit relative to clinical-stage "
-                          "nanobodies."),
+                          "aggregation-prone regions, where the CDR lengths "
+                          "sit relative to clinical-stage nanobodies, and how "
+                          "likely the CDRs are to bind things they were not "
+                          "selected against."),
     "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
                                   "Clonal families"],
                       "How your sequences compare with each other: alignment "
@@ -208,11 +211,15 @@ def _triage(r: Run) -> None:
             flagged_only = st.checkbox(
                 "Only sequences with a flag", value=False,
                 help="Keeps the rows carrying a high-risk liability, an orphan "
-                     "cysteine, an unusual framework residue or an "
-                     "aggregation-prone region.")
+                     "cysteine, an unusual framework residue, an "
+                     "aggregation-prone region, or a polyreactivity percentile "
+                     "at or above the flag.")
 
         with st.spinner("Collecting…"):
-            table = triage_for(sequences, annotations, kinds, ph, include_added=True)
+            table = triage_for(sequences, annotations, kinds, ph,
+                               include_added=True,
+                               annotation_is_imgt=_annotator_used(
+                                   sequences, r.method) == "ANARCI / IMGT")
 
         view = table
         if flagged_only and len(view):
@@ -925,6 +932,257 @@ def _risk(r: Run) -> None:
     # --- Clinical context -------------------------------------------------- #
     with tabs["Clinical context"]:
         _clinical_context(r)
+
+    # Two tabs rather than one, although both read the same CDRs: one of these
+    # scores is a published predictor and the other is a resemblance to a
+    # handful of peptides, and putting them side by side under one heading
+    # would make that difference a matter of wording. See `specificity.py`.
+    with tabs["Polyreactivity"]:
+        _polyreactivity(r)
+
+    with tabs["Plastic resemblance"]:
+        _plastic(r)
+
+
+def _specificity_table(r: Run):
+    """The specificity table for this run, and which annotator fed it.
+
+    Both tabs need the same two things, and the annotator question has exactly
+    one right answer per run, so it is answered once here.
+    """
+    used = _annotator_used(r.sequences, r.method)
+    imgt = used == "ANARCI / IMGT"
+    seqs = {n: s for n, s in r.sequences.items() if r.kinds[n]["full_analysis"]}
+    return specificity_for(seqs, {n: r.annotations.get(n) for n in seqs}, imgt), used
+
+
+def _specificity_annotator_note(table, used: str) -> None:
+    """Say which annotator produced the CDRs, and what it costs when it is the
+    fallback.
+
+    The numbers quoted are measured, in `tools/polyreactivity/build.py` and in
+    the module docstring of `specificity.py`, against the IMGT annotation of
+    the 141 204 sequences the model's authors published. They are not an
+    estimate of how the anchors behave on an engineered framework, which is the
+    case where they are most likely to give up, and they say nothing about a
+    sequence they refused.
+    """
+    n_ok = int(table["annotation_ok"].sum())
+    if used == "ANARCI / IMGT":
+        st.success(
+            f"CDRs from **ANARCI**, IMGT scheme, which is what the model was "
+            f"trained on: {n_ok} of {len(table)} sequence(s) annotated.",
+            icon="✅")
+        return
+    st.warning(
+        f"ANARCI is not available on this server, so the CDRs come from "
+        f"**sequence anchors**, and {n_ok} of {len(table)} sequence(s) could "
+        f"be annotated. On the model authors' own library the anchors accept "
+        f"two thirds of the sequences and reproduce the IMGT CDRs exactly for "
+        f"99.2% of those, and the percentile they give differs from the IMGT "
+        f"one by less than 0.2 point in 99 cases out of 100. A sequence the "
+        f"anchors refuse gets no score rather than an approximate one, and the "
+        f"reason is in its row. " + anarci_requirement().capitalize() + ".",
+        icon="⚠️")
+
+
+def _polyreactivity(r: Run) -> None:
+    """The polyreactivity tab: a published predictor, on this app's input.
+
+    Everything quantitative on this screen comes from `specificity.py`, and
+    every figure in the captions comes from `reference_report()`, which reads
+    the shipped files. Nothing here is a number typed into a string.
+    """
+    if not r.vhh_names and not r.heavy_names:
+        st.info("No antibody variable domain in this input, so there are no "
+                "CDRs to score.", icon="ℹ️")
+        return
+
+    ref = specificity_reference()
+    table, used = _specificity_table(r)
+
+    st.markdown(
+        "How likely these CDRs are to bind things they were never selected "
+        "against. This is a **published predictor**: a logistic regression on "
+        "CDR 3-mer frequencies, fitted by its authors on 141 474 nanobody "
+        "sequences sorted by flow cytometry into polyreactive and clean pools, "
+        "with an AUC above 0.8 on held-out data.")
+    st.info(
+        f"**Higher means more polyreactive.** The authors' own decision "
+        f"function has the opposite sign, it is positive for *low* "
+        f"polyreactivity; it is negated here so the column reads like every "
+        f"other flag in this app. The percentile is the position in their "
+        f"low-polyreactivity pool of {ref['n_pool']} sequences: at 95, a "
+        f"sequence is more polyreactive than 95% of the clones that survived "
+        f"their selection for cleanliness. This app flags at "
+        f"{ref['flag_percentile']:.0f}.", icon="ℹ️")
+
+    _specificity_annotator_note(table, used)
+
+    shown = table[["name", "annotation_ok", "CDR1", "CDR2", "CDR3",
+                   "polyreactivity_score", "polyreactivity_pct",
+                   "polyreactive_flag", "note"]]
+    st.dataframe(
+        shown, hide_index=True, **FIT,
+        column_config={
+            "annotation_ok": st.column_config.CheckboxColumn("CDRs placed"),
+            "polyreactivity_score": st.column_config.NumberColumn(
+                "Score", format="%.3f",
+                help="The authors' decision function, negated."),
+            "polyreactivity_pct": st.column_config.NumberColumn(
+                "Percentile", format="%.1f"),
+            "polyreactive_flag": st.column_config.CheckboxColumn(
+                "Flagged", help=f"Percentile at or above "
+                                f"{ref['flag_percentile']:.0f}."),
+            "note": st.column_config.TextColumn("Note", width="large")})
+
+    scored = table[table["annotation_ok"]]
+    cols = st.columns(3)
+    cols[0].metric("Scored", len(scored))
+    cols[1].metric("Flagged", int(table["polyreactive_flag"].sum()))
+    cols[2].metric("Not scored", int((~table["annotation_ok"]).sum()))
+
+    with st.expander("How to read this, and what it cannot tell you"):
+        st.markdown(
+            "- The model was trained on **one synthetic library with a fixed "
+            "framework**, on CDRs only. A framework contribution to "
+            "non-specific binding is invisible to it, and so is anything "
+            "outside the CDRs.\n"
+            "- Polyreactivity as measured depends strongly on the reagents and "
+            "the method used to measure it. Treat the score as a ranking for a "
+            "pre-screen, not as a measurement of a property of the molecule.\n"
+            "- It does not replace a counter-screen. The honest use is to rank "
+            "a panning output, put the top-flagged clones into an ELISA "
+            "against the blocking agent, the capture reagent and a naked "
+            "plate, and spend the expression slots on the rest.\n"
+            f"- The scoring is exact rather than approximate: "
+            f"{ref['n_weights']} non-zero weights of {ref['n_features']} are "
+            f"shipped from the authors' own fitted model, and the build script "
+            f"checks that this implementation reproduces the scores they "
+            f"published for all {ref['n_pool']} sequences of their clean pool "
+            f"to within 2e-15.")
+
+    st.caption(
+        "Harvey EP, Shin JE, Skiba MA, et al. An in silico method to assess "
+        "antibody fragment polyreactivity. *Nat Commun* 13, 7554 (2022). "
+        "[doi:10.1038/s41467-022-35276-4]"
+        "(https://doi.org/10.1038/s41467-022-35276-4). Their code and data are "
+        "MIT-licensed; the weights shipped here were extracted from their "
+        "released model, and the notice is in this app's LICENSE. Please cite "
+        "them, not this app, for the method.")
+
+    st.download_button(
+        "Polyreactivity table (CSV)", table.to_csv(index=False),
+        file_name="polyreactivity.csv", mime="text/csv")
+
+
+def _plastic(r: Run) -> None:
+    """The plastic resemblance tab: a number with no calibration, labelled as such.
+
+    The order on this screen is deliberate. The caveat comes before the table,
+    not after it and not in an expander, because a percentile in a column and a
+    caveat below it are read in that order and the number wins.
+    """
+    if not r.vhh_names and not r.heavy_names:
+        st.info("No antibody variable domain in this input, so there are no "
+                "CDRs to score.", icon="ℹ️")
+        return
+
+    ref = specificity_reference()
+    table, used = _specificity_table(r)
+
+    st.markdown(
+        "How much these CDRs **look like published peptides that bind "
+        "polystyrene**, by class, as a percentile against a naive library.")
+    # `st.warning`, not `st.error`, although this is the strongest caveat in
+    # the app: a healthy screen draws no error element, `test_app_smoke.py`
+    # checks exactly that, and a caveat that trips the smoke test would make
+    # the test useless for finding a real one.
+    st.warning(
+        "**This is not a prediction of binding to plastic, and it is not "
+        "calibrated.** No dataset labels VHHs for adsorption on polystyrene, "
+        "so nothing here has been fitted to, or tested against, the quantity "
+        "it is named after: the weights behind the two scores were set by hand "
+        "to reproduce the composition of each published class. A percentile of "
+        "99 means the CDRs look more like those peptides than 99% of a naive "
+        "library does. It does not mean a 99% chance of sticking to a plate, "
+        "and it is not comparable with the polyreactivity percentile in the "
+        "tab next door, which is a fitted model.", icon="🚨")
+
+    _specificity_annotator_note(table, used)
+
+    shown = table[["name", "annotation_ok", "cationic_mode", "cationic_mode_pct",
+                   "aromatic_mode", "aromatic_mode_pct", "calibrated", "note"]]
+    st.dataframe(
+        shown, hide_index=True, **FIT,
+        column_config={
+            "annotation_ok": st.column_config.CheckboxColumn("CDRs placed"),
+            "cationic_mode": st.column_config.NumberColumn(
+                "Cationic", format="%.3f"),
+            "cationic_mode_pct": st.column_config.NumberColumn(
+                "Cationic percentile", format="%.1f"),
+            "aromatic_mode": st.column_config.NumberColumn(
+                "Aromatic", format="%.3f"),
+            "aromatic_mode_pct": st.column_config.NumberColumn(
+                "Aromatic percentile", format="%.1f"),
+            "calibrated": st.column_config.CheckboxColumn(
+                "Calibrated", help="Always false, see above."),
+            "note": st.column_config.TextColumn("Note", width="large")})
+
+    with st.expander("Why two scores, and why they are not added together"):
+        st.markdown(
+            "The published polystyrene binders fall into two "
+            "physicochemically opposite groups, so one number would average "
+            "away the only part of this that adds information:\n\n"
+            "- **Cationic**, the arginine-rich immobilisation tags. Their "
+            "composition is close to what drives polyreactivity in VHHs, so "
+            "the tab next door already covers much of this class.\n"
+            "- **Aromatic**, the tryptophan and histidine-rich peptides that "
+            "keep turning up in phage selections against unrelated targets. "
+            "This class is the blind spot of a polyreactivity screen, and the "
+            "reason this tab exists.\n\n"
+            "The app does not combine the two with each other, and does not "
+            "combine either with the polyreactivity score. Adding a calibrated "
+            "number to an uncalibrated one produces an uncalibrated number "
+            "that looks calibrated.")
+
+    with st.expander("What it would take to make this a real predictor"):
+        st.markdown(
+            "Screen a set of clones on an uncoated plate and on the blocking "
+            "agent, label them, and fit. Roughly 200 clones at 20% prevalence "
+            "settles an effect of AUC 0.75; a weaker one needs several "
+            "hundred. Until that exists for VHHs, this tab ranks candidates "
+            "for exactly that experiment and claims nothing else. The fitting "
+            "harness is not in this web app, because the app has no labels to "
+            "fit: it belongs beside the plate reader.")
+
+    with st.expander(f"The reference set, {ref['n_peptides']} peptides, with "
+                     f"its citations"):
+        st.dataframe(sp.reference_peptides(), hide_index=True, **FIT,
+                     column_config={
+                         "source": st.column_config.TextColumn("Source",
+                                                                width="large"),
+                         "source_kind": st.column_config.TextColumn("Checked")})
+        st.caption(
+            "Every sequence was read off the publication in its own row. Where "
+            "the kind is `review`, the sequence comes from a review that "
+            "reports it and the original selection paper was not checked. "
+            "Peptides whose only attribution was a table that does not contain "
+            "them are not shipped; `data/specificity/"
+            "plastic_binding_peptides.csv` names the ones that were dropped "
+            "and why. The percentile is read against the same naive library as "
+            f"the polyreactivity percentile, {ref['n_pool']} sequences.")
+
+    st.caption(
+        "Context for material-binding peptides: Mao M, Ahrens L, Luka J, et "
+        "al. Material-specific binding peptides empower sustainable "
+        "innovations in plant health, biocatalysis, medicine and microplastic "
+        "quantification. *Chem Soc Rev* 53, 6445-6510 (2024). "
+        "[doi:10.1039/d2cs00991a](https://doi.org/10.1039/d2cs00991a).")
+
+    st.download_button(
+        "Plastic resemblance table (CSV)", table.to_csv(index=False),
+        file_name="plastic_resemblance.csv", mime="text/csv")
 
 
 def _clinical_context(r: Run) -> None:

@@ -37,6 +37,7 @@ import library as lib
 import repertoire as rep
 import sabdab
 import sanger as sg
+import specificity as sp
 import af3
 import buffers as bf
 import structure as stx
@@ -46,7 +47,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.16d"
+__version__ = "2026.11.16e"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -400,8 +401,32 @@ def png_differences(reference, seqs, reference_name):
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
-def triage_for(seqs, anns, kinds, ph, include_added):
-    return tg.triage_table(seqs, anns, kinds, ph=ph, include_added=include_added)
+def triage_for(seqs, anns, kinds, ph, include_added, annotation_is_imgt=False):
+    return tg.triage_table(seqs, anns, kinds, ph=ph, include_added=include_added,
+                           annotation_is_imgt=annotation_is_imgt)
+
+
+@st.cache_resource
+def specificity_reference():
+    """The polyreactivity model, both backgrounds and the peptide table.
+
+    `cache_resource` rather than `cache_data`: these are three files read off
+    disk and never mutated, and they are shared by every session on the server
+    rather than copied per call.
+    """
+    return sp.reference_report()
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def specificity_for(seqs, anns, annotation_is_imgt):
+    """The polyreactivity and plastic resemblance table for a set of sequences.
+
+    `annotation_is_imgt` is part of the key on purpose: the same sequences
+    annotated by ANARCI and by the regex anchors are two different inputs to
+    the model, and caching them under one key would serve one for the other
+    after a deploy moved the server from one annotator to the other.
+    """
+    return sp.table(seqs, anns, annotation_is_imgt)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)

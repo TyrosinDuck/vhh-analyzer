@@ -116,7 +116,7 @@ not another row of tabs.
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces seventeen different views of a set of sequences. Showing
+The analysis produces nineteen different views of a set of sequences. Showing
 them as one tab each made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
 tabs you never open. Moving one slider redrew nineteen figures.
@@ -129,7 +129,7 @@ top. Each family answers one question:
 |---|---|
 | 🎯 **Triage** | Which of these do I keep? (§3.2b) |
 | 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
-| ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b) |
+| ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b, 3.8c, 3.8d) |
 | 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
 | 🌍 **Repertoire** | How do they compare with what is known? (§3.11, 3.11b, 3.11c) |
 | 🧪 **Outputs** | What do I make from them? (§3.13–3.15) |
@@ -838,6 +838,130 @@ Source: Gordon GL, Gervasio J, Souders C, Deane CM. *Characterising nanobody
 developability to improve therapeutic design using the Therapeutic Nanobody
 Profiler*. Commun Biol 9:344 (2026),
 doi:[10.1038/s42003-026-09594-y](https://doi.org/10.1038/s42003-026-09594-y).
+
+### 3.8c Polyreactivity
+
+How likely the CDRs are to bind things the clone was never selected against.
+This is a **published predictor**, reimplemented here from its authors' own
+fitted model: a logistic regression on the frequencies of CDR 3-mers, trained
+on 141 474 nanobody sequences that were sorted by flow cytometry into a
+polyreactive and a clean pool, with an AUC above 0.8 on held-out data.
+
+**Higher means more polyreactive, which is the opposite of the authors' own
+sign.** Their decision function is positive for *low* polyreactivity. It is
+negated here so the column reads like every other flag in the app, and any
+comparison with their web server or their published tables has to allow for the
+flip.
+
+**The percentile is a position in a naive library, not among good antibodies.**
+It is read against the 69 702 sequences of their low-polyreactivity pool: a
+sequence at 95 is more polyreactive than 95% of the clones that survived their
+selection for cleanliness. The app flags at 90, which is their own default and
+a convention, not a measured threshold; the provenance screen lists it as one.
+
+**Only IMGT CDRs are scored, and the screen says which annotator produced
+them.** The model was trained on IMGT boundaries, with one wrinkle: its CDR2 is
+IMGT 55 to 65, one residue wider at the N-terminus than the CDR2 shown
+everywhere else in this app, which is the IMGT loop 56 to 65. The app rebuilds
+the model's CDR2 from the same annotation and scores that. Two consequences
+worth knowing:
+
+- The regex annotation used elsewhere in the app **cannot** feed this model.
+  Its boundaries are drawn for display and include framework residues; measured
+  against the authors' own annotation of 14 192 of their sequences, it
+  reproduces none of their CDR sets, moves the percentile by a median of 9
+  points, and would place the flag differently on 8.45% of sequences. So this
+  tab does not use it.
+- Where ANARCI is unavailable, the app annotates with **anchors of its own**,
+  calibrated against the authors' IMGT columns over the 141 204 sequences of
+  their two pools that carry a complete annotation. They accept 66.6% of those
+  sequences and reproduce the IMGT CDRs exactly for 99.2% of what they accept;
+  on the accepted sequences the percentile differs from the IMGT one by less
+  than 0.2 point in 99 cases out of 100. **A sequence they refuse gets no
+  score**, with the reason in its row, rather than an approximate one. One of
+  those reasons is an ambiguity nothing in the sequence can settle: where the
+  residue that opens the FR3 anchor is a threonine, the authors' numbering puts
+  it in CDR2 about half the time and in the framework the other half.
+
+Where ANARCI does run, the two paths agree on every sequence both accept, and
+the ANARCI path reproduces the authors' CDRs for 96% of the sequences of the
+test fixture. The residual is ANARCI itself: their run and this one place the
+gaps inside CDR2 differently on a few percent of sequences, which no boundary
+definition here can fix.
+
+**What it cannot tell you.** The model was trained on one synthetic library
+with a fixed framework, on CDRs only, so a framework contribution to
+non-specific binding is invisible to it. Polyreactivity as measured depends
+strongly on the reagents and the assay, so the score is a ranking for a
+pre-screen rather than a property of the molecule. It does not replace a
+counter-screen: the honest use is to rank a panning output, put the
+top-flagged clones into an ELISA against the blocking agent, the capture
+reagent and a naked plate, and spend the expression slots on the rest.
+
+The percentile also appears in the triage table, under the Specificity column
+group, with a `polyreactive` flag.
+
+Source: Harvey EP, Shin JE, Skiba MA, et al. *An in silico method to assess
+antibody fragment polyreactivity*. Nat Commun 13:7554 (2022),
+doi:[10.1038/s41467-022-35276-4](https://doi.org/10.1038/s41467-022-35276-4).
+Their code and data are MIT-licensed; the weights shipped here were extracted
+from their released model by `tools/polyreactivity/build.py`, which checks on
+every run that this implementation reproduces the scores they published for all
+69 702 sequences of their clean pool, to a maximum difference of 2e-15. The
+notice is in this project's LICENSE. Cite them, not this app, for the method.
+
+### 3.8d Plastic resemblance
+
+How much the CDRs look like published peptides that bind polystyrene, by class,
+as a percentile against the same naive library.
+
+**This is not a prediction of binding to plastic, and it is not calibrated.**
+No dataset labels VHHs for adsorption on polystyrene, so nothing in this tab
+has been fitted to, or tested against, the quantity it is named after: the
+weights behind the two scores were set by hand in this project so that each
+reproduces the composition of one published class, and the provenance screen
+lists them as `unfitted`, a basis that exists for exactly this. Every row of
+the table carries `calibrated = False`, and a test fails if one does not. A
+percentile of 99 means the CDRs look more like those peptides than 99% of a
+naive library does. It does not mean a 99% chance of sticking to a plate, and
+it is not comparable with the polyreactivity percentile next door.
+
+**Two scores, never added together.** The published binders fall into two
+physicochemically opposite groups, and one number would average away the only
+part of this that adds anything:
+
+| Mode | What it is built from | Relation to polyreactivity |
+|---|---|---|
+| Cationic | Net charge, arginine and basic fraction, an arginine motif, 3-mers shared with the arginine-rich immobilisation tags | Close to what drives polyreactivity in VHHs, so §3.8c already covers much of this class |
+| Aromatic | Aromatic and tryptophan fraction, a W..W-type motif, 3-mers shared with the tryptophan-rich target-unrelated peptides | The blind spot of a polyreactivity screen, and the reason this tab exists |
+
+Neither is combined with the other, and neither is combined with the
+polyreactivity score. Adding a calibrated number to an uncalibrated one
+produces an uncalibrated number that looks calibrated. The plastic columns are
+also **absent from the triage table**, which is read as a table of flags.
+
+**The reference set is twelve peptides, each with its own citation**, shown in
+the tab and kept in `data/specificity/plastic_binding_peptides.csv`: four
+arginine-rich PS-tags and eight tryptophan or histidine-rich target-unrelated
+peptides. Eleven were read off the paper that isolated them; one is marked
+`review`, meaning the sequence comes from a review that reports it and the
+original selection paper was not checked. Nine peptides present in the draft
+implementation this module came from were dropped, because their only
+attribution was a review table that does not contain them, and the file names
+them and says so. A sequence whose source cannot be named is an invented
+constant.
+
+**What it would take to make this real.** Screen clones on an uncoated plate
+and on the blocking agent, label them, and fit. Roughly 200 clones at 20%
+prevalence settles an effect of AUC 0.75; a weaker one needs several hundred.
+The fitting harness is deliberately not in this app, which has no labels to fit
+and no business pretending otherwise. Until that experiment exists for VHHs,
+this tab ranks candidates for it and claims nothing else.
+
+Context for the field: Mao M, Ahrens L, Luka J, et al. *Material-specific
+binding peptides empower sustainable innovations in plant health, biocatalysis,
+medicine and microplastic quantification*. Chem Soc Rev 53:6445-6510 (2024),
+doi:[10.1039/d2cs00991a](https://doi.org/10.1039/d2cs00991a).
 
 ### 3.9 Alignment
 

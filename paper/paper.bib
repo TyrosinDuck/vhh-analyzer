@@ -167,3 +167,109 @@
   pages   = {D535--D542},
   doi     = {10.1093/nar/gkae881}
 }
+
+% ---------------------------------------------------------------------------
+% Added 2026-11-16 with the specificity module. Checked the same way as the
+% entries above: each one against at least two independent records, and a
+% field that could not be confirmed twice was left out rather than guessed.
+% One entry says in its comment which field is the weakest and why. The paper
+% that isolated PS19-6, Kumada et al., J Biosci Bioeng 109(6):583-587 (2010),
+% is deliberately absent: two records agree on its authors, volume, issue and
+% pages, neither shows a DOI, and an entry without one cannot be followed, so
+% it is cited where it belongs instead, in the source column of
+% data/specificity/plastic_binding_peptides.csv.
+% ---------------------------------------------------------------------------
+
+% The polyreactivity model the app ships the weights of. Confirmed against the
+% publisher's own PDF and the DOAJ record, which agree on volume, article
+% number and year. Their code and data repository,
+% github.com/debbiemarkslab/nanobody-polyreactivity, is MIT-licensed; the
+% licence file was read, not assumed, and the notice is in this project's
+% LICENSE.
+@article{harvey2022,
+  author  = {Harvey, Edward P. and Shin, Jung-Eun and Skiba, Meredith A. and
+             Nemeth, Genevieve R. and Hurley, Joseph D. and Wellner, Alon and
+             Shaw, Ada Y. and Miranda, Victor G. and Min, Joseph K. and
+             Liu, Chang C. and Marks, Debora S. and Kruse, Andrew C.},
+  title   = {An in silico method to assess antibody fragment polyreactivity},
+  journal = {Nature Communications},
+  year    = {2022},
+  volume  = {13},
+  number  = {1},
+  pages   = {7554},
+  doi     = {10.1038/s41467-022-35276-4}
+}
+
+% Context for material-binding peptides, cited by the plastic resemblance tab
+% for the field rather than for any sequence: the peptide sequences the app
+% ships were taken from the primary selections below, not from this review,
+% because its own tables could not be read in the text available.
+@article{mao2024,
+  author  = {Mao, Maochao and Ahrens, Leon and Luka, Julian and
+             Contreras, Francisca and Kurkina, Tetiana and Bienstein, Marian
+             and S{\'a}rria Pereira de Passos, Marisa and Schirinzi, Gabriella
+             and Mehn, Dora and Valsesia, Andrea and Desmet, Clo{\'e} and
+             Serra, Miguel-{\'A}ngel and Gilliland, Douglas and
+             Schwaneberg, Ulrich},
+  title   = {Material-specific binding peptides empower sustainable
+             innovations in plant health, biocatalysis, medicine and
+             microplastic quantification},
+  journal = {Chemical Society Reviews},
+  year    = {2024},
+  volume  = {53},
+  number  = {12},
+  pages   = {6445--6510},
+  doi     = {10.1039/d2cs00991a}
+}
+
+% PS19 and PS23, the two cationic polystyrene tags. Authors, volume, issue and
+% pages confirmed against a library catalogue record and the publisher's DOI
+% landing page, which agree.
+@article{kumada2006,
+  author  = {Kumada, Yoichi and Tokunaga, Yasuhide and Imanaka, Hiroyuki and
+             Imamura, Koreyoshi and Sakiyama, Takaharu and Katoh, Shigeo and
+             Nakanishi, Kazuhiro},
+  title   = {Screening and characterization of affinity peptide tags specific
+             to polystyrene supports for the orientated immobilization of
+             proteins},
+  journal = {Biotechnology Progress},
+  year    = {2006},
+  volume  = {22},
+  number  = {2},
+  pages   = {401--405},
+  doi     = {10.1021/bp050331l}
+}
+
+% HWGMWSY, the polystyrene binder that keeps turning up in selections against
+% unrelated targets. The article itself was confirmed on the publisher's
+% abstract page; volume, issue, pages, DOI and PMID come from a single
+% secondary record that carries the full citation, so this is the weakest
+% entry of the set. Re-check it before submission.
+@article{vodnik2012,
+  author  = {Vodnik, Miha and Strukelj, Borut and Lunder, Mojca},
+  title   = {{HWGMWSY}, an unanticipated polystyrene binding peptide from
+             random phage display libraries},
+  journal = {Analytical Biochemistry},
+  year    = {2012},
+  volume  = {424},
+  number  = {2},
+  pages   = {83--86},
+  doi     = {10.1016/j.ab.2012.02.013}
+}
+
+% The seven polystyrene-binding target-unrelated peptides of the aromatic
+% class. Authors, volume, issue, pages and DOI confirmed against the
+% publisher's article page and an independent indexer record, which agree, and
+% the seven sequences were read off the abstract itself.
+@article{hu2016,
+  author  = {Hu, Yun-Fei and Gao, Xiao-Chen and Xu, Tian-Qi and Dun, Zhao and
+             Yu, Xing-Long},
+  title   = {Characterization of seven new polystyrene plates binding peptides
+             from a phage-displayed random 12-peptide library},
+  journal = {Combinatorial Chemistry \& High Throughput Screening},
+  year    = {2016},
+  volume  = {19},
+  number  = {4},
+  pages   = {283--289},
+  doi     = {10.2174/1386207319666160316122106}
+}

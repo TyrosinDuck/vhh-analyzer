@@ -926,7 +926,8 @@ def test_the_analysis_tab_count_in_the_manual_matches_the_code():
     from sections.analysis import view_count
     manual = (ROOT / "MANUAL.md").read_text(encoding="utf-8")
     words = {12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
-             16: "sixteen", 17: "seventeen", 18: "eighteen"}
+             16: "sixteen", 17: "seventeen", 18: "eighteen",
+             19: "nineteen", 20: "twenty"}
     count = view_count()
     assert count in words, \
         f"{count} views, and this test cannot spell that; add the word"

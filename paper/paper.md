@@ -83,6 +83,19 @@ single
 number would hide that choice behind a decimal point. Where a value is
 theoretical, the interface says it is theoretical.
 
+**A published predictor and a resemblance score are not displayed as the same
+kind of thing.** Polyreactivity is scored with the logistic regression of
+Harvey et al. [@harvey2022], whose fitted weights are shipped and whose
+published scores the implementation reproduces, and the interface says which
+annotator produced the CDRs it was given, because the model was trained on IMGT
+boundaries and a sequence whose CDRs cannot be placed is left unscored rather
+than scored approximately. Beside it, resemblance to published
+polystyrene-binding peptides [@kumada2006; @vodnik2012; @hu2016], a class of
+reagent reviewed by Mao et al. [@mao2024], is reported as a percentile against
+a naive library and labelled uncalibrated in every row, because no dataset
+labels VHHs for adsorption on plastic; the two are kept in separate views and
+never combined into one index.
+
 **Antibody assumptions are not applied to non-antibodies.** Each sequence is
 classified, and a protein that is not a variable domain receives the generic
 analyses only. Applied indiscriminately, the canonical-pair logic reports hen

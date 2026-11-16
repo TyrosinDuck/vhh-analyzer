@@ -1,0 +1,41 @@
+# Published plastic-binding peptides. This is the reference set of the plastic
+# resemblance score in specificity.py. Read-only in the app; edit here, commit
+# and push. Lines starting with # are ignored.
+#
+# Every sequence was read off the publication cited in its own row. Where
+# source_kind is "review", the sequence was taken from a review that reports it
+# and the original selection paper was not checked; where it is "primary", the
+# citation is the paper that isolated the peptide.
+#
+# Five peptides present in the draft implementation this file derives from were
+# dropped, because their only attribution was "Mao et al. table" and the
+# sequences are not in the text of that review: VHWDFRQWWQPS, ADYLSRWGSIRN,
+# ETYVFDNHFHAP, AGAGGGNVPVCS and LYARDVSRYWHV. Four PET and PLA peptides were
+# dropped for the same reason. A sequence whose source cannot be named is an
+# invented constant, and this project does not ship those.
+#
+# One row, PS19-6, carries no DOI: two records agree on the paper's authors,
+# volume, issue and pages and neither shows a DOI, so the citation names the
+# journal and the pages instead of guessing an identifier. For the same reason
+# that paper is not in paper/paper.bib, where every entry must be followable
+# by DOI.
+#
+# binding_class is the physicochemical class the score treats separately, and
+# it is this project's grouping, not a claim from the sources: "cationic" for
+# the arginine-rich PS-tags selected as immobilisation tags, "aromatic" for the
+# tryptophan and histidine-rich peptides that turn up as target-unrelated
+# binders. Net charge and aromatic content are computed from the sequence in
+# specificity.py and deliberately not repeated here.
+peptide,name,material,binding_class,source,source_kind,doi
+RAFIASRRIKRP,PS19,polystyrene,cationic,"Kumada Y, Tokunaga Y, Imanaka H, Imamura K, Sakiyama T, Katoh S, Nakanishi K. Screening and characterization of affinity peptide tags specific to polystyrene supports for the orientated immobilization of proteins. Biotechnol Prog 22(2):401-405 (2006)",primary,10.1021/bp050331l
+AGLRLKKAAIHR,PS23,polystyrene,cationic,"Kumada Y, Tokunaga Y, Imanaka H, Imamura K, Sakiyama T, Katoh S, Nakanishi K. Screening and characterization of affinity peptide tags specific to polystyrene supports for the orientated immobilization of proteins. Biotechnol Prog 22(2):401-405 (2006)",primary,10.1021/bp050331l
+RIIIRRIRR,PS19-6,polystyrene,cationic,"Kumada Y, Kuroki D, Yasui H, Ohse T, Kishimoto M. Characterization of polystyrene-binding peptides (PS-tags) for site-specific immobilization of proteins. J Biosci Bioeng 109(6):583-587 (2010)",primary,
+RLLLRRLRR,PS19-6L,polystyrene,cationic,"Listed among the PS-binding peptides by Dedisch et al. RSC Adv 15:41115 (2025); the paper that isolated it was not checked",review,10.1039/d5ra06185g
+HWGMWSY,PB-TUP,polystyrene,aromatic,"Vodnik M, Strukelj B, Lunder M. HWGMWSY, an unanticipated polystyrene binding peptide from random phage display libraries. Anal Biochem 424(2):83-86 (2012)",primary,10.1016/j.ab.2012.02.013
+WHWNAPWWNGVY,PS-TUP P1,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+FHWTWQFPYTST,PS-TUP P2,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+GAMHLPWHMGTL,PS-TUP P3,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+HWNIWWQHHPSP,PS-TUP P4,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+HFFKWHTRTNDQ,PS-TUP P5,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+HFFRWHPSAHLG,PS-TUP P6,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106
+HFAYWWNGVRGP,PS-TUP P7,polystyrene,aromatic,"Hu YF, Gao XC, Xu TQ, Dun Z, Yu XL. Characterization of seven new polystyrene plates binding peptides from a phage-displayed random 12-peptide library. Comb Chem High Throughput Screen 19(4):283-289 (2016)",primary,10.2174/1386207319666160316122106

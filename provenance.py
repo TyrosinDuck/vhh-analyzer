@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "entries", "resolve", "value_text",
@@ -77,6 +77,11 @@ BASES = {
                   "this project could find. Used because the arithmetic is "
                   "standard, and shown beside an alternative route wherever "
                   "the app can offer one.",
+    "unfitted": "Set by hand so that a score reproduces a pattern somebody "
+                "described, and never fitted to, or tested against, any "
+                "measurement of what the score is named after. Changing it "
+                "changes the ranking and nothing can say whether the new one "
+                "is better. A screen showing such a number has to say so.",
 }
 
 
@@ -197,6 +202,48 @@ _REGISTRY = (
                "anchors have different lengths.",
         used_for="Sequence analysis and Structure: CDR and framework "
                  "annotation whenever ANARCI runs.",
+    ),
+    Constant(
+        key="polyreactivity_flag",
+        label="Polyreactivity percentile at which a sequence is flagged",
+        where=("specificity", "FLAG_PERCENTILE"),
+        unit="percentile of the reference pool",
+        basis="convention",
+        source="The default of the model's authors, Harvey et al., Nat Commun "
+               "13, 7554 (2022). It is a cut on a continuous ranking, chosen "
+               "to flag the top tenth of a naive library, not a threshold "
+               "anything measured: a sequence at 89 and one at 91 differ by "
+               "nothing a plate would show.",
+        used_for="Sequence analysis, Polyreactivity and Triage: the flag "
+                 "column, and the count of flagged sequences.",
+    ),
+    Constant(
+        key="plastic_weights_cationic",
+        label="Plastic resemblance, weights of the cationic mode",
+        where=("specificity", "PLASTIC_WEIGHTS", "cationic"),
+        unit="weights on composition features",
+        basis="unfitted",
+        source="Set by hand in this project so that the score reproduces the "
+               "composition of the published arginine-rich polystyrene tags: "
+               "net charge, arginine and basic fraction, an arginine motif, "
+               "and the share of 3-mers shared with those peptides. No "
+               "dataset labels VHHs for adsorption on polystyrene, so these "
+               "weights were never fitted to anything and no AUC exists for "
+               "them.",
+        used_for="Sequence analysis, Plastic resemblance: the cationic score "
+                 "and its percentile. Deliberately absent from Triage.",
+    ),
+    Constant(
+        key="plastic_weights_aromatic",
+        label="Plastic resemblance, weights of the aromatic mode",
+        where=("specificity", "PLASTIC_WEIGHTS", "aromatic"),
+        unit="weights on composition features",
+        basis="unfitted",
+        source="Set by hand in this project, as the cationic mode above, for "
+               "the tryptophan and histidine-rich target-unrelated peptides. "
+               "Same standing: fitted to nothing, tested against nothing.",
+        used_for="Sequence analysis, Plastic resemblance: the aromatic score "
+                 "and its percentile. Deliberately absent from Triage.",
     ),
     Constant(
         key="hallmark_positions",
