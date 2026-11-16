@@ -1,4 +1,4 @@
-"""The hand-written vector layouts, checked against the plasmid maps beside them.
+"""The vector layouts, checked against the plasmid maps they are read from.
 
 `sanger.VECTORS` says which tags follow the VHH in each vector, and the comment
 under it says to take that from the actual plasmid map rather than from memory,
@@ -9,11 +9,14 @@ entry carried the nine-residue HA epitope YPYDVPDYA while the pMECS map in
 correct pMECS clone came back with `missing tag(s): HA` on the sequencing screen
 and in the cloning screen's construct check.
 
-These tests close that gap without changing how the layouts are written. Every
-tag sequence in `VECTORS` has to be found in the map of the vector it names, and
-the HA case is pinned on its own so the specific mistake cannot come back
-quietly. Adding a vector whose layout disagrees with its map now fails the suite
-instead of being discovered at the bench.
+`VECTORS` is no longer written by hand at all: it is what
+`cloning.derive_layout` reads out of the five bundled maps, which is what
+`tests/test_derive_layout.py` covers. These tests stay because they check the
+result from the other end, against the map rather than against the derivation:
+every tag sequence in `VECTORS` has to be found in the map of the vector it
+names, whatever produced it, and the HA case is pinned on its own so the
+specific mistake cannot come back quietly. They now cover five vectors rather
+than the two that had entries.
 
 What they cannot check: whether the *set* of tags is complete. A map annotating
 a tag the layout omits passes here, because the test asks only that what the

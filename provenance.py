@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.13a"
+__version__ = "2026.11.16a"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "entries", "resolve", "value_text",
@@ -964,6 +964,14 @@ NOT_SCIENTIFIC: dict[str, str] = {
                                    "cells stop carrying a number",
     "shell.CACHE_TTL": "how long a cached result lives",
     "shell.CACHE_MAX_ENTRIES": "how many cached results are kept",
+    "cloning.MAX_TAG_NT": "longest annotation still read as an affinity or "
+                          "detection tag when the cassette layout is derived "
+                          "from a vector's own map. The tags on the bundled "
+                          "vectors run 18 to 30 nt and the next annotated "
+                          "element downstream is gIII at 1227 nt, so the "
+                          "bound separates two things that are nowhere near "
+                          "each other; it is a guard against a mislabelled "
+                          "large feature, not a measurement of a tag",
 
     # Units and counts. Exact by definition, or definitional in the word.
     "buffers.MOLAR": "molar to millimolar and micromolar; exact by definition",

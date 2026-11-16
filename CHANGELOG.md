@@ -16,7 +16,101 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Changed
+
+- **The recipient vector is drawn where you choose it.** The map and the feature
+  inventory sat at the foot of the in-silico cloning screen, behind the stop
+  that waits for donor DNA, so the vector you had just picked could not be
+  looked at until you had pasted a donor. Both now sit in step 1, under the
+  vector's length, GC, feature count and cloning window. There is one map on the
+  screen and not two: it is drawn into a slot when the vector loads, showing the
+  file's features in blue, motifs detected here in orange and a VHH scaffold in
+  green, and the same slot is written again once the plan exists, adding the
+  usable enzyme sites in red. The caption says which of the two you are looking
+  at. The view selector, whole plasmid or cloning region, sits outside the slot,
+  because a widget created twice in one run is a duplicate-key error rather than
+  a second selector.
+
+### Removed
+
+- **The "Expected tags" selector, which asked a question the vector answers.**
+  It offered the two vectors `sanger.VECTORS` had hand-written entries for while
+  the app ships five, and it was a free choice: picking pMECS for a pMES3 clone
+  made the construct check report a missing HA tag. The expected cassette is now
+  read from the vector in hand and stated under the picker, as
+  *PelB → VHH → HA → spacer(GS) → His6 → stop* for pMECS. A vector whose
+  annotation yields no tag says so, and the construct check reports the
+  translated cassette without looking for a tag in it, instead of checking
+  another vector's tags against it.
+
 ### Fixed
+
+- **The HA tag is recognised whole and truncated, and only where it counts.**
+  The motif library held the HA epitope as the nine residues YPYDVPDYA, which is
+  what the epitope is, and found it in none of the five bundled vectors: pMECS
+  and pMES4 both encode eight of them, YPYDVPDY followed by the linker GS, which
+  is how the vectors' authors describe the tag themselves, the C-terminal
+  extension of a pMECS clone being AAAYPYDVPDYGSHHHHHH (Vincke et al.,
+  US 2015/0093336 A1, SEQ ID NO 261 and 262). pMECS got away with it because its
+  map annotates `HA-tag` by hand; pMES4 carries the same sequence unannotated and
+  the app did not see it at all, and a bare FASTA of either vector lost the tag
+  entirely. Both forms are now searched for, longest first, so a position
+  claimed by the full epitope is not reported a second time as its own prefix,
+  and the feature's note says which form is there rather than rounding eight
+  residues up to nine.
+  This alone would have broken pMES4. Its cassette is His6, the amber stop, then
+  that HA tag, then gIII: in a suppressor strain the amber is read through and
+  the tag is on the phage fusion, and in a non-suppressor strain the protein
+  stops at the His6 and has no HA at all. Since the cassette extractor looks for
+  tags in the stretch before the first stop, expecting that tag reported
+  *missing tag(s): HA* on every correct pMES4 clone, which is the pMECS failure
+  over again from the other end. Measured on a real pMES4 clone before the
+  second half of the fix was in.
+  So the derived cassette now ends at the first stop, in the tags' own reading
+  frame rather than the leader's, and a tag past it is named under the picker as
+  something the vector carries but the soluble protein does not. On pMES4 that
+  reads *Also carried, past the stop that ends the cassette: HA at 361–384*. It
+  stays on the map and in the feature inventory, where it is real.
+
+- **A vector with no entry of its own was checked against pMES3's tags.** Three
+  of the five bundled vectors, pMES4, pHEN6 and pHEN25, had no entry in
+  `sanger.VECTORS`, and neither did any uploaded vector. `verify_construct`
+  resolved an unknown name to pMES3 and carried on, so a pHEN6 construct was
+  checked for pMES3's tags and an upload for a cassette nobody had claimed it
+  carried. An unknown name now yields no tags rather than another vector's.
+  Where the two vectors happen to carry the same His6 this changed no verdict,
+  which is why it went unnoticed; on an upload with a different cassette it
+  reported a tag as missing that was never expected.
+
+### Added
+
+- **The cassette layout is read out of each vector's own map.** `sanger.VECTORS`
+  was two entries typed in beside plasmid maps the app already ships, and the
+  release above fixed the pMECS HA tag by correcting one of them by hand, which
+  left the second list in place and free to drift again. `cloning.derive_layout`
+  now reads the layout from the map: it takes each annotation downstream of the
+  cloning window that is short enough to be a tag and whose label names one, and
+  translates the span **in its own frame**, because an empty phage-display
+  vector carries a stuffer and its tags are out of frame with the leader until a
+  VHH of the right length is cloned in.
+  pMECS derives to the eight residues YPYDVPDY, which is what its map encodes
+  and what the release above had to be told by hand, and the three vectors that
+  had no entry get one from their own file. The sequencing screen's vector list
+  is the five bundled maps rather than the two with entries; it points at the
+  default by name, since the list is sorted and index 0 is no longer pMES3.
+  A label has to match on word boundaries: pMECS annotates gIII as
+  *Protein 3 M13 phage*, whose lower-cased form contains `ha` inside `phage`,
+  and the substring test that finds the cloning window takes it, pulling 409
+  residues of phage coat protein in as an HA tag. A length bound stops the same
+  thing independently. `tests/test_derive_layout.py` pins what the five maps
+  derive to, pins the pMECS HA case, and lifts each of those two guard rails in
+  turn to show the other still holds, then lifts both to show what they are for.
+  Verified by putting the hand-written table back on a copy, which fails seven
+  tests across the two layout files with the vectors named.
+  What this cannot check is whether a map's own annotation is right. If a
+  vendor's map labels the wrong span, the app reads the wrong span: deriving
+  moves the trust from a list typed in the repository to the file you supply, it
+  does not remove it.
 
 - **A correct pMECS clone is no longer reported as missing its HA tag.** The tag
   sequences in `sanger.VECTORS` are written out by hand beside the plasmid maps

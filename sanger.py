@@ -39,7 +39,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.13a"
+__version__ = "2026.11.16b"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -67,22 +67,52 @@ PELB_CORE = "AAQPAMA"                   # short anchor, survives truncated reads
 # Whether an anti-HA antibody detects YPYDVPDY followed by GS as well as it
 # detects YPYDVPDYA is a question about the antibody, and this module does not
 # answer it. It reports what the vector encodes.
-HA_AA = "YPYDVPDYA"                     # the epitope on record, for reference
-HA_SEARCH = "YPYDVPDY"                  # what pMECS encodes, and a prefix of it
+# Both forms, kept here as named constants because the layouts are no longer
+# written out in this module and these two are what `tests/test_derive_layout.py`
+# checks `cloning.PROTEIN_MOTIFS` against, so the motif table and this module
+# cannot go back to disagreeing about what an HA tag is.
+HA_AA = "YPYDVPDYA"                     # the epitope itself, nine residues
+HA_SEARCH = "YPYDVPDY"                  # what pMECS and pMES4 encode, eight
 HIS_AA = "HHHHHH"
 
-VECTORS = {
-    "pMES3": {"layout": ["PelB", "VHH", "His6", "stop"],
-              "tags": [("His6", HIS_AA)]},
-    "pMECS": {"layout": ["PelB", "VHH", "spacer(AAA)", "HA", "spacer(GAA)", "His6", "stop"],
-              "tags": [("HA", HA_SEARCH), ("His6", HIS_AA)]},
-}
+def _bundled_layouts() -> dict:
+    """Read every bundled plasmid map and derive its cassette layout.
 
-# To add a vector, take the tag layout from its actual plasmid map rather than
-# from memory: a wrong layout makes the app report missing tags on clones that
-# are perfectly fine. `tests/test_vector_layouts.py` now checks every entry
-# above against the map of the same name in `data/plasmids/`, so a layout that
-# disagrees with its vector fails the suite instead of being found at the bench.
+    These layouts used to be written out here, two of them, pMES3 and pMECS,
+    with their tag sequences typed in by hand. That was a second account of
+    plasmid maps the app already ships in `data/plasmids/`, and the two
+    disagreed: the pMECS map annotates an HA tag whose 24 nucleotides encode
+    YPYDVPDY, while the entry here carried the nine-residue YPYDVPDYA, so every
+    correct pMECS clone was reported as missing its HA tag. Fixing that entry by
+    hand left the two lists separate and free to drift again. Reading the maps
+    removes the second list and gives the sequencing screen the three vectors it
+    never had, pMES4, pHEN6 and pHEN25.
+
+    Measured at 0.06 s for the five bundled maps on this container, once, at
+    import. A map that will not parse is skipped rather than breaking the import:
+    the cloning screen loads the same file itself and reports the failure there,
+    with the file name.
+    """
+    import cloning as cl                  # local: cloning imports sanger lazily
+
+    layouts = {}
+    for name, path in cl.list_bundled_plasmids().items():
+        try:
+            derived = cl.derive_layout(cl.load_plasmid(path))
+        except Exception:
+            continue
+        layouts[name] = {"layout": derived["layout"], "tags": derived["tags"],
+                         "tag_table": derived["tag_table"]}
+    return layouts
+
+
+VECTORS = _bundled_layouts()
+
+# To add a vector, drop its map in `data/plasmids/`: the layout is read from the
+# file, so there is no second list to keep in step with it.
+# `tests/test_vector_layouts.py` pins what the five bundled maps derive to,
+# including the pMECS HA case, so a change in the derivation that alters a
+# layout fails the suite instead of being found at the bench.
 
 # C-terminal FR4 signature delimiting the end of the VHH
 FR4_RE = re.compile(r"[WF]G[A-Z]G[TA][A-Z][VLIMQ]TV[STF][SPAL]")
@@ -186,6 +216,23 @@ def _find_pelb(protein: str) -> tuple[int, int, str | None]:
     return -1, -1, None
 
 
+def tags_for(vector) -> list[tuple[str, str]]:
+    """The (name, protein) tags to look for, from a vector name or a layout.
+
+    The cloning screen can load a vector that ships with no entry here at all,
+    an upload, so it passes the layout it derived from that file rather than a
+    name. Accepting both keeps one code path for the sequencing screen, which
+    picks a bundled vector by name, and the cloning screen, which does not.
+    An unknown *name* yields no tags, which reports "nothing to check" instead
+    of silently checking pMES3's tags against someone else's vector.
+    """
+    if isinstance(vector, str):
+        return list(VECTORS.get(vector, {}).get("tags", []))
+    if isinstance(vector, dict):
+        return list(vector.get("tags", []))
+    return [(str(n), str(s)) for n, s in (vector or ())]
+
+
 def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
     """Locate the PelB–VHH–tags cassette in a read, in any strand and frame.
 
@@ -265,7 +312,7 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
 
     tail = downstream[:stop_i] if stop_i >= 0 else downstream
     found, missing = [], []
-    for tag_name, tag_seq in VECTORS[vector]["tags"]:
+    for tag_name, tag_seq in tags_for(vector):
         (found if tag_seq in tail else missing).append(tag_name)
     res["tags_found"] = ",".join(found)
     res["tags_missing"] = ",".join(missing)

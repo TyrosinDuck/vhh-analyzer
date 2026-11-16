@@ -2344,27 +2344,38 @@ being told which is which.
 
 | Setting | Default | Effect |
 |---|---|---|
-| Vector | pMES3 | which tags are expected after the VHH: pMES3 is PelB–VHH–His6–stop, pMECS is PelB–VHH–HA–His6–stop |
+| Vector | pMES3 | which tags are expected after the VHH, read from that vector's own map: pMES3, pMES4, pHEN6 and pHEN25 are PelB–VHH–His6–stop, pMECS is PelB–VHH–HA–spacer(GS)–His6–stop |
 | Trim cutoff | 0.05 | Mott error-probability cutoff, roughly Q13. Lower is stricter |
 | Min trimmed length | 150 nt | below this the read is flagged, and the raw sequence is analysed instead of the trimmed one |
 | Min mean Phred | 20 | QC threshold on the trimmed window |
 
-To add a vector, edit `sanger.VECTORS`, and take the tag layout from the actual
-plasmid map rather than from memory. A wrong layout makes the app report
-missing tags
-on clones that are perfectly fine. `tests/test_vector_layouts.py` checks every
-entry against the map of the same name in `data/plasmids/`, so a layout that
-disagrees with its vector fails the test suite.
+The list is the plasmid maps in `data/plasmids/`, and each layout is read out of
+its own map rather than written down beside it, so to add a vector you add its
+map and nothing else. There is no list of tag layouts to keep in step with the
+files.
 
-That had already happened. The pMECS entry carried the HA epitope on record, the
-nine residues YPYDVPDYA, while the pMECS map annotates its HA tag over 24
-nucleotides, which encode the eight residues YPYDVPDY followed by GS. The
-nine-residue form is in none of the six frames of that map, so every correct
+There was one, and it had drifted. The pMECS entry carried the HA epitope on
+record, the nine residues YPYDVPDYA, while the pMECS map annotates its HA tag
+over 24 nucleotides, which encode the eight residues YPYDVPDY followed by GS.
+The nine-residue form is in none of the six frames of that map, so every correct
 pMECS clone was reported as missing its HA tag, here and in the cloning screen's
-construct check. What is searched for is now the eight residues the vector
-encodes; they are a prefix of the nine, so a cassette carrying the canonical
-epitope still matches. Whether an anti-HA antibody detects the shorter form as
-well is a question about the antibody, and the app does not answer it.
+construct check. What is searched for is now whatever the annotated span
+encodes, which for pMECS is those eight residues; they are a prefix of the nine,
+so a cassette carrying the canonical epitope still matches, and the motif scan
+looks for both forms so neither is missed in a file that carries no annotation.
+The eight residues are not a defect in the map: the vectors' authors describe
+the tag the same way, giving the C-terminal extension of a pMECS clone as
+AAAYPYDVPDYGSHHHHHH (Vincke et al., US 2015/0093336 A1, SEQ ID NO 261 and 262).
+Whether an anti-HA antibody detects the shorter form as well as the full epitope
+is a question about the antibody, and the app does not answer it.
+
+Two vectors had an entry and three did not, and the three were checked against
+pMES3's tags. All five now carry their own.
+
+What this moves rather than removes is the trust: a map whose annotation is
+wrong is read wrongly. The *source* column in the cloning screen's feature
+inventory says whether a feature came from the file or was inferred here, which
+is the thing to look at when a tag reads oddly.
 
 ### 8.3 Reading the results table
 
@@ -2771,7 +2782,10 @@ FASTA carries only sequence, so the app detects what it can from short protein
 motifs
 (PelB, His6, HA, Myc, FLAG, Strep, protease sites, and the VHH scaffold
 itself). A histidine run is reported once, at the length it actually has, so ten
-histidines read **His10** and not five overlapping His6. It
+histidines read **His10** and not five overlapping His6. The HA tag is found
+whole or truncated: the epitope is the nine residues YPYDVPDYA, and pMECS and
+pMES4 both encode eight of them followed by the linker GS, so both forms count
+as the tag and the feature's note says which one the vector carries. It
 deliberately does **not** guess large elements such as gIII, AmpR or the
 origin: doing
 that properly needs a reference database, and a confident wrong annotation on a
@@ -2785,9 +2799,35 @@ the first
 tag. That is where the insert will land, and the app shows the coordinates it
 found.
 
-The **Expected tags** selector says which cassette layout the finished
-construct should
-have; it is used when the construct is translated back.
+**The expected cassette is read from the vector, not chosen.** Under the picker
+the app states the layout it found, for pMECS
+*PelB → VHH → HA → spacer(GS) → His6 → stop*, and that is what the finished
+construct is checked against when it is translated back. There used to be an
+*Expected tags* selector here, offering the two vectors the app had layouts
+written out for, which made it possible to check a pMES3 clone against pMECS and
+be told its HA tag was missing. Each tag is read from the annotation that covers
+it and translated in its own frame, so what the check looks for is what the
+vector encodes: pMECS gives the eight residues YPYDVPDY, not the nine the HA
+epitope is known by. A vector whose annotation yields no tag at all says so, and
+the construct check then reports the translated cassette without looking for a
+tag in it.
+
+The cassette **ends at the first stop codon**, read in the tags' own frame and
+not the leader's, because an empty vector's stuffer puts the two out of frame. A
+tag beyond that stop is named under the picker as something the vector carries
+which the soluble protein does not. pMES4 is the case to know: its order is
+His6, amber stop, HA, gIII, so in a suppressor strain the HA rides on the phage
+fusion and in a non-suppressor strain the protein stops at the His6 and carries
+no HA. Expecting it would report a missing HA tag on every correct pMES4 clone.
+It stays on the map and in the feature inventory, where it is real.
+
+The map of the vector and the full feature inventory are **here**, under the
+measurements, rather than at the foot of the screen. There is one map, showing
+the file's features in blue, motifs detected here in orange and a VHH scaffold
+in green, and it gains the usable enzyme sites in red once you have pasted a
+donor and the plan has been worked out; the caption says which of the two you
+are looking at. Switch between the whole plasmid and the cloning region with the
+selector above it.
 
 ### 11.2 Donor DNA
 
@@ -2894,7 +2934,9 @@ the domain.
   no site are listed as not applicable; that is usually a property of the
 vector rather
   than a mistake, since pHEN6 has no gIII for a gIII primer to sit in.
-- **Vector map** (circular or zoomed on the cloning region, with enzyme sites in red, file features in blue, detected motifs in orange and a VHH scaffold in green. - **Vector features**) the full inventory with its sources.
+The vector map and the feature inventory used to be here. They are in §11.1
+now, where the vector is chosen: looking at the recipient is step 1, and this
+part of the screen cannot be reached until a donor has been pasted.
 
 ---
 

@@ -361,11 +361,12 @@ families, and said nothing of the four sections added since.
 Two things that live here rather than in the manual, because they are about
 the repository rather than about using the app:
 
-**Adding a Sanger vector.** The Sanger screen expects the PelB-VHH-tag
-cassette of pMES3 or pMECS, which differ only in the tags expected after the
-VHH. Add one in `sanger.VECTORS`, taking the layout from the actual plasmid
-map: a wrong tag layout makes the app report missing tags on clones that are
-fine.
+**Adding a Sanger vector.** The Sanger screen expects a PelB-VHH-tag cassette,
+and reads which tags follow the VHH out of each plasmid map in
+`data/plasmids/`. Add a vector by adding its map; there is no list of layouts
+to keep in step with it. `sanger.VECTORS` is what `cloning.derive_layout`
+returns for the bundled maps, and `tests/test_derive_layout.py` pins what the
+five of them derive to.
 
 **The synthetic generator's reference set.** `generator.py` samples frameworks
 from an IMGT position-frequency matrix built from **PLAbDab-nano** (OPIG,

@@ -15,11 +15,11 @@ import pandas as pd
 import streamlit as st
 
 import cloning as cl
-import sanger as sg
-from compute import load_plasmid_cached, plan_cloning_cached, png_plasmid_map, primer_report_cached
+from compute import (derive_layout_cached, load_plasmid_cached, plan_cloning_cached,
+                     png_plasmid_map, primer_report_cached)
 from shell import FIT, Settings, footer
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.16b"
 
 
 def render(settings: Settings) -> None:
@@ -39,15 +39,8 @@ def render(settings: Settings) -> None:
     # ---- 1. recipient ----
     st.subheader("1 · Recipient vector")
     bundled = cl.list_bundled_plasmids()
-    rcol = st.columns([2, 1])
-    with rcol[0]:
-        backbone_name = st.selectbox("Vector", list(bundled) + ["Upload my own…"],
-                                     index=0)
-    with rcol[1]:
-        layout = st.selectbox(
-            "Expected tags", list(sg.VECTORS), index=0,
-            help="Which tags the finished construct should carry, used when the "
-                 "cassette is translated back.")
+    backbone_name = st.selectbox("Vector", list(bundled) + ["Upload my own…"],
+                                 index=0)
 
     payload, display_name = None, backbone_name
     if backbone_name == "Upload my own…":
@@ -87,6 +80,68 @@ def render(settings: Settings) -> None:
     else:
         st.error("Could not find a leader and a tag in this vector, so there is no "
                  "window to clone into. Check the annotation.")
+
+    # The expected cassette is read out of this vector's own annotation rather
+    # than picked from a list. There used to be an "Expected tags" selector here
+    # offering the two vectors `sanger.VECTORS` had entries for, so the other
+    # three bundled vectors and every upload were checked against another
+    # vector's tags.
+    derived = derive_layout_cached(payload, display_name)
+    # tuples, so the cached planning functions below can hash it
+    layout = {"layout": tuple(derived["layout"]), "tags": derived["tags"]}
+    if derived["tags"]:
+        st.caption("Expected cassette, read from this vector: "
+                   + " → ".join(derived["layout"]))
+    else:
+        st.caption("No tag could be read from this vector's annotation, so the "
+                   "construct check will report the translated cassette without "
+                   "looking for a tag in it.")
+    if derived["beyond_stop"]:
+        st.caption(
+            "Also carried, past the stop that ends the cassette: "
+            + ", ".join(f"{tag} at {start}–{end}"
+                        for tag, start, end in derived["beyond_stop"])
+            + ". On pMES4 that is the HA tag sitting between the amber stop and "
+              "gIII: displayed on phage in a suppressor strain, absent from the "
+              "protein a non-suppressor strain makes, so it is not expected in "
+              "the construct.")
+
+    # The map sits here, where the vector is chosen, rather than at the foot of
+    # the screen behind the stop that waits for donor DNA: looking at the
+    # recipient is step 1, and it used to be unreachable until a donor had been
+    # pasted. The slot is filled again further down, once the plan exists, with
+    # the usable enzyme sites drawn on it.
+    view = st.radio("Map view", ["Cloning region", "Whole plasmid"],
+                    horizontal=True, key="map_view")
+    map_slot, map_caption = st.empty(), st.empty()
+
+    def draw_map(sites=()):
+        """Render the map into the slot, with the given enzyme sites marked."""
+        try:
+            img = png_plasmid_map(
+                payload, display_name, view == "Whole plasmid", sites,
+                (max(1, (auto_region or (1, stats["length"]))[0] - 160),
+                 min(stats["length"], (auto_region or (1, stats["length"]))[1] + 160)))
+            map_slot.image(img, **FIT)
+            map_caption.caption(
+                ("Enzyme sites in red; features" if sites else "Features")
+                + " from the file in blue, motifs detected here in orange, a VHH "
+                  "scaffold in green."
+                + ("" if sites else " Usable enzyme sites appear once a donor is "
+                                    "pasted and the plan is worked out."))
+        except Exception as exc:
+            map_slot.warning(f"Map unavailable: {exc}")
+        plt.close("all")
+
+    draw_map()
+
+    with st.expander(f"Vector features ({len(features)})"):
+        st.dataframe(
+            features[[c for c in ["feature", "kind", "source", "start", "end",
+                                  "strand", "type", "note"]
+                      if c in features.columns]], hide_index=True, **FIT)
+        st.caption("The *source* column says whether a feature was read from the file "
+                   "or inferred here by motif scan.")
 
     # ---- 2. donor ----
     st.subheader("2 · Donor DNA")
@@ -304,34 +359,14 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
                        "That is usually a property of the vector rather than a "
                        "mistake, pHEN6 has no gIII for a gIII primer to sit in.")
 
-    with st.expander("Vector map"):
-        view = st.radio("View", ["Cloning region", "Whole plasmid"], horizontal=True,
-                        key="map_view")
-        sites = (tuple((p["enzyme_5"], "", tuple([p["removed_bp"]])) for p in [])
-                 or ())
-        cand = plan["candidates"]
-        usable_sites = (tuple((r["enzyme"], r["site"], tuple(r["cut_positions"]))
-                              for _, r in cand[cand["usable"]].iterrows())
-                        if len(cand) else ())
-        try:
-            img_map = png_plasmid_map(
-                payload, display_name, view == "Whole plasmid", usable_sites,
-                (max(1, (auto_region or (1, stats["length"]))[0] - 160),
-                 min(stats["length"], (auto_region or (1, stats["length"]))[1] + 160)))
-            st.image(img_map, **FIT)
-            st.caption("Enzyme sites in red; features from the file in blue, motifs "
-                       "detected here in orange, a VHH scaffold in green.")
-        except Exception as exc:
-            st.warning(f"Map unavailable: {exc}")
-        plt.close("all")
-
-    with st.expander(f"Vector features ({len(features)})"):
-        st.dataframe(
-            features[[c for c in ["feature", "kind", "source", "start", "end",
-                                  "strand", "type", "note"]
-                      if c in features.columns]], hide_index=True, **FIT)
-        st.caption("The *source* column says whether a feature was read from the file "
-                   "or inferred here by motif scan.")
+    # The map drawn in step 1 is filled in again here, now that the plan says
+    # which enzyme sites are usable. One map on the screen, not two: a second
+    # copy down here would be the same figure with a different caption, and the
+    # two would drift the way two lists of anything do.
+    cand_for_map = plan["candidates"]
+    draw_map(tuple((r["enzyme"], r["site"], tuple(r["cut_positions"]))
+                   for _, r in cand_for_map[cand_for_map["usable"]].iterrows())
+             if len(cand_for_map) else ())
 
     # No footer() here: the router draws it after render() returns, so
     # that every screen gets exactly one and a new screen cannot forget

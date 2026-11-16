@@ -46,7 +46,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.16b"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -480,6 +480,21 @@ def load_plasmid_cached(payload, name):
     """Parse a plasmid once per file. Returns (plasmid, feature table)."""
     plasmid = cl.load_plasmid(payload, name=name)
     return plasmid, cl.feature_table(plasmid)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def derive_layout_cached(payload, name):
+    """The cassette layout read out of this vector's own annotation.
+
+    Returned with ``tags`` as a tuple of pairs so the result is hashable and can
+    be passed straight into the cached planning functions below.
+    """
+    plasmid, features = load_plasmid_cached(payload, name)
+    derived = cl.derive_layout(plasmid, features)
+    return {"layout": list(derived["layout"]),
+            "tags": tuple((n, s) for n, s in derived["tags"]),
+            "tag_table": derived["tag_table"],
+            "beyond_stop": tuple(derived["beyond_stop"])}
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)

@@ -37,11 +37,12 @@ from Bio.SeqRecord import SeqRecord
 __all__ = [
     "PROTEIN_MOTIFS", "load_plasmid", "detect_motifs", "feature_table",
     "restriction_profile", "unique_cutters", "plot_map", "sequence_stats",
+    "derive_layout",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.13a"
+__version__ = "2026.11.16b"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -51,7 +52,16 @@ PROTEIN_MOTIFS = {
     "PelB leader": ("MKYLLPTAAAGLLLLAAQPAMA", "signal peptide, periplasmic export"),
     "PelB core": ("AAQPAMA", "C-terminal part of the PelB leader"),
     "His6": ("HHHHHH", "purification tag"),
-    "HA tag": ("YPYDVPDYA", "detection tag"),
+    # Two forms, longest first. The HA epitope is the nine residues YPYDVPDYA,
+    # and that is what this entry used to hold, but the vectors bundled here
+    # carry eight of them: pMECS and pMES4 both encode YPYDVPDY followed by the
+    # linker GS, which is how the vector's authors describe the tag themselves
+    # (the C-terminal extension of a pMECS clone is AAAYPYDVPDYGSHHHHHH, Vincke
+    # et al., US 2015/0093336 A1, SEQ ID NO 261 and 262). Searching for the
+    # nine-residue form alone found neither vector: pMECS was saved only by its
+    # map annotating `HA-tag` by hand, and pMES4's tag was invisible. Both forms
+    # are a tag, so both are recognised, and the hit records which one is there.
+    "HA tag": (("YPYDVPDYA", "YPYDVPDY"), "detection tag"),
     "Myc tag": ("EQKLISEEDL", "detection tag"),
     "FLAG tag": ("DYKDDDDK", "detection tag"),
     "Strep-tag II": ("WSHPQFEK", "purification tag"),
@@ -187,19 +197,38 @@ def detect_motifs(record: SeqRecord, circular: bool = True) -> list[dict]:
         for label, (motif, note) in PROTEIN_MOTIFS.items():
             if not motif:
                 continue
-            for m in re.finditer(f"(?=({re.escape(motif)}))", protein):
-                found, name = motif, label
+            # An entry may hold several forms of the same element, longest
+            # first, which is how a tag that exists both whole and truncated is
+            # found either way. A position claimed by a longer form is not
+            # offered to a shorter one, or the full HA epitope would also be
+            # reported as its own eight-residue prefix at the same coordinates.
+            variants = (motif,) if isinstance(motif, str) else tuple(motif)
+            variants = sorted(variants, key=len, reverse=True)
+            longest = len(variants[0])
+            claimed: set[int] = set()
+            for variant, m in ((v, m) for v in variants
+                               for m in re.finditer(f"(?=({re.escape(v)}))",
+                                                    protein)):
+                if m.start() in claimed:
+                    continue
+                claimed.add(m.start())
+                found, name = variant, label
+                if len(variant) < longest:
+                    note = (f"{PROTEIN_MOTIFS[label][1]}, truncated form, "
+                            f"{len(variant)} of {longest} residues")
+                else:
+                    note = PROTEIN_MOTIFS[label][1]
                 # A motif made of one repeated residue matches at every offset
                 # inside a longer run of it, so a His10 came back as five
                 # separate His6 features, 70-87, 73-90, 76-93, 79-96 and 82-99,
                 # five tags drawn on the map where the vector carries one. The
                 # run is reported once, at the length it actually has: a vector
                 # with ten histidines reads His10 and not His6.
-                if len(set(motif)) == 1:
-                    residue = motif[0]
+                if len(set(variant)) == 1:
+                    residue = variant[0]
                     if m.start() > 0 and protein[m.start() - 1] == residue:
                         continue                # not the start of the run
-                    end = m.start() + len(motif)
+                    end = m.start() + len(variant)
                     while end < len(protein) and protein[end] == residue:
                         end += 1
                     found = protein[m.start():end]
@@ -566,6 +595,156 @@ def insertion_region(plasmid: dict, features: pd.DataFrame | None = None
     return start + 1, int(tags["start"].min()) - 1
 
 
+# A tag is recognised by its label, and the label has to be matched on word
+# boundaries rather than as a substring. `TAG_LABELS` above is a substring test
+# and is wrong for this job: "Protein 3 M13 phage" contains "ha" inside "phage",
+# so a substring test pulls the whole 1227 nt gIII of pMECS in as an HA tag. It
+# survives in `insertion_region` only because that function takes the *first*
+# tag downstream of the leader, and the real HA tag sits before gIII.
+TAG_PATTERNS = [
+    (re.compile(r"\bhis[\s-]*\d*\b|\b\d+\s*x?\s*his\b|\bpoly[\s-]*his"), "His"),
+    (re.compile(r"\bha\b|\bha[\s-]*tag\b"), "HA"),
+    (re.compile(r"\bc?[\s-]*myc\b"), "Myc"),
+    (re.compile(r"\bflag\b"), "FLAG"),
+    (re.compile(r"\bstrep\b|\bstrep[\s-]*tag"), "Strep"),
+    (re.compile(r"\be[\s-]*tag\b"), "E-tag"),
+]
+
+# The layout assumed when a caller does not pass one. A notebook calling
+# `plan_cloning` on a bundled vector gets the same check the app does; the app
+# always passes the layout it derived from the vector in hand.
+DEFAULT_LAYOUT = "pMES3"
+
+# Longest annotation still treated as a tag. The tags these vectors carry are
+# 18 to 30 nt; the next annotated thing downstream is gIII at 1227 nt. The
+# bound is a guard against a mislabelled large feature, not a measurement.
+MAX_TAG_NT = 60
+
+
+def tag_name_for(label: str) -> str | None:
+    """Canonical tag name for an annotation label, or None if it is not a tag."""
+    low = str(label).lower()
+    for pattern, name in TAG_PATTERNS:
+        if pattern.search(low):
+            return name
+    return None
+
+
+def derive_layout(plasmid: dict, features: pd.DataFrame | None = None) -> dict:
+    """Read the expression cassette's tag layout out of the plasmid itself.
+
+    These layouts used to be written out by hand in `sanger.VECTORS`, two of
+    them, for pMES3 and pMECS. That was a second account of plasmid maps the app
+    already ships in `data/plasmids/`, and the two had drifted: the pMECS entry
+    carried the nine-residue HA epitope YPYDVPDYA while the pMECS map annotates
+    `HA-tag` over 24 nucleotides, which encode the eight residues YPYDVPDY. Every
+    correct pMECS clone was reported as missing its HA tag until that was fixed
+    by hand on the entry, which left the two lists still separate and free to
+    drift again. Deriving removes the second list, and gives the three bundled
+    vectors that never had an entry one that is read from their own map.
+
+    What is returned is the slice each annotation covers, **translated in its own
+    frame**, not a sequence looked up by tag name. An empty phage-display vector
+    carries a stuffer, so its tags are usually out of frame with the leader until
+    a correctly sized VHH is cloned in, and a single cassette-wide frame would
+    read them as nonsense. Reading each annotation on its own is what makes the
+    pMECS HA come back as the eight residues the vector really encodes rather
+    than the nine the epitope is known by.
+
+    Returns ``{"layout": [...], "tags": [(name, aa), ...], "tag_table": DataFrame}``.
+    ``layout`` is the human-readable chain shown on the sequencing screen;
+    ``tags`` is what `sanger.extract_cassette` searches for downstream of the VHH.
+    A vector with no recognisable tag returns the bare PelB/VHH/stop chain and an
+    empty tag list, which makes the construct check report that it has nothing to
+    look for rather than silently checking another vector's tags.
+    """
+    features = feature_table(plasmid) if features is None else features
+    if features.empty:
+        return {"layout": ["PelB", "VHH", "stop"], "tags": [],
+                "tag_table": pd.DataFrame(columns=["tag", "aa", "start", "end",
+                                                   "source"])}
+    seq = str(plasmid["record"].seq)
+    region = insertion_region(plasmid, features)
+    window_end = region[1] if region else 0
+
+    rows = []
+    for _, row in features.iterrows():
+        start, end = int(row["start"]), int(row["end"])
+        if start <= window_end or end < start:      # upstream, or wraps the origin
+            continue
+        if not 6 <= end - start + 1 <= MAX_TAG_NT:
+            continue
+        name = tag_name_for(row["feature"])
+        if name is None:
+            continue
+        nt = seq[start - 1:end]
+        aa = str(Seq(nt[:len(nt) // 3 * 3]).translate())
+        if not aa or "*" in aa:                     # not a clean coding slice
+            continue
+        if name == "His":                           # the name carries the length
+            name = f"His{len(aa)}"
+        rows.append({"tag": name, "aa": aa, "start": start, "end": end,
+                     "source": row["source"], "kind": row["kind"]})
+
+    # The file's own label and the motif scan find the same six histidines at the
+    # same coordinates, and pHEN6 calls them "H". One tag per span, and where the
+    # two disagree the motif scan wins, because it names the run at the length it
+    # actually has.
+    rows.sort(key=lambda d: (d["start"], d["kind"] != "motif"))
+    kept: list[dict] = []
+    for row in rows:
+        if any(not (row["end"] < k["start"] or row["start"] > k["end"]) for k in kept):
+            continue
+        kept.append(row)
+    kept.sort(key=lambda d: d["start"])
+
+    # Only the tags the soluble protein carries. pMES4 encodes a second HA tag
+    # *after* the amber stop that separates the cassette from gIII, so it is on
+    # the phage fusion in a suppressor strain and absent from the protein a
+    # non-suppressor strain makes. `sanger.extract_cassette` looks for tags in
+    # the stretch before the first stop, so expecting that one would report
+    # `missing tag(s): HA` on every correct pMES4 clone, which is the pMECS
+    # failure over again from the other end.
+    # The reading frame comes from the first tag, not from the leader: an empty
+    # vector's stuffer puts the two out of frame, and the stop that ends the
+    # cassette is only in the tags' frame. A tag in another frame belongs to
+    # something else and is dropped with the same line.
+    beyond: list[dict] = []
+    if kept:
+        frame0 = kept[0]["start"] - 1
+        tail = seq[frame0:]
+        tail = tail[:len(tail) // 3 * 3]
+        protein = str(Seq(tail).translate())
+        stop_i = protein.find("*")
+        if stop_i >= 0:
+            cassette_end = frame0 + 3 * stop_i          # first base of the stop
+            in_frame = [r for r in kept
+                        if (r["start"] - 1 - frame0) % 3 == 0
+                        and r["end"] <= cassette_end]
+            beyond = [r for r in kept if r not in in_frame]
+            kept = in_frame
+
+    layout = ["PelB", "VHH"]
+    cursor = window_end
+    for row in kept:
+        gap = seq[cursor:row["start"] - 1]
+        if gap and len(gap) % 3 == 0:
+            gap_aa = str(Seq(gap).translate())
+            if gap_aa and "*" not in gap_aa:
+                layout.append(f"spacer({gap_aa})")
+        layout.append(row["tag"])
+        cursor = row["end"]
+    layout.append("stop")
+
+    table = pd.DataFrame(kept, columns=["tag", "aa", "start", "end", "source",
+                                        "kind"])
+    return {"layout": layout, "tags": [(r["tag"], r["aa"]) for r in kept],
+            "tag_table": table.drop(columns=["kind"]) if len(table) else table,
+            # tags the vector carries that the soluble protein does not, named
+            # so a screen can say so rather than leaving them unexplained
+            "beyond_stop": [(r["tag"], r["start"], r["end"]) for r in beyond]}
+
+
 def recommend_enzymes(backbone: SeqRecord, insert: str | SeqRecord | None = None,
                       region: tuple[int, int] | None = None,
                       enzymes: list[str] | None = None,
@@ -834,16 +1013,21 @@ def assemble(backbone: SeqRecord, insert_dna: str, enzyme_5: str, enzyme_3: str,
     return report
 
 
-def verify_construct(construct: str, vector_layout: str = "pMES3") -> dict:
+def verify_construct(construct: str, vector_layout=DEFAULT_LAYOUT) -> dict:
     """Translate the assembled construct and check the expression cassette.
 
     Reuses the Sanger cassette extractor: the same code that validates a
     sequencing read validates a designed construct, so a frame error, a
     premature stop or a lost tag is caught here rather than after the ligation.
-    """
-    from sanger import VECTORS, extract_cassette
 
-    layout = vector_layout if vector_layout in VECTORS else "pMES3"
+    ``vector_layout`` is a bundled vector's name, or the layout `derive_layout`
+    read from the vector actually loaded. An upload has no name to look up, and
+    this used to fall back to pMES3 for it, checking one vector's tags against
+    another's construct and reporting a missing His6 that was never expected.
+    """
+    from sanger import extract_cassette
+
+    layout = vector_layout
     ex = extract_cassette(construct, layout)
     ok = bool(ex["vhh_aa"]) and not ex["frameshift"] and "*" not in ex["vhh_aa"]
     return {
@@ -853,12 +1037,16 @@ def verify_construct(construct: str, vector_layout: str = "pMES3") -> dict:
         "premature_stops": ex["n_premature_stops"],
         "stop_codon": ex["stop_codon_present"], "frameshift": ex["frameshift"],
         "strand": ex["strand"], "frame": ex["frame"],
-        "warnings": list(ex["warnings"]), "layout": layout,
+        "warnings": list(ex["warnings"]),
+        # a name when one was given, the derived chain when a layout was
+        "layout": layout if isinstance(layout, str)
+                  else " → ".join(layout.get("layout", [])) if isinstance(layout, dict)
+                  else "",
     }
 
 
 def evaluate_pairs(backbone: SeqRecord, insert_dna: str, candidates: pd.DataFrame,
-                   layout: str = "pMES3", circular: bool = True,
+                   layout=DEFAULT_LAYOUT, circular: bool = True,
                    max_pairs: int = 20) -> pd.DataFrame:
     """Try each enzyme pair for real: assemble, translate, and report the verdict.
 
@@ -901,7 +1089,7 @@ def evaluate_pairs(backbone: SeqRecord, insert_dna: str, candidates: pd.DataFram
 
 
 def construct_record(construct: str, name: str, insert_start: int, insert_end: int,
-                     layout: str = "pMES3", circular: bool = True) -> SeqRecord:
+                     layout=DEFAULT_LAYOUT, circular: bool = True) -> SeqRecord:
     """Wrap an assembled construct as an annotated SeqRecord, ready for GenBank.
 
     The insert is annotated from the assembly coordinates; the cassette parts
@@ -1047,7 +1235,7 @@ DEFAULT_ENZYMES = ("PstI", "NotI", "BstEII", "NcoI", "SfiI", "XbaI", "EcoRI",
 def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
                  primers: pd.DataFrame | None = None,
                  enzymes: tuple[str, ...] | None = None,
-                 layout: str = "pMES3") -> dict:
+                 layout=DEFAULT_LAYOUT) -> dict:
     """Plan the whole cloning in one call.
 
     Reads the VHH out of the donor, amplifies it when the donor is a plasmid,

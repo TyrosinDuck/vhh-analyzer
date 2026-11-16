@@ -14,7 +14,7 @@ import sanger as sg
 from compute import png_quality, process_ab1
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.16a"
 
 
 def render(settings: Settings) -> None:
@@ -36,8 +36,16 @@ def render(settings: Settings) -> None:
 
     opts = st.columns(4)
     with opts[0]:
-        vector = st.selectbox("Vector", list(sg.VECTORS), index=0,
-                              help="Determines which tags are expected after the VHH.")
+        # The list is the bundled maps, now five rather than the two that had
+        # hand-written entries, so it is sorted by name and index 0 is no longer
+        # the default vector. Point at the default by name instead.
+        vector_names = list(sg.VECTORS)
+        vector = st.selectbox(
+            "Vector", vector_names,
+            index=(vector_names.index(sg.DEFAULTS["vector"])
+                   if sg.DEFAULTS["vector"] in vector_names else 0),
+            help="Determines which tags are expected after the VHH. The layout is "
+                 "read from the vector's own map.")
     with opts[1]:
         mott_cutoff = st.slider("Trim cutoff", 0.01, 0.20,
                                 sg.DEFAULTS["mott_cutoff"], 0.01,

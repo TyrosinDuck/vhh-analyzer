@@ -1092,3 +1092,101 @@ def test_a_filter_keeps_the_ticks_on_their_entries(app):
     app.text_input(key="lib_search").input("").run()
     _click(app, "Untick all")
     assert not any(c.value.startswith("Selected:") for c in app.caption)
+
+
+def test_the_recipient_vector_is_drawn_before_any_donor_is_pasted(app):
+    """Step 1 shows the vector, and does not ask which tags to expect.
+
+    The map and the feature inventory used to sit at the foot of the screen,
+    behind the stop that waits for donor DNA, so the recipient could not be
+    looked at until a donor had been pasted. Beside the vector picker sat an
+    "Expected tags" selector offering the two vectors that had hand-written
+    entries, which is a question the vector's own map answers.
+    """
+    _goto(app, "🧬 In-silico cloning")
+    _no_failure(app, "cloning section")
+
+    labels = [s.label for s in app.selectbox]
+    assert "Vector" in labels
+    assert "Expected tags" not in labels, \
+        "the expected-tag selector is back; the layout is read from the vector"
+
+    assert [r for r in app.radio if r.label == "Map view"], \
+        "the map view selector did not render before a donor was pasted"
+    assert app.get("image"), "no vector map was drawn in step 1"
+
+    # the derived cassette is stated, not chosen
+    assert any("Expected cassette, read from this vector" in c.value
+               for c in app.caption), [c.value for c in app.caption]
+
+
+def test_the_cassette_shown_is_the_one_derived_from_the_chosen_vector(app):
+    """Switching vector changes the stated cassette, pMECS carrying an HA tag.
+
+    pMES3 and pMECS were the only two the old selector offered. The three the
+    app ships beside them were checked against pMES3's tags; here pHEN6 states
+    its own.
+    """
+    import sanger as sg
+
+    _goto(app, "🧬 In-silico cloning")
+    picker = next(s for s in app.selectbox if s.label == "Vector")
+
+    for name in ("pMECS", "pHEN6"):
+        next(s for s in app.selectbox if s.label == "Vector").set_value(name).run()
+        _no_failure(app, f"cloning with {name}")
+        expected = " → ".join(sg.VECTORS[name]["layout"])
+        assert any(expected in c.value for c in app.caption), \
+            f"{name}: expected {expected!r} among {[c.value for c in app.caption]}"
+
+    assert "HA" in " → ".join(sg.VECTORS["pMECS"]["layout"])
+    next(s for s in app.selectbox if s.label == "Vector").set_value(
+        picker.options[0]).run()
+
+
+def test_one_map_on_the_screen_that_gains_its_enzyme_sites(app):
+    """The step 1 map is filled in again once the plan exists, not duplicated.
+
+    It is drawn into an `st.empty` slot before the donor is pasted and written
+    a second time after the plan, so the screen keeps one map rather than a
+    bare one at the top and an annotated copy at the foot. Two copies of a
+    figure are two things to keep in step, and the caption is what says which
+    is which. The view selector sits outside the slot on purpose: a widget
+    created twice in one run is a duplicate-key error.
+    """
+    _goto(app, "🧬 In-silico cloning")
+    next(s for s in app.selectbox if s.label == "Vector").set_value("pMECS").run()
+    assert len(app.get("image")) == 1
+    assert any(c.value.startswith("Features from the file") for c in app.caption)
+
+    app.text_area[0].set_value(_PMECS_CLONE).run()
+    _no_failure(app, "cloning with a donor carrying a VHH")
+    assert any("VHH found in the donor" in s.value for s in app.success)
+    assert len(app.get("image")) == 1, "a second map was drawn"
+    assert any(c.value.startswith("Enzyme sites in red") for c in app.caption), \
+        "the map kept its donor-less caption after the plan was worked out"
+
+    app.text_area[0].set_value("").run()
+
+
+def _build_pmecs_clone() -> str:
+    """A pMECS backbone carrying a real VHH, so the planner has something to do."""
+    from Bio.Data import CodonTable
+
+    import cloning as cl
+
+    vhh = ("QVQLQESGGGLVQAGGSLRLSCAASGRTFSSYAMGWFRQAPGKEREFVAAISWSGGSTYYADSVKG"
+           "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAAGSRFSSWGQGTQVTVSS")
+    back = CodonTable.unambiguous_dna_by_id[1].back_table
+    plasmid = cl.load_plasmid(cl.list_bundled_plasmids()["pMECS"])
+    seq = str(plasmid["record"].seq)
+    fr1, fr4 = "CAGGTGCAGCTGCAG", "ACCCAGGTCACCGTCTCCTCA"
+    i5, i3 = seq.find(fr1), seq.find(fr4)
+    dna = fr1 + "".join(back[a] for a in vhh)[len(fr1):]
+    dna = dna[:-len(fr4)] + fr4
+    insert = seq[i5 - 25:i5] + dna + seq[i3 + len(fr4):i3 + len(fr4) + 8]
+    return cl.assemble(plasmid["record"], insert, "PstI", "BstEII",
+                       circular=True)["construct"]
+
+
+_PMECS_CLONE = _build_pmecs_clone()
