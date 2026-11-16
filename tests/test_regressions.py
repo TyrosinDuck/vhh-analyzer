@@ -416,6 +416,71 @@ def test_clustering_at_100_percent_groups_only_identical_cdr3s(cablys3):
         "two different CDR3s were grouped at a 100% identity threshold"
 
 
+def test_identical_cdr3s_are_drawn_away_from_the_axis():
+    """A family of identical CDR3s merges at 100%, which is where the axis is.
+
+    The dendrogram is drawn with identity increasing to the left, so a link at
+    distance 0 lands exactly on the spine and the merge that matters most, two
+    reads of the same lineage, was the one merge a user could not see. Three
+    things are asserted, because any one of them alone would let it come back:
+    the axis no longer ends at 0, the zero-height links are drawn as their own
+    thick marks, and every sequence that has an identical twin carries a dot
+    at 100%. Nothing is moved off 100% to make it visible.
+    """
+    loops = {"a": "AADRWGSYYRRGEYDY", "b": "AADRWGSYYRRGEYDY",
+             "c": "AADRWGSYYRRGEYDY", "d": "AADRWGSFYRRGEYDY",
+             "e": "NAKVTRGYSSDWYDY"}
+    seqs = {name: "" for name in loops}
+    annotations = {name: {"CDR3": {"seq": loop}} for name, loop in loops.items()}
+    result = vc.cluster_families(seqs, annotations, cutoff=80.0)
+    figure, _dd = vc.plot_family_dendrogram(result)
+    try:
+        axes = figure.axes[0]
+        left, right = axes.get_xlim()
+        assert min(left, right) < 0, (
+            "the identity axis still ends at 100%, so a link drawn there is "
+            "hidden under the spine")
+
+        thick = [line for line in axes.lines
+                 if line.get_label() == "_identical link"]
+        assert thick, "no zero-distance link is drawn as a mark of its own"
+        for line in thick:
+            assert set(line.get_xdata()) == {0.0}, \
+                "a zero-distance link was moved off 100% to make it visible"
+            assert line.get_linewidth() >= 4
+
+        marked = sum(len(collection.get_offsets())
+                     for collection in axes.collections
+                     if collection.get_label() == "_identical leaf")
+        assert marked == 3, (
+            f"{marked} sequences marked as having an identical twin, expected "
+            f"the three that do")
+    finally:
+        import matplotlib.pyplot as plt
+        plt.close(figure)
+
+
+def test_a_dendrogram_without_identical_cdr3s_marks_nothing():
+    """The marker says something, so it must not be drawn when it is false."""
+    loops = {"a": "AADRWGSYYRRGEYDY", "b": "AADRWGSFYRRGEYDY",
+             "c": "NAKVTRGYSSDWYDY"}
+    seqs = {name: "" for name in loops}
+    annotations = {name: {"CDR3": {"seq": loop}} for name, loop in loops.items()}
+    result = vc.cluster_families(seqs, annotations, cutoff=80.0)
+    figure, _dd = vc.plot_family_dendrogram(result)
+    try:
+        axes = figure.axes[0]
+        marked = sum(len(collection.get_offsets())
+                     for collection in axes.collections
+                     if collection.get_label() == "_identical leaf")
+        assert marked == 0, "sequences marked as identical when none are"
+        assert not [line for line in axes.lines
+                    if line.get_label() == "_identical link"]
+    finally:
+        import matplotlib.pyplot as plt
+        plt.close(figure)
+
+
 # --------------------------------------------------------------------------- #
 # 9. Input validation
 # --------------------------------------------------------------------------- #

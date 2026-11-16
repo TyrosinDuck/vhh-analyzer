@@ -1190,3 +1190,67 @@ def _build_pmecs_clone() -> str:
 
 
 _PMECS_CLONE = _build_pmecs_clone()
+
+
+# --------------------------------------------------------------------------- #
+# The bundled examples, through the buttons a user presses
+# --------------------------------------------------------------------------- #
+
+def test_the_sequencing_screen_loads_its_example_run(app):
+    """The example is what somebody with no .ab1 file sees first.
+
+    Driven through the button rather than by filling the session key, because
+    what is being checked is that the screen reaches the results table from a
+    cold start, with nothing uploaded.
+    """
+    _click(app, "🏠 Home")
+    _goto(app, "🧪 Sanger sequencing")
+    _click(app, "Load an example run")
+    _no_failure(app, "sequencing example")
+
+    assert app.session_state.get("ab1_example_files"), "no example was loaded"
+    assert len(app.session_state["ab1_example_files"]) == 6
+
+    counters = {metric.label: metric.value for metric in app.metric}
+    assert counters.get("Reads") == "6"
+    assert counters.get("VHH extracted") == "3"
+    assert counters.get("Unique sequences") == "2"
+
+    warnings = " ".join(warning.value for warning in app.warning)
+    assert "not a measurement" in warnings, (
+        "the example is drawn without saying it is simulated")
+
+
+def test_the_example_run_can_be_cleared(app):
+    """It has to be possible to get back to an empty screen to upload."""
+    _click(app, "Clear the example")
+    _no_failure(app, "clearing the sequencing example")
+    assert "ab1_example_files" not in app.session_state
+    assert any("No chromatogram uploaded yet" in info.value
+               for info in app.info)
+
+
+def test_the_structure_screen_loads_its_example_and_shows_the_sequences(app):
+    """The example structure, and the panel it was added alongside.
+
+    1MEL is a complex, so the chain table has four rows, and chain A is
+    modelled over fewer residues than the entry declares, which is what the
+    sequence panel is for.
+    """
+    app.session_state["struct_raw"] = None
+    app.session_state["struct_name"] = None
+    _click(app, "🏠 Home")
+    _goto(app, "🧊 Structure")
+    _click(app, "Load an example structure")
+    _no_failure(app, "structure example")
+
+    assert app.session_state["struct_name"] == "1mel.pdb.gz"
+    success = " ".join(element.value for element in app.success)
+    assert "4 chain(s)" in success
+
+    body = " ".join(element.value for element in app.markdown)
+    assert "132 residues modelled, 148 declared" in body, (
+        "the sequence panel does not show the declared sequence beside the "
+        "modelled one")
+    captions = " ".join(element.value for element in app.caption)
+    assert "Desmyter" in captions, "the bundled entry is used without citing it"

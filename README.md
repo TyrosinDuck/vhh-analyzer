@@ -53,7 +53,16 @@ convention, observed here, unverified) and where it came from. The values are
 read from the modules that own them while the page is drawn, so it cannot show
 a number the app is not using.
 
-`examples/` holds a worked example: three published sequences, one set of
+`data/examples/` holds what the *Load an example* buttons use: PDB entry 1MEL
+for the Structure screen, shipped because the app does not download structures
+on your behalf, and nothing at all for the Sanger screen, whose example reads
+are built in memory by `demo.py` from the bundled pMES3 map and the bundled
+library. Those reads are **simulated**: real VHH sequences in a real vector,
+with invented traces and invented quality values, and they say so on the
+screen and in their own sample and comment fields.
+`data/examples/README.md` carries the entry's citation and licence.
+
+`examples/` is a different thing. It holds a worked example: three published sequences, one set of
 settings, and the descriptors this code produces from them, with
 `python3 tools/make_examples.py --check` to compare. It is a baseline rather
 than an independent reference, except for the molar mass, which the test suite
@@ -99,6 +108,7 @@ a fresh export and rerunning that script.
 | `sections/library.py` | the Sequence library screen |
 | `sections/home.py`, `sections/manual.py`, `sections/reference.py` | the landing page, the manual and the reference tables |
 | `sections/provenance.py` | the provenance register: every constant and where it came from |
+| `demo.py` | the example inputs the Sanger and Structure screens offer |
 
 Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
 `structure.py`, `codons.py`, `bench.py`, `buffers.py`, `repertoire.py`,

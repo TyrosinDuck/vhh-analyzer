@@ -59,7 +59,8 @@ import vhh_core as vc
 
 __all__ = [
     "TIEN_MAX_ASA", "BURIED_MAX", "EXPOSED_MIN", "SS_MAX_DISTANCE",
-    "load_structure", "chain_table", "chain_sequence", "confidence_kind",
+    "load_structure", "chain_table", "chain_sequence",
+    "deposited_sequences", "sequence_coverage", "confidence_kind",
     "confidence_table", "disulfides_3d", "compare_disulfides",
     "residue_sasa", "exposure_table", "interface_table", "interface_summary",
     "surface_patches", "annotate_liabilities", "map_structure_to_sequence",
@@ -70,7 +71,7 @@ __all__ = [
     "PATCH_CONTACT", "PATCH_MIN_SIZE", "PATCH_MIN_REL", "__version__",
 ]
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.16a"
 
 
 def _three_to_one(resname: str) -> str | None:
@@ -332,6 +333,123 @@ def chain_table(model: Model) -> pd.DataFrame:
             "no polypeptide chain found, the file may contain only nucleic "
             "acids, ligands or waters.")
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------
+# The deposited sequence, as opposed to the modelled one
+# --------------------------------------------------------------------------
+
+def _seqres_pdb(text: str) -> dict[str, str]:
+    """Per-chain sequence from the SEQRES records of a PDB file."""
+    residues: dict[str, list[str]] = {}
+    for line in text.splitlines():
+        if not line.startswith("SEQRES"):
+            continue
+        chain = line[11].strip() or "?"
+        for name in line[19:].split():
+            residues.setdefault(chain, []).append(
+                _three_to_one(name) or "X")
+    return {chain: "".join(seq) for chain, seq in residues.items() if seq}
+
+
+def _seqres_cif(text: str) -> dict[str, str]:
+    """Per-chain sequence from ``_entity_poly`` of an mmCIF file.
+
+    ``pdbx_seq_one_letter_code_can`` is the canonical one-letter sequence of
+    each polymer entity and ``pdbx_strand_id`` lists the author chain IDs that
+    carry it, which are the IDs Biopython's parser uses. Written against the
+    mmCIF dictionary, and tested on a hand-written file only: no mmCIF from the
+    PDB or from AlphaFold has been run through it yet.
+    """
+    from Bio.PDB.MMCIF2Dict import MMCIF2Dict
+
+    try:
+        table = MMCIF2Dict(io.StringIO(text))
+    except Exception:
+        return {}
+
+    def column(key):
+        value = table.get(key)
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
+    codes = column("_entity_poly.pdbx_seq_one_letter_code_can")
+    strands = column("_entity_poly.pdbx_strand_id")
+    kinds = column("_entity_poly.type")
+    out = {}
+    for i, code in enumerate(codes):
+        if i < len(kinds) and "polypeptide" not in kinds[i].lower():
+            continue
+        seq = "".join(code.split()).upper()
+        if not seq or seq in ("?", "."):
+            continue
+        for chain in (strands[i] if i < len(strands) else "").split(","):
+            if chain.strip():
+                out[chain.strip()] = seq
+    return out
+
+
+def deposited_sequences(data: bytes | str,
+                        filename: str = "structure") -> dict[str, str]:
+    """The sequence each chain was *declared* to have, where the file says.
+
+    A PDB file declares it in its SEQRES records and an mmCIF file in
+    ``_entity_poly``. This is the construct that went into the crystal or the
+    prediction, tags and all, and it is routinely longer than what the
+    coordinates hold, because disordered termini and loops are not modelled.
+    Returns ``{}`` when the file declares nothing, which is common for
+    predicted models written as PDB.
+    """
+    if isinstance(data, str):
+        data = data.encode()
+    try:
+        text = _decompress(data).decode("utf-8", errors="replace")
+    except Exception:
+        return {}
+    lower = filename.lower()
+    for suffix in (".gz", ".bz2"):
+        if lower.endswith(suffix):
+            lower = lower[: -len(suffix)]
+    is_cif = (lower.endswith((".cif", ".mmcif"))
+              or ("_atom_site." in text and "\nATOM  " not in text))
+    return _seqres_cif(text) if is_cif else _seqres_pdb(text)
+
+
+def sequence_coverage(modelled: str, deposited: str) -> dict:
+    """Which residues of the deposited sequence the model actually holds.
+
+    The two are aligned rather than matched by residue number, because the
+    numbering of a structure file need not start at 1 and may follow IMGT or
+    Kabat, both of which skip numbers by design.
+
+    Returns ``marked``, the deposited sequence with modelled residues in upper
+    case and unmodelled ones in lower case; ``missing_n``, ``missing_c`` and
+    ``missing_internal``, counts of unmodelled residues at each end and
+    inside; and ``mismatches``, positions where the model's residue differs from
+    the declared one, as ``(deposited position 1-based, declared, modelled)``.
+    """
+    mapping, _identity = map_structure_to_sequence(modelled, deposited)
+    covered = set(mapping.values())
+    marked = "".join(c.upper() if i in covered else c.lower()
+                     for i, c in enumerate(deposited))
+    if covered:
+        first, last = min(covered), max(covered)
+        missing_n = first
+        missing_c = len(deposited) - 1 - last
+        missing_internal = sum(1 for i in range(first, last + 1)
+                               if i not in covered)
+    else:
+        missing_n, missing_c, missing_internal = 0, 0, len(deposited)
+    mismatches = [(t + 1, deposited[t], modelled[s])
+                  for s, t in sorted(mapping.items())
+                  if modelled[s] != deposited[t]]
+    return {"marked": marked, "n_modelled": len(covered),
+            "n_deposited": len(deposited), "missing_n": int(missing_n),
+            "missing_c": int(missing_c),
+            "missing_internal": int(missing_internal),
+            "unaligned_model": len(modelled) - len(mapping),
+            "mismatches": mismatches}
 
 
 # --------------------------------------------------------------------------

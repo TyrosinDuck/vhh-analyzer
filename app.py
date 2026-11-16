@@ -123,7 +123,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.11.16b",
+REQUIRED_MODULES = {"vhh_core": "2026.11.16a", "sanger": "2026.11.16b",
                     "session": "2026.11.12a",
                     "provenance": "2026.11.16a",
                     "sections.provenance": "2026.11.13a",
@@ -131,11 +131,12 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.11.16b",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.10.27a",
                     "triage": "2026.10.26a", "codons": "2026.11.12a",
-                    "library": "2026.11.13b", "structure": "2026.11.12a",
-                    "shell": "2026.11.16a", "compute": "2026.11.16b",
+                    "library": "2026.11.13b", "structure": "2026.11.16a",
+                    "shell": "2026.11.16a", "compute": "2026.11.16c",
                     "af3": "2026.11.04a",
+                    "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.12e",
+                    "sections.analysis": "2026.11.16a",
                     "tnp": "2026.11.12a",
                     "sabdab": "2026.11.12a",
                     "elsewhere": "2026.11.12b",
@@ -150,8 +151,8 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.12a", "sanger": "2026.11.16b",
                     "sections.home": "2026.11.12c",
                     "sections.library": "2026.11.13d",
                     "sections.manual": "2026.11.12a",
-                    "sections.sequencing": "2026.11.16a",
-                    "sections.structure": "2026.11.12b"}
+                    "sections.sequencing": "2026.11.16b",
+                    "sections.structure": "2026.11.16a"}
 
 
 def _imported(name: str):

@@ -57,7 +57,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    anarci_requirement, anarci_status, current_sequences,
                    fig_to_png, footer, go_to, runtime_versions, usage_prompt)
 
-__version__ = "2026.11.12e"
+__version__ = "2026.11.16a"
 
 
 @dataclass
@@ -1312,9 +1312,11 @@ def _compare(r: Run) -> None:
                 st.subheader("Dendrogram")
                 st.image(img_dendro, **FIT)
                 st.caption("The dashed line is your threshold; branches joining to "
-                           "its right are separate families. Move the slider and "
-                           "watch which groups merge, that is the honest way to see "
-                           "how robust a family is.")
+                           "its right are separate families. Sequences with an "
+                           "identical CDR3 join at exactly 100%: they are drawn as "
+                           "a thick bar on that line, with a dot on each of them. "
+                           "Move the slider and watch which groups merge, that is "
+                           "the honest way to see how robust a family is.")
 
             st.subheader("Per-sequence assignment")
             st.dataframe(fam["assignment"].assign(

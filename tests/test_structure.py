@@ -394,3 +394,104 @@ def test_a_b_factor_column_contributes_no_confidence_factor(cablys3):
     for row in scored.itertuples():
         assert row.weighted_score == pytest.approx(row.score * row.rel_sasa,
                                                    abs=0.02)
+
+
+# --------------------------------------------------------------------------- #
+# The declared sequence, as opposed to the modelled one
+# --------------------------------------------------------------------------- #
+
+def _with_seqres(sequence: str, modelled_from: int, modelled_to: int) -> bytes:
+    """A PDB declaring ``sequence`` in SEQRES and modelling a slice of it.
+
+    The two differ on purpose: this is the ordinary case of a crystal
+    structure whose termini are disordered, built small enough that the right
+    answer is known by construction.
+    """
+    header = []
+    names = [THREE_LETTER[a].upper() for a in sequence]
+    for row, start in enumerate(range(0, len(names), 13)):
+        header.append(
+            f"SEQRES {row + 1:3d} A {len(sequence):4d}  "
+            + " ".join(names[start:start + 13]))
+    body = synthetic_pdb(sequence[modelled_from:modelled_to],
+                         first_resnum=modelled_from + 1).decode()
+    return ("\n".join(header) + "\n" + body).encode()
+
+
+def test_the_declared_sequence_is_read_from_seqres():
+    sequence = "ACDEFGHIKLMNPQRSTVWY" * 2
+    raw = _with_seqres(sequence, 3, 32)
+    assert stx.deposited_sequences(raw, "s.pdb") == {"A": sequence}
+
+
+def test_a_file_that_declares_nothing_gives_nothing():
+    """Most predicted models written as PDB have no SEQRES at all.
+
+    The panel then says so rather than showing a second sequence that is a
+    copy of the first, so an empty answer here has to stay empty.
+    """
+    raw = synthetic_pdb("ACDEFGHIKLMNPQRSTVWY")
+    assert stx.deposited_sequences(raw, "model.pdb") == {}
+
+
+def test_coverage_marks_what_is_declared_and_not_modelled():
+    """Where the unmodelled residues are, counted at each end and inside."""
+    sequence = "ACDEFGHIKLMNPQRSTVWY" * 2
+    raw = _with_seqres(sequence, 3, 36)
+    model = stx.load_structure(raw, "s.pdb")
+    modelled = stx.chain_table(model).set_index("chain").loc["A", "sequence"]
+    coverage = stx.sequence_coverage(modelled, sequence)
+
+    assert coverage["n_deposited"] == 40
+    assert coverage["n_modelled"] == 33
+    assert coverage["missing_n"] == 3
+    assert coverage["missing_c"] == 4
+    assert coverage["missing_internal"] == 0
+    assert coverage["mismatches"] == []
+    # lower case is what the screen draws for a residue that is not there
+    assert coverage["marked"] == (sequence[:3].lower() + sequence[3:36]
+                                  + sequence[36:].lower())
+
+
+def test_coverage_counts_an_unmodelled_loop_as_internal():
+    """A gap in the middle is a different problem from a ragged terminus."""
+    sequence = "ACDEFGHIKLMNPQRSTVWY" * 2
+    header = _with_seqres(sequence, 0, 40).decode().splitlines()
+    seqres = [line for line in header if line.startswith("SEQRES")]
+    body = synthetic_pdb(sequence, missing={10, 11, 12}).decode()
+    raw = ("\n".join(seqres) + "\n" + body).encode()
+
+    model = stx.load_structure(raw, "s.pdb")
+    modelled = stx.chain_table(model).set_index("chain").loc["A", "sequence"]
+    coverage = stx.sequence_coverage(modelled, sequence)
+    assert coverage["missing_internal"] == 3
+    assert coverage["missing_n"] == coverage["missing_c"] == 0
+    assert coverage["marked"][10:13] == sequence[10:13].lower()
+
+
+def test_a_declared_sequence_that_disagrees_is_reported_and_not_hidden():
+    """Silently aligning over a mismatch is how a wrong file looks right."""
+    sequence = "ACDEFGHIKLMNPQRSTVWY"
+    modelled = sequence[:10] + "W" + sequence[11:]
+    coverage = stx.sequence_coverage(modelled, sequence)
+    assert coverage["mismatches"] == [(11, sequence[10], "W")]
+
+
+def test_the_declared_sequence_is_read_from_an_mmcif_entity_poly():
+    """The mmCIF route, on a file written here rather than one from the PDB.
+
+    `_entity_poly` is what an mmCIF carries instead of SEQRES. This is the
+    only check that path has: no mmCIF from the PDB or from AlphaFold has been
+    run through it, which the function's own docstring says as well.
+    """
+    cif = """data_test
+loop_
+_entity_poly.entity_id
+_entity_poly.type
+_entity_poly.pdbx_seq_one_letter_code_can
+_entity_poly.pdbx_strand_id
+1 'polypeptide(L)' ACDEFGHIKL A,B
+2 'polyribonucleotide' AUGC C
+"""
+    assert stx.deposited_sequences(cif.encode(), "test.cif") == {
+        "A": "ACDEFGHIKL", "B": "ACDEFGHIKL"}

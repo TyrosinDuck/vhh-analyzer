@@ -46,7 +46,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -558,6 +558,21 @@ def st_load(raw: bytes, name: str) -> tuple[pd.DataFrame, str, str, int, list]:
     model = stx.load_structure(raw, name)
     kind, reason = stx.confidence_kind(model)
     return (stx.chain_table(model), kind, reason, model.n_models, model.ssbond)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES)
+def st_chain_sequences(raw: bytes, name: str) -> list[dict]:
+    """Each chain's modelled sequence beside the one the file declares."""
+    chains = st_load(raw, name)[0]
+    declared = stx.deposited_sequences(raw, name)
+    rows = []
+    for chain, modelled in zip(chains["chain"], chains["sequence"]):
+        deposited = declared.get(chain, "")
+        rows.append({"chain": chain, "modelled": modelled,
+                     "deposited": deposited,
+                     "coverage": (stx.sequence_coverage(modelled, deposited)
+                                  if deposited else None)})
+    return rows
 
 
 # The AlphaFold3 archive is kept as uploaded and these read from it on demand:

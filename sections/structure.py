@@ -15,18 +15,21 @@ import matplotlib.pyplot as plt
 import streamlit as st
 
 import af3
+import demo
+import session as ses
 import structure as stx
 import tnp
 import vhh_core as vc
 from compute import (annotation_for, classify_cached, st_af3_full,
                      st_af3_index, st_af3_member, st_compactness,
-                     st_confidence, st_disulfides,
+                     st_chain_sequences, st_confidence, st_disulfides,
                      st_exposure, st_identity_map, st_interface,
                      st_interface_summary, st_liabilities, st_load, st_patches,
                      st_resnum_map, st_weighted_liabilities, st_viewer_html)
-from shell import FIT, Settings, current_sequences, embed_html, footer
+from shell import (FIT, Settings, current_sequences, embed_html, footer,
+                   go_to)
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.16a"
 
 
 def render(settings: Settings) -> None:
@@ -59,6 +62,24 @@ def render(settings: Settings) -> None:
              "your own run) gives it: ipTM and PAE live in JSON files beside "
              "the .cif, not in it, and are only shown when the .zip is "
              "uploaded.")
+
+    # An example, for somebody who has none to hand. It goes into the same
+    # session key an upload goes into, so everything below this point cannot
+    # tell the two apart and there is no second code path to keep in step.
+    if st.session_state.get("struct_raw") is None:
+        cols_example = st.columns([2, 5])
+        with cols_example[0]:
+            if st.button("Load an example structure", key="struct_example",
+                         **FIT, help=demo.STRUCTURE_EXAMPLE["title"]):
+                raw_example, name_example = demo.structure_example()
+                st.session_state["struct_raw"] = raw_example
+                st.session_state["struct_name"] = name_example
+                st.session_state.pop("struct_af3_model", None)
+                st.rerun()
+        with cols_example[1]:
+            st.caption(f"{demo.STRUCTURE_EXAMPLE['title']}. A crystal "
+                       f"structure of a complex: the B-factor column really "
+                       f"is a B-factor, and there is an interface to measure.")
 
     # The uploader is unmounted when you leave the section, which discards what
     # it held. Parking the bytes under a key of our own is what lets you come
@@ -151,6 +172,10 @@ behalf would mean this server making requests that look like they came from you.
                 st.session_state.pop(key, None)
             st.rerun()
 
+    if fname == demo.STRUCTURE_EXAMPLE["file"]:
+        st.caption(f"Example. {demo.STRUCTURE_EXAMPLE['citation']} "
+                   f"{demo.STRUCTURE_EXAMPLE['licence']}")
+
     if n_models > 1:
         st.info(f"The file holds {n_models} models (an NMR ensemble, or several "
                 f"predictions). Only the first is used, everything below "
@@ -168,6 +193,7 @@ behalf would mean this server making requests that look like they came from you.
                          help="Mean of the B-factor column, whatever it holds."),
                      "sequence": st.column_config.TextColumn(
                          "Sequence", width="medium")})
+    _sequences_panel(raw, fname)
 
     # ---- which chain is the molecule of interest, and what it is bound to ----
     pick = st.columns([1, 2, 2])
@@ -768,6 +794,112 @@ behalf would mean this server making requests that look like they came from you.
 # --------------------------------------------------------------------------- #
 # AlphaFold3 confidence, shown only when the .zip was uploaded
 # --------------------------------------------------------------------------- #
+
+def _wrapped(seq: str, width: int = 60) -> str:
+    return "\n".join(seq[i:i + width] for i in range(0, len(seq), width))
+
+
+def _sequences_panel(raw: bytes, fname: str) -> None:
+    """Each chain's amino-acid sequence, readable and copyable.
+
+    Two sequences per chain where the file allows it, because they are not the
+    same thing: what the coordinates hold, and what the file declares the
+    chain to be (SEQRES in a PDB file, ``_entity_poly`` in an mmCIF file).
+    The second is routinely longer, by the termini, tags and loops that were
+    too disordered to model.
+    """
+    rows = st_chain_sequences(raw, fname)
+    stem = re.sub(r"\.(pdb|ent|cif|mmcif)(\.gz)?$", "", fname,
+                  flags=re.IGNORECASE) or "structure"
+    with st.expander("Amino-acid sequence of each chain"):
+        st.caption(
+            "**Modelled** is what the coordinates hold, residue by residue. "
+            "**Declared** is the sequence the file says the chain has, from its "
+            "SEQRES records (PDB) or `_entity_poly` (mmCIF): the construct that "
+            "went into the experiment or the prediction. In the declared "
+            "sequence, residues in lower case are not in the coordinates.")
+        for row in rows:
+            cov = row["coverage"]
+            title = f"**Chain {row['chain']}**, {len(row['modelled'])} " \
+                    f"residues modelled"
+            if row["deposited"]:
+                title += f", {len(row['deposited'])} declared"
+            st.markdown(title)
+            st.code(_wrapped(row["modelled"]), language=None)
+            if not row["deposited"]:
+                st.caption("The file declares no sequence for this chain, so "
+                           "unmodelled residues cannot be shown. Breaks in the "
+                           "residue numbering are not marked inside the "
+                           "sequence: IMGT-numbered files skip numbers by "
+                           "design, so a break is not always a missing residue.")
+                continue
+            if row["deposited"] == row["modelled"]:
+                st.caption("The declared sequence is the modelled one.")
+                continue
+            st.code(_wrapped(cov["marked"]), language=None)
+            parts = []
+            if cov["missing_n"]:
+                parts.append(f"{cov['missing_n']} at the N-terminus")
+            if cov["missing_internal"]:
+                parts.append(f"{cov['missing_internal']} inside the chain")
+            if cov["missing_c"]:
+                parts.append(f"{cov['missing_c']} at the C-terminus")
+            if parts:
+                st.caption("Declared but not modelled: " + ", ".join(parts)
+                           + ".")
+            if cov["mismatches"]:
+                st.warning(
+                    "The modelled residue differs from the declared one at "
+                    + ", ".join(f"{d}{p}{m}" for p, d, m in cov["mismatches"][:15])
+                    + ("…" if len(cov["mismatches"]) > 15 else "")
+                    + " (declared, position in the declared sequence, "
+                      "modelled). A modified residue mapped to its parent "
+                      "amino acid can do this; so can a file whose SEQRES was "
+                      "not updated.")
+            if cov["unaligned_model"]:
+                st.warning(f"{cov['unaligned_model']} modelled residue(s) do "
+                           f"not align to the declared sequence.")
+
+        modelled = {f"{stem}_{r['chain']}": r["modelled"] for r in rows}
+        declared = {f"{stem}_{r['chain']}": r["deposited"].upper()
+                    for r in rows if r["deposited"]}
+        dl = st.columns(2)
+        with dl[0]:
+            st.download_button("Modelled sequences (FASTA)",
+                               ses.fasta(modelled),
+                               file_name=f"{stem}_modelled.fasta",
+                               mime="text/plain", key="struct_fasta_model",
+                               **FIT)
+        with dl[1]:
+            st.download_button("Declared sequences (FASTA)",
+                               ses.fasta(declared) if declared else "",
+                               file_name=f"{stem}_declared.fasta",
+                               mime="text/plain", key="struct_fasta_declared",
+                               disabled=not declared, **FIT)
+
+        send = st.columns([2, 2, 1])
+        with send[0]:
+            picked = st.multiselect("Chains to send to the analysis",
+                                    list(modelled), key="struct_send_chains")
+        with send[1]:
+            which = st.radio("Which sequence", ["Modelled", "Declared"],
+                             horizontal=True, key="struct_send_which",
+                             disabled=not declared,
+                             help="The declared sequence carries any tag the "
+                                  "construct had; the analysis will read it "
+                                  "as part of the protein.")
+        with send[2]:
+            st.write("")
+            if st.button("Send", key="struct_send", disabled=not picked,
+                         help="Replaces the sequences loaded in the analysis "
+                              "section.", **FIT):
+                source = (declared if which == "Declared" and declared
+                          else modelled)
+                chosen = {n: source.get(n) or modelled[n] for n in picked}
+                st.session_state["pending_seq_text"] = ses.fasta(chosen)
+                go_to("analysis")
+                st.rerun()
+
 
 def _num(value, digits: int = 2) -> str:
     return "n/a" if value is None else f"{value:.{digits}f}"

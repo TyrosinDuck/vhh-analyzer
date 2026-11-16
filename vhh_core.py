@@ -55,7 +55,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.12a"
+__version__ = "2026.11.16a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1619,6 +1619,27 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
     dd = dendrogram(link, labels=names, orientation="right",
                     color_threshold=1.0 - cutoff / 100.0, ax=ax,
                     above_threshold_color="0.6")
+    # Identical CDR3s join at distance 0, so their link is drawn on x = 0, which
+    # is where the axis sits: the merge was there and could not be seen. The
+    # axis is moved off it by a margin, and every zero-height link is redrawn
+    # as a thick bar, with a dot on each leaf it joins, so "identical" reads at
+    # a glance. Nothing is shifted to make it visible: the bar sits at 100%.
+    pad = 0.035
+    for xs, ys, colour in zip(dd["dcoord"], dd["icoord"], dd["color_list"]):
+        if max(xs) == 0.0:
+            ax.plot([0.0, 0.0], [min(ys), max(ys)], color=colour, lw=4,
+                    solid_capstyle="round", zorder=3,
+                    label="_identical link")
+    ident = result["identity"].to_numpy()
+    twins = {names[i] for i in range(len(names))
+             for j in range(len(names)) if i != j and ident[i, j] >= 100.0}
+    leaf_y = {label: 10 * k + 5 for k, label in enumerate(dd["ivl"])}
+    if twins:
+        ax.scatter([0.0] * len(twins), [leaf_y[t] for t in twins],
+                   s=14, color="0.25", zorder=4, label="_identical leaf")
+    lo, hi = ax.get_xlim()
+    ax.set_xlim(min(lo, hi) - pad, max(lo, hi))
+    ax.spines["left"].set_visible(False)
     ax.axvline(1.0 - cutoff / 100.0, color="crimson", ls="--", lw=1.2)
     ax.annotate(f"{cutoff:.0f}% identity", xy=(1.0 - cutoff / 100.0, 1.0),
                 xycoords=("data", "axes fraction"), xytext=(4, -12),

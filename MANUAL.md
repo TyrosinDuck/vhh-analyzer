@@ -1172,6 +1172,16 @@ honest way to judge how robust a family is. A grouping that holds from 70% to
 95% is
 real; one that appears only at 78% is an artefact of where you put the line.
 
+**Identical CDR3s are drawn on the 100% line.** They join at a distance of
+zero, which is exactly where the identity axis ends, so the link used to be
+hidden under the axis itself and the most clear-cut result in the plot, two
+reads of the same lineage, was the one you could not see. Those links are now
+drawn as a thick bar at 100%, with a dot on each sequence that has an identical
+twin, and the axis is extended slightly past 100% to leave room for them.
+Nothing is moved off 100%: the bar sits where the merge really is, and the
+extra room is in the axis rather than in the data. Two sequences joined by one
+of those bars have exactly the same CDR3, whatever the threshold is set to.
+
 Finally a per-sequence assignment table, and CSV downloads of the families, the
 assignment and the CDR3 identity matrix, plus a FASTA of one representative per
 family, which is usually what you actually want to order or subclone.
@@ -1401,6 +1411,53 @@ otherwise there is no interface left to compute.
 
 If the file holds several models (an NMR ensemble, or several predictions) only
 the first is used, and the app says so.
+
+**If you have no structure to hand**, *Load an example structure* brings in PDB
+entry 1MEL, the camel VHH cAbLys3 bound to hen egg-white lysozyme (Desmyter et
+al. 1996, doi:10.1038/nsb0996-803). It ships with the app, in
+`data/examples/`, because the app does not download structures for you. It is a
+crystal structure, so the B-factor column really is a B-factor; it is a
+complex, so the interface view has something to measure; and both of its
+molecules are in the bundled sequence library, as `cAbLys3` and
+`hen-lysozyme`, so *Annotate against* can be pointed at either without
+uploading anything. PDB archive files are public domain (CC0 1.0), and the
+entry is cited on the screen that offers it.
+
+### 4.1b The amino-acid sequence of each chain
+
+Under the chain table, *Amino-acid sequence of each chain* opens two sequences
+per chain, which are not the same thing and are worth telling apart.
+
+**Modelled** is what the coordinates hold, residue by residue. It is the
+sequence every measurement on this screen is made on.
+
+**Declared** is the sequence the file says the chain has: the SEQRES records of
+a PDB file, `_entity_poly` of an mmCIF. That is the construct that went into
+the crystal or the prediction, tags and all. It is routinely longer than the
+modelled sequence, because disordered termini and loops have no coordinates,
+and residues that are declared and not modelled are shown in **lower case**,
+counted at the N-terminus, inside the chain and at the C-terminus.
+
+On the bundled 1MEL, chain A is 132 residues modelled out of 148 declared: the
+first residue and the C-terminal `GRYPYDVPDYGSGRA` are in the file and not in
+the coordinates. That is the ordinary case, not a defect in the entry.
+
+Three things this panel is careful about. A residue that is modelled but
+differs from the declared one is reported rather than aligned over, which is
+how a modified residue, or a SEQRES somebody forgot to update, shows up at all.
+A file that declares nothing, which is the usual case for a predicted model
+written as PDB, says so instead of showing the modelled sequence twice. And
+breaks in the residue numbering are **not** marked inside the sequence: an
+IMGT-numbered or Kabat-numbered file skips numbers by design, so a jump in the
+numbers is not evidence of a missing residue. The *Gaps* column of the chain
+table counts those jumps, and the lower-case residues here are the ones that
+are really absent.
+
+Both sequences download as FASTA, and any chain can be sent straight to the
+analysis section. Sending the **declared** sequence sends the tag with it, and
+the analysis will read that tag as part of the protein, which changes the mass,
+the pI and the extinction coefficient; send the modelled one unless you mean to
+analyse the construct.
 
 ### 4.2 Choosing the chain, and what to annotate against
 
@@ -2339,6 +2396,30 @@ You upload the chromatograms from a screening run. For each read the app:
 Because all six frames are searched, forward and reverse reads are handled
 without
 being told which is which.
+
+### 8.1b An example run, when you have no files
+
+*Load an example run* fills the screen with six reads, so the section can be
+tried, shown to somebody or checked against a notebook without a screening run
+in hand. They are a clean clone read from both ends, a second clone, a clone
+with one nucleotide deleted inside the VHH, a read that stops before the end of
+the VHH, and an empty well: one of each status the results table reports.
+
+**They are simulated, and the app says so above the table.** The VHH sequences
+are real, taken from the bundled library, and they sit in the real pMES3 map in
+place of its stuffer, so the cassette, the frames and the His6 tag are genuine.
+The chromatogram traces and the quality values are invented: a curve that
+rises, holds and falls like a Sanger read, with no measurement behind it. What
+the example demonstrates is the app's reading of a clone, not the behaviour of
+a sequencing instrument, and no number taken off this example describes any
+real run.
+
+The files are built when you press the button rather than stored in the
+repository, so they cannot drift away from the library or the plasmid map they
+are made from. They can be downloaded as a `.zip`, which is the way to open
+them in a chromatogram viewer or to put them through your own pipeline. Each
+file names itself a simulation in its own sample name and comment fields, so
+the warning travels with the file when it leaves the app.
 
 ### 8.2 Settings
 

@@ -45,6 +45,17 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+- **Identical CDR3s are visible in the clonal-family dendrogram.** Sequences
+  with the same CDR3 join at a distance of zero, which is exactly where the
+  identity axis ends, so their link was drawn under the axis spine and the
+  clearest result in the plot, two reads of the same lineage, was the one merge
+  that could not be seen. Those links are now drawn as a thick bar at 100%,
+  each sequence that has an identical twin carries a dot there, and the axis is
+  extended a little past 100% to leave room. Nothing is moved off 100% to make
+  it visible: the extra room is in the axis, not in the data. Found on a plate
+  where several picked colonies carried the same clone, which is the case the
+  tab exists for.
+
 - **The HA tag is recognised whole and truncated, and only where it counts.**
   The motif library held the HA epitope as the nine residues YPYDVPDYA, which is
   what the epitope is, and found it in none of the five bundled vectors: pMECS
@@ -83,6 +94,55 @@ ran, from its Zenodo record.
   reported a tag as missing that was never expected.
 
 ### Added
+
+- **An example run on the sequencing screen, and an example structure.** Both
+  screens take a file and can do nothing without one, which left anybody
+  without an `.ab1` or a model looking at an empty page. *Load an example run*
+  fills the sequencing screen with six reads, one of each status the table
+  reports: a clean clone read from both ends, a second clone, a clone with one
+  nucleotide deleted inside the VHH, a read that stops before FR4, and an empty
+  well. *Load an example structure* brings in PDB entry 1MEL, cAbLys3 bound to
+  hen egg-white lysozyme (Desmyter et al. 1996, doi:10.1038/nsb0996-803), which
+  ships in `data/examples/` because the app does not download structures on
+  your behalf. PDB archive files are CC0 1.0, and the entry is cited on the
+  screen and in `data/examples/README.md`.
+  **The reads are simulated and say so**, above the table, in the module that
+  makes them and inside the files themselves: their sample name and comment
+  fields both carry the warning, so it survives a download. What is real in
+  them is the VHH sequences, which come from the bundled library, and the
+  vector, which is the bundled pMES3 map with each read's VHH put in place of
+  its stuffer. What is invented is every trace and every quality value: a curve
+  that rises, holds and falls like a Sanger read, with no measurement behind
+  it. No number read off that example describes a real run.
+  They are built when the button is pressed rather than committed, so they
+  cannot drift away from the library or the map they are derived from, and
+  nothing binary is added to the repository for them. `demo.py` writes real
+  ABIF files so that the example goes through the same parser an upload does;
+  that writer has been checked by reading its own output back through
+  Biopython, which is the parser the app uses, and not against an instrument's
+  own software.
+
+- **The amino-acid sequence of each chain, on the Structure screen.** Under the
+  chain table, two sequences per chain where the file allows it: what the
+  coordinates hold, and what the file declares the chain to be, from SEQRES in
+  a PDB file or `_entity_poly` in an mmCIF. The second is routinely longer, by
+  the termini, tags and loops that were too disordered to model, and the
+  residues that are declared and not modelled are shown in lower case and
+  counted at each end and inside the chain. On the bundled 1MEL, chain A is 132
+  residues of the 148 the entry declares, the missing ones being the first
+  residue and the C-terminal `GRYPYDVPDYGSGRA`.
+  A modelled residue that disagrees with the declared one is reported rather
+  than quietly aligned over, a file that declares nothing says so instead of
+  showing the same sequence twice, and breaks in the residue numbering are
+  deliberately not marked inside the sequence, because an IMGT-numbered or
+  Kabat-numbered file skips numbers by design and a jump in the numbers is not
+  a missing residue. Both sequences download as FASTA and any chain can be sent
+  to the analysis section; sending the declared sequence sends its tag with it,
+  which the screen says, because the analysis would then read that tag as part
+  of the protein.
+  The mmCIF route is written against the mmCIF dictionary and tested on a file
+  written here. No mmCIF from the PDB or from AlphaFold has been run through it
+  yet, which the function's docstring says as well.
 
 - **The cassette layout is read out of each vector's own map.** `sanger.VECTORS`
   was two entries typed in beside plasmid maps the app already ships, and the

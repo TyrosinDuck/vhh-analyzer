@@ -7,14 +7,28 @@ The screen only. Its computations live in `compute.py`; the chrome it uses
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 import matplotlib.pyplot as plt
 import streamlit as st
 
+import demo
 import sanger as sg
 from compute import png_quality, process_ab1
 from shell import FIT, Settings, go_to
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
+
+
+def _zipped(files) -> bytes:
+    """The example reads as a .zip, so they can leave the app as files."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("README.txt", demo.SANGER_NOTE + "\n")
+        for name, data in files:
+            archive.writestr(name, data)
+    return buffer.getvalue()
 
 
 def render(settings: Settings) -> None:
@@ -33,6 +47,37 @@ def render(settings: Settings) -> None:
 
     ab1_files = st.file_uploader("Chromatograms (.ab1)", type=["ab1"],
                                  accept_multiple_files=True, key="ab1_uploader")
+
+    # An example, for somebody who has no .ab1 to hand. It is parked under a
+    # key of our own rather than pushed into the uploader, which Streamlit
+    # does not allow a script to fill, and it is dropped the moment a real
+    # file is uploaded: two sets of reads on one screen would be a screen
+    # that cannot say which it is describing.
+    example = st.columns([2, 5])
+    with example[0]:
+        if st.button("Load an example run", key="ab1_example",
+                     disabled=bool(ab1_files), **FIT,
+                     help="Six simulated reads, enough to see every status "
+                          "the table reports."):
+            st.session_state["ab1_example_files"] = demo.sanger_example_files()
+            st.rerun()
+    if ab1_files:
+        st.session_state.pop("ab1_example_files", None)
+    example_files = st.session_state.get("ab1_example_files")
+    with example[1]:
+        if example_files:
+            side = st.columns([1, 1])
+            with side[0]:
+                if st.button("Clear the example", key="ab1_example_clear"):
+                    st.session_state.pop("ab1_example_files", None)
+                    st.rerun()
+            with side[1]:
+                st.download_button(
+                    "The example files (.zip)", _zipped(example_files),
+                    file_name="vhh_toolbox_example_reads.zip",
+                    mime="application/zip", key="ab1_example_zip",
+                    help="The same six .ab1 files, to open in a chromatogram "
+                         "viewer or to run through your own pipeline.")
 
     opts = st.columns(4)
     with opts[0]:
@@ -59,10 +104,19 @@ def render(settings: Settings) -> None:
                                     sg.DEFAULTS["min_mean_phred"], 1)
     st.caption(f"{vector} layout: " + " → ".join(sg.VECTORS[vector]["layout"]))
 
-    if not ab1_files:
+    if not ab1_files and not example_files:
         st.info("No chromatogram uploaded yet.")
     else:
-        payload = tuple((f.name, f.getvalue()) for f in ab1_files)
+        if ab1_files:
+            payload = tuple((f.name, f.getvalue()) for f in ab1_files)
+        else:
+            payload = tuple(example_files)
+            st.warning("**Example run, not a measurement.** " + demo.SANGER_NOTE
+                       + " The six reads are a clean clone read from both "
+                         "ends, a second clone, a clone with one nucleotide "
+                         "deleted, a read that stops inside the VHH, and an "
+                         "empty well: one of each status the table below "
+                         "reports.")
         bar = st.progress(0.0, text="Reading chromatograms…")
         try:
             sanger_df, reads = process_ab1(payload, vector, mott_cutoff,
