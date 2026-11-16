@@ -272,6 +272,93 @@ def test_the_figures_draw_for_a_real_set(real_triage):
                           layers["pareto"], layers["gates"]) is not None
 
 
+# --------------------------------------------------------------------------- #
+# The orientation of the front figure
+# --------------------------------------------------------------------------- #
+
+def _pareto(x: str, y: str):
+    values = pd.DataFrame(
+        {"liability_score": [10.0, 20.0], "n_high_risk": [0, 2],
+         "humanness": [70.0, 85.0], "worst_window": [-0.5, 0.2]},
+        index=pd.Index(["A", "B"], name="name"))
+    front = pd.DataFrame({"name": ["A", "B"], "front": [True, False],
+                          "excluded": [False, False],
+                          "comparable": [True, True], "dominated_by": [0, 1]})
+    return rk.plot_pareto(values, x, y, front, None)
+
+
+def test_neither_axis_of_the_front_figure_runs_backwards():
+    """Numbers grow rightwards and upwards, whichever end is the good one.
+
+    An inverted axis was the first version of this figure and it misread: the
+    tick marks are met once per point and the axis label once per figure, so
+    the inversion cost more than the fixed corner it bought.
+    """
+    for pair in (("liability_score", "n_high_risk"),
+                 ("humanness", "worst_window"),
+                 ("liability_score", "humanness")):
+        axes = _pareto(*pair).axes[0]
+        assert not axes.xaxis_inverted(), pair
+        assert not axes.yaxis_inverted(), pair
+
+
+@pytest.mark.parametrize("x, y, corner", [
+    ("liability_score", "n_high_risk", "bottom left"),
+    ("humanness", "worst_window", "top right"),
+    ("liability_score", "humanness", "top left"),
+    ("humanness", "n_high_risk", "bottom right"),
+])
+def test_the_figure_names_the_corner_its_axes_actually_put_the_best_in(x, y, corner):
+    """The sentence is derived from the axes in hand, so it cannot drift."""
+    said = " ".join(text.get_text() for text in _pareto(x, y).axes[0].texts)
+    assert f"towards the {corner}" in said, said
+
+
+def _arrows(axes):
+    """The two direction arrows: annotations with no text and an arrow."""
+    from matplotlib.text import Annotation
+
+    return [a for a in axes.texts
+            if isinstance(a, Annotation) and a.arrow_patch is not None
+            and not a.get_text()]
+
+
+@pytest.mark.parametrize("x, y, horizontally, vertically", [
+    ("liability_score", "humanness", "left", "up"),
+    ("humanness", "n_high_risk", "right", "down"),
+])
+def test_each_axis_carries_an_arrow_pointing_the_better_way(x, y, horizontally,
+                                                            vertically):
+    """An arrow runs from `xytext` to `xy`, which is how its direction reads."""
+    arrows = _arrows(_pareto(x, y).axes[0])
+    assert len(arrows) == 2, "one arrow per axis, and no more"
+    horizontal = [a for a in arrows
+                  if a.xy[1] == pytest.approx(rk.ARROW_OFFSET)][0]
+    vertical = [a for a in arrows if a is not horizontal][0]
+    if horizontally == "left":
+        assert horizontal.xy[0] < horizontal.xyann[0]
+    else:
+        assert horizontal.xy[0] > horizontal.xyann[0]
+    if vertically == "up":
+        assert vertical.xy[1] > vertical.xyann[1]
+    else:
+        assert vertical.xy[1] < vertical.xyann[1]
+
+
+def test_the_arrows_are_drawn_in_the_colour_reserved_for_them():
+    """Green here means direction and nothing else: no data point uses it."""
+    import matplotlib.colors as mcolors
+
+    axes = _pareto("liability_score", "humanness").axes[0]
+    expected = mcolors.to_rgba(rk.BETTER_COLOUR)
+    for arrow in _arrows(axes):
+        assert tuple(arrow.arrow_patch.get_edgecolor()) == expected
+    for collection in axes.collections:
+        for colour in collection.get_edgecolor():
+            assert tuple(colour) != expected, "a marker is drawn in the "\
+                                              "arrow colour"
+
+
 def test_the_heatmap_draws_something_when_no_axis_survives():
     """An empty figure beats a traceback on a set of non-antibody sequences."""
     empty = pd.DataFrame(index=pd.Index([], name="name"))

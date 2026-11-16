@@ -84,6 +84,18 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+- **The front figure no longer runs its axes backwards.** It inverted any axis
+  whose good end is low, so that the front always sat in the top right, which
+  is a real convention in multi-objective plots and the wrong trade here: the
+  axis labels have to be read anyway when the directions are mixed, so the
+  inversion moved the confusion from the corners to the tick marks, where it is
+  met once per point instead of once per figure. Both axes now run in their
+  natural direction, the better end of each carries a green arrow, and the line
+  above the figure names the corner the arrows point to, derived from the axes
+  in hand. Reported from the first build, where the two default axes are both
+  "lower is better" and the figure read as though the largest values belonged
+  on the left.
+
 - **The README's module paragraph had lost four modules**, `specificity.py`,
   `tnp.py`, `sabdab.py` and `elsewhere.py`, each of which had been added to the
   app without being added to the sentence that says what every file at the root

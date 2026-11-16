@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.16c"
+__version__ = "2026.11.16d"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "entries", "resolve", "value_text",
@@ -1019,6 +1019,11 @@ NOT_SCIENTIFIC: dict[str, str] = {
                                "as the identity heatmap",
     "ranking.HEATMAP_LABEL_MAX": "above this many sequences the comparison "
                                  "cells stop carrying a number",
+    "ranking.ARROW_OFFSET": "how far outside the axes the direction arrows "
+                            "of the front figure sit, in axes fractions",
+    "ranking.ARROW_LABEL_PAD": "how far the axis labels of that figure are "
+                               "pushed out so the arrows sit between them and "
+                               "the axis; points, a matplotlib unit",
     "ranking.MIN_FOR_RANKS": "below this many sequences the comparison tab "
                              "says a rank is not worth reading, because with "
                              "two of them every axis has a winner and a loser "

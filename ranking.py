@@ -61,12 +61,13 @@ import pandas as pd
 
 import triage as tg
 
-__all__ = ["Axis", "AXES", "DEFAULT_AXES", "DEFAULT_GATES", "GATE_LABELS",
+__all__ = ["Axis", "AXES", "BETTER_COLOUR", "DEFAULT_AXES", "DEFAULT_GATES",
+           "GATE_LABELS",
            "axis_labels", "within_set_ranks", "gate_status", "pareto_front",
            "comparison_frame", "plot_rank_heatmap", "plot_pareto",
            "MIN_FOR_RANKS", "__version__"]
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 # Below this many sequences a rank says nothing a side-by-side reading of two
 # numbers does not say better: with two sequences every axis has a winner and a
@@ -341,6 +342,17 @@ def comparison_frame(table: pd.DataFrame, columns=DEFAULT_AXES,
 HEATMAP_FIG_MAX = 14.0         # inches, longest side
 HEATMAP_LABEL_MAX = 24         # sequences beyond which cells carry no number
 
+# The direction arrows of the front figure: how far outside the axes they sit,
+# in axes fractions, and the one colour this figure uses for nothing else, so
+# an arrow cannot be read as a data point.
+ARROW_OFFSET = -0.085
+BETTER_COLOUR = "#55a868"
+# The axis labels are pushed past the arrows rather than the arrows past the
+# labels: an arrow set far enough out to clear any label would end up detached
+# from the axis it describes, and on a figure with wide tick labels it would
+# drift further still.
+ARROW_LABEL_PAD = 26
+
 
 def plot_rank_heatmap(ranks: pd.DataFrame, values: pd.DataFrame | None = None,
                       gates: pd.DataFrame | None = None,
@@ -428,9 +440,23 @@ def plot_pareto(values: pd.DataFrame, x: str, y: str,
     unremarkable here. The figure says so rather than letting the picture pass
     for the computation.
 
-    Both axes are drawn with their better end towards the top right, whichever
-    direction that is, so "up and to the right is preferable" holds without
-    anyone having to remember which axis is inverted.
+    **Both axes run in their natural direction**, values increasing to the
+    right and upwards, and the end that is better is marked by an arrow along
+    each axis with the corner named above the figure. An earlier version
+    inverted any axis whose good end is low, so that the front always sat in
+    the top right. That is a real convention in multi-objective plots and it
+    was the wrong trade here: it spent the strongest expectation a reader
+    brings to a chart, that numbers grow rightwards and upwards, to save them
+    reading two axis labels. With a mix of directions the labels have to be
+    read anyway, so the inversion did not remove the confusion, it moved it
+    from the corners to the tick marks, where it is met once per point instead
+    of once per figure.
+
+    The cost of the choice, stated because it is real: the preferable corner
+    moves with the axes picked. Two liability axes put it at the bottom left,
+    humanness against polyreactivity at the bottom right. The arrows and the
+    line above the figure are derived from the axes in hand rather than
+    written down, so they cannot disagree with what is drawn.
     """
     import matplotlib.pyplot as plt
 
@@ -464,18 +490,33 @@ def plot_pareto(values: pd.DataFrame, x: str, y: str,
             ax.plot([p[0] for p in pts], [p[1] for p in pts], color="#4c72b0",
                     lw=1.0, ls="--", alpha=0.7, zorder=2)
 
-    for column, setter, inverter in ((x, ax.set_xlabel, ax.invert_xaxis),
-                                     (y, ax.set_ylabel, ax.invert_yaxis)):
-        axis = AXES.get(column)
-        label = axis.label if axis else column
-        setter(f"{label}  ({'lower is better' if axis and axis.ascending else 'higher is better'})",
-               fontsize=9)
-        if axis and axis.ascending:
-            inverter()
-    ax.set_title("Filled: on the front over every chosen axis. "
-                 "Red outline: gated.", fontsize=9)
+    axis_x, axis_y = AXES.get(x), AXES.get(y)
+    ax.set_xlabel(axis_x.label if axis_x else x, fontsize=9,
+                  labelpad=ARROW_LABEL_PAD)
+    ax.set_ylabel(axis_y.label if axis_y else y, fontsize=9,
+                  labelpad=ARROW_LABEL_PAD)
     ax.grid(alpha=0.25)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
+
+    # The better direction as an arrow outside the axes, in the one colour this
+    # figure uses for nothing else, so it cannot be read as a data point. Drawn
+    # in axes fractions, which is why it survives any data range.
+    for axis, near, far in ((axis_x, (0.0, ARROW_OFFSET), (0.32, ARROW_OFFSET)),
+                            (axis_y, (ARROW_OFFSET, 0.0), (ARROW_OFFSET, 0.32))):
+        if axis is None:
+            continue
+        start, end = (far, near) if axis.ascending else (near, far)
+        ax.annotate("", xy=end, xytext=start, xycoords="axes fraction",
+                    textcoords="axes fraction",
+                    arrowprops=dict(arrowstyle="-|>", color=BETTER_COLOUR,
+                                    lw=1.4), annotation_clip=False)
+    corner = (f"{'bottom' if axis_y is None or axis_y.ascending else 'top'} "
+              f"{'left' if axis_x is None or axis_x.ascending else 'right'}")
+    ax.text(0.5, 1.02, f"Better is towards the {corner}, where the green "
+                       "arrows point.", transform=ax.transAxes, ha="center",
+            fontsize=8, color=BETTER_COLOUR)
+    ax.set_title("Filled: on the front over every chosen axis. "
+                 "Red outline: gated.", fontsize=9, pad=22)
     fig.tight_layout()
     return fig

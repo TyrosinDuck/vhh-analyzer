@@ -517,11 +517,25 @@ reported as such rather than dropped or treated as worst: it could dominate or
 be dominated and there is no way to tell. Drop the axis or the sequence.
 
 The scatter below the front draws two axes at a time, which is the number a
-scatter can show honestly, with both axes oriented so that up and to the right
-is preferable. The filled points are the front computed over **every** axis
-chosen, not over the two drawn, so a point can be filled while looking
-unremarkable in that view; that is the figure telling you the other axes are
-carrying it.
+scatter can show honestly. **Both axes run in their natural direction**, values
+increasing to the right and upwards, and the end that is better is marked by a
+green arrow along each axis, with the corner named in the line above the
+figure. The corner therefore moves with the axes you pick: two liability axes
+put it at the bottom left, humanness against polyreactivity at the bottom
+right, and the figure says which it is rather than leaving you to work it out.
+
+An earlier version inverted any axis whose good end is low, so that the front
+always sat in the top right. That is a real convention in multi-objective
+plots, and it was the wrong trade here: it spent the strongest expectation a
+reader brings to a chart, that numbers grow rightwards and upwards, to save
+them reading two axis labels. With a mix of directions the labels have to be
+read anyway, so the inversion did not remove the confusion, it moved it from
+the corners to the tick marks, where it is met once per point instead of once
+per figure.
+
+The filled points are the front computed over **every** axis chosen, not over
+the two drawn, so a point can be filled while looking unremarkable in that
+view; that is the figure telling you the other axes are carrying it.
 
 **What this tab will not do.** There is no composite score, no weighting, no
 grade and no star rating, and that is not an omission waiting to be filled.
