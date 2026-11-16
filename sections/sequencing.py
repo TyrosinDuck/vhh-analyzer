@@ -15,10 +15,10 @@ import streamlit as st
 
 import demo
 import sanger as sg
-from compute import png_quality, process_ab1
-from shell import FIT, Settings, go_to
+from compute import png_quality, process_ab1, quality_table_for
+from shell import FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 
 def _zipped(files) -> bytes:
@@ -138,6 +138,10 @@ def render(settings: Settings) -> None:
                                  "tags_found", "tags_missing", "premature_stops",
                                  "n_copies", "duplicate_of", "warnings"]
                      if c in sanger_df.columns]
+        data_download("The results as shown", sanger_df[show_cols],
+                      "sanger_results_shown.csv", key="dl_sanger_shown",
+                      help="The columns above. The full table, with every "
+                           "column the run produced, is further down.")
         st.dataframe(
             sanger_df[show_cols], hide_index=True, **FIT,
             column_config={
@@ -175,6 +179,12 @@ def render(settings: Settings) -> None:
                     st.image(img_q, **FIT)
                     st.caption("Blue is the window kept after trimming; the dashed "
                                "line is Phred 20.")
+                    data_download("Phred per base",
+                                  quality_table_for(payload, mott_cutoff),
+                                  "read_quality.csv", key="dl_read_quality",
+                                  help="One row per base of each read drawn, "
+                                       "with the bases kept by the trim "
+                                       "marked.")
                 plt.close("all")
 
         usable_df = sanger_df[sanger_df["usable"]] if n_usable else sanger_df.iloc[0:0]

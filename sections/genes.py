@@ -11,10 +11,11 @@ import streamlit as st
 
 import codons as cdn
 import vhh_core as vc
-from compute import diagnose_gene, gc_fix_for, gene_summary, png_gc_comparison, png_gene_diagnosis
-from shell import EXAMPLE, FIT, Settings, go_to
+from compute import (diagnose_gene, gc_fix_for, gc_profiles_for, gene_summary,
+                     png_gc_comparison, png_gene_diagnosis)
+from shell import EXAMPLE, FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.12b"
+__version__ = "2026.11.16a"
 
 
 def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window):
@@ -47,10 +48,17 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
 
     st.image(png_gene_diagnosis(gene_dna, expected, cluster_window, gc_window),
              **FIT)
+    data_download("The GC profile drawn", diag["gc"], "gc_profile.csv",
+                  key="dl_gc_profile",
+                  help="The lower panel: GC fraction in each window along the "
+                       "gene. The rare codons of the upper panel are in the "
+                       "codon table below.")
 
     if len(diag["clusters"]):
         st.subheader("Rare-codon clusters")
         st.dataframe(diag["clusters"], hide_index=True, **FIT)
+        data_download("Rare-codon clusters", diag["clusters"],
+                      "rare_codon_clusters.csv", key="dl_clusters")
         st.caption("Clustered and tandem rare codons are the ones associated "
                    "with ribosome stalling. Isolated ones are generally "
                    "tolerated, which is why they are counted but not listed.")
@@ -58,6 +66,8 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
     if len(diag["gc_regions"]):
         st.subheader("Extreme GC stretches")
         st.dataframe(diag["gc_regions"], hide_index=True, **FIT)
+        data_download("Extreme GC stretches", diag["gc_regions"],
+                      "gc_regions.csv", key="dl_gc_regions")
 
     gc_rich = (diag["gc_regions"][diag["gc_regions"]["direction"] == "GC-rich"]
                if len(diag["gc_regions"]) else [])
@@ -130,6 +140,13 @@ def render_gene_detail(name, gene_dna, diag, expected, cluster_window, gc_window
                                            float(min_usage))
             if comparison:
                 st.image(comparison, **FIT)
+                data_download(
+                    "The two profiles drawn",
+                    gc_profiles_for(gene_dna, gc_window, strategy,
+                                    tuple(sorted(fix_avoid)), float(min_usage)),
+                    "gc_profile_before_after.csv", key="dl_gc_compare",
+                    help="GC fraction in each window before and after the "
+                         "suggested swaps, the two curves above.")
                 st.caption(
                     "Red is the sequence as you pasted it, blue after the "
                     "swaps; the grey band is the acceptable range and the "

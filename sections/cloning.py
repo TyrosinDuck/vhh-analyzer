@@ -17,9 +17,9 @@ import streamlit as st
 import cloning as cl
 from compute import (derive_layout_cached, load_plasmid_cached, plan_cloning_cached,
                      png_plasmid_map, primer_report_cached)
-from shell import FIT, Settings, footer
+from shell import FIT, Settings, data_download, footer
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 
 def render(settings: Settings) -> None:
@@ -142,6 +142,9 @@ def render(settings: Settings) -> None:
                       if c in features.columns]], hide_index=True, **FIT)
         st.caption("The *source* column says whether a feature was read from the file "
                    "or inferred here by motif scan.")
+        data_download("Vector features", features, "vector_features.csv",
+                      key="dl_vector_features",
+                      help="Every feature the map is drawn from.")
 
     # ---- 2. donor ----
     st.subheader("2 · Donor DNA")
@@ -330,6 +333,8 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
                    "encodes is compared with the donor's. A pair that would delete an "
                    "annotated part of the vector is rejected even when the cassette "
                    "still translates.")
+        data_download("Every pair considered", pd.DataFrame(rows),
+                      "cloning_plans.csv", key="dl_cloning_plans")
 
     with st.expander("Restriction sites"):
         cand = plan["candidates"]
@@ -343,6 +348,10 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
             st.caption("An enzyme that cuts the insert is not necessarily wrong: in "
                        "VHH cloning BstEII is used on purpose, its site sitting in "
                        "FR4 at the 3' end of the domain.")
+            data_download("Every enzyme considered", cand,
+                          "restriction_candidates.csv", key="dl_enzymes",
+                          help="The table shows the first thirty rows; this is "
+                               "all of them.")
 
     with st.expander("Primers on this vector"):
         full_report = primer_report_cached(payload, display_name, primer_rows)
@@ -352,6 +361,10 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
                                   "tm"]], hide_index=True, **FIT,
                          column_config={"tm": st.column_config.NumberColumn(
                              "Tm (°C)", format="%.1f")})
+            data_download("Primers on this vector", full_report,
+                          "primer_report.csv", key="dl_primer_report",
+                          help="Every primer checked, including those that do "
+                               "not bind.")
         absent = [p for p in primers["name"] if p not in set(binding["primer"])] \
             if len(binding) else list(primers["name"])
         if absent:

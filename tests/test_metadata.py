@@ -720,6 +720,28 @@ def test_the_readme_section_table_is_generated_and_current():
         "`python tools/readme_sections.py`")
 
 
+def test_the_readme_names_every_module_at_the_root():
+    """The paragraph under the section table is written out by hand.
+
+    Unlike the table above it, it is prose that groups the modules by what
+    they are for, which is worth more than a generated enumeration and is
+    exactly why it cannot be generated. So the list stays hand-written and
+    this test is what keeps it true: it had already lost four modules,
+    `specificity.py`, `tnp.py`, `sabdab.py` and `elsewhere.py`, with nothing
+    to say so.
+
+    Only the root is checked. `sections/` is covered by the generated table
+    above, and `tools/` is not part of the app.
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    missing = sorted(path.name for path in ROOT.glob("*.py")
+                     if f"`{path.name}`" not in text)
+    assert not missing, (
+        f"README.md names no role for {', '.join(missing)}. Add each to the "
+        f"paragraph under the section table, with what it is for, or say "
+        f"there why it is not described.")
+
+
 # --------------------------------------------------------------------------
 # The JOSS manuscript's bibliography
 # --------------------------------------------------------------------------

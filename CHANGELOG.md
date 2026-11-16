@@ -18,6 +18,84 @@ ran, from its Zenodo record.
 
 ### Added
 
+- **A comparison view in the Triage family, which still refuses to score.**
+  The triage table is the right shape for sorting and the wrong shape for
+  "which of these eight differs from the others, and where". A second tab
+  answers that in three layers, none of them added to another: a heatmap of
+  each sequence's rank **within the submitted set** on each axis separately,
+  with the raw value written in every cell; the flags of the same table read as
+  gates, go or no-go, marking a sequence without touching its ranks; and the
+  Pareto front over the axes chosen, which is the only answer to "which is
+  best" that needs no weights.
+
+  There is still **no composite score**, and that is not an omission. Adding a
+  percentile from a model fitted on 69 702 sequences to a count of motifs
+  weighted in this laboratory produces a number with no unit, and a weighted
+  total would let three comfortable axes outvote one unpaired cysteine. A front
+  holding every sequence is a real answer: the axes disagree and the choice is
+  yours.
+
+  Only columns with a defensible direction are offered as axes. There is no
+  good pI, no good molecular weight and no good CDR3 length, and the hallmark
+  score is an identity rather than a quality, so those stay in the table. Each
+  axis carries the direction that is better, its basis in the app's own three
+  words for a result, and the reason that direction is defensible; GRAVY is
+  labelled the weakest of them, because a VHH needs hydrophobic residues in its
+  core. Nothing here claims a sequence is fit for use in people: humanness is
+  identity to the closest human germline and not a prediction of
+  immunogenicity.
+
+  The arithmetic lives in a new importable module, `ranking.py`, which reads
+  the triage table and nothing else, so a notebook can have the same ranks,
+  gates and front. The axes name triage columns and the gates come from
+  `triage.FLAG_COLUMNS` rather than from a second list; a test fails if an axis
+  names a column the table no longer produces. `MANUAL.md` §3.2c is the long
+  form of the three layers and of what the view will not do.
+
+- **The data behind every figure, beside the figure.** Each figure and table in
+  the app now offers a CSV of what it was drawn from, either next to it or, in
+  a tab drawing several views of one computation, as a single button holding
+  exactly those rows. Roughly thirty new downloads: the titration curves, the
+  per-residue charge and hydropathy profiles, the Chou-Fasman propensities and
+  state track, the secondary-structure fractions, the liability score by
+  sequence and type, the per-window aggregation profile, the dendrogram as a
+  table of merges, the CDR-length distribution drawn against the reference, the
+  GC profile of a gene and the before-and-after pair of the suggested swaps,
+  Phred per base for each Sanger read, the pLDDT or B-factor curve, the PAE
+  matrix, and the ordinary tables that had none: properties, hallmarks,
+  germlines, repairs, patches, vector features, primers, codon usage.
+
+  What makes the download worth having is that **the figure and the CSV come
+  from one call**. Five plot functions used to compute their own numbers inline
+  and now ask for a frame: `plot_charge` takes `titration_curves`,
+  `plot_profiles` takes `profile_table`, `plot_liability_profile` takes
+  `liability_profile_matrix`, and `chou_fasman_table` and `linkage_table`
+  reshape what their figures already use. A download that recomputed the same
+  thing would agree with its figure until one of the two was edited, with
+  nothing to say which one the user was holding; `tests/test_figure_data.py`
+  patches each data function and checks the figure follows it, which is the
+  test that would catch a second computation creeping back in.
+
+  Three figures have no table behind them and say so instead of offering a
+  substitute: the alignment and the logo are drawn from the alignment itself,
+  offered as FASTA, and the 3D viewer is the structure file. §2.1 of the manual
+  states the rule and the caveats that travel with these files, among them that
+  a profile value is a window mean and not a property of its residue.
+
+### Fixed
+
+- **The README's module paragraph had lost four modules**, `specificity.py`,
+  `tnp.py`, `sabdab.py` and `elsewhere.py`, each of which had been added to the
+  app without being added to the sentence that says what every file at the root
+  is for. The same failure as the line count that paragraph already describes,
+  and noticed only because `ranking.py` was being added to it.
+
+  The list stays written out by hand, because prose that groups the modules by
+  what they are for says more than a generated enumeration. What is new is that
+  `tests/test_metadata.py` now fails on a module at the root that neither the
+  paragraph nor the generated section table above it names, so the next one
+  cannot be added silently.
+
 - **Polyreactivity, as a published predictor, in the Developability family.**
   A new tab scores the CDRs with the logistic regression of Harvey et al., Nat
   Commun 13:7554 (2022), and reports the score, its percentile against their

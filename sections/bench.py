@@ -25,9 +25,9 @@ import bench as bn
 import vhh_core as vc
 from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
-                   current_sequences, usage_prompt)
+                   current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.16a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -413,6 +413,8 @@ def _mass(t: Tube) -> None:
     with st.expander("Every modification considered, and why it was or was not "
                      "offered"):
         st.dataframe(frame, hide_index=True, **FIT)
+        data_download("Every modification considered", frame,
+                      "mass_candidates.csv", key="dl_mass_candidates")
         st.caption(
             "Each delta is computed from a chemical formula rather than copied "
             "from a table, so you can check any of them by hand. A modification "
@@ -584,6 +586,8 @@ def _conjugate(t: Tube) -> None:
                     f"*accessible* is a structural question: upload a model to "
                     f"the structure section.")
             st.dataframe(sites, hide_index=True, **FIT)
+            data_download("Labelling sites", sites, "labelling_sites.csv",
+                          key="dl_conjugate_sites")
 
 
 # --------------------------------------------------------------------------
@@ -703,6 +707,10 @@ def _balance(t: Tube) -> None:
         "Note": row["comment"],
     } for row in balance["rows"]])
     st.dataframe(shown, **FIT, hide_index=True)
+    data_download("The balance as shown", shown, "purification_balance.csv",
+                  key="dl_balance_shown",
+                  help="The table above. The full record, with every column "
+                       "the computation carries, is below.")
 
     if balance["reference_step"]:
         st.caption(
@@ -1212,6 +1220,8 @@ def _lots(t: Tube) -> None:
         "File": row["source"],
     } for row in rows])
     st.dataframe(table, **FIT, hide_index=True)
+    data_download("The lots as shown", table, "across_lots.csv",
+                  key="dl_across_lots")
 
     for warning in comparison["warnings"]:
         st.warning(warning)

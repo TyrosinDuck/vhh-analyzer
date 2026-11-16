@@ -20,16 +20,17 @@ import session as ses
 import structure as stx
 import tnp
 import vhh_core as vc
-from compute import (annotation_for, classify_cached, st_af3_full,
+from compute import (annotation_for, classify_cached, pae_table_for,
+                     st_af3_full,
                      st_af3_index, st_af3_member, st_compactness,
                      st_chain_sequences, st_confidence, st_disulfides,
                      st_exposure, st_identity_map, st_interface,
                      st_interface_summary, st_liabilities, st_load, st_patches,
                      st_resnum_map, st_weighted_liabilities, st_viewer_html)
-from shell import (FIT, Settings, current_sequences, embed_html, footer,
-                   go_to)
+from shell import (FIT, Settings, current_sequences, data_download,
+                   embed_html, footer, go_to)
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 
 def render(settings: Settings) -> None:
@@ -181,6 +182,8 @@ behalf would mean this server making requests that look like they came from you.
                 f"predictions). Only the first is used, everything below "
                 f"describes model 1.")
 
+    data_download("The chains in this file", chains, "chains.csv",
+                  key="dl_chains")
     st.dataframe(chains, hide_index=True, **FIT,
                  column_config={
                      "chain": "Chain", "length": "Residues",
@@ -286,6 +289,9 @@ behalf would mean this server making requests that look like they came from you.
             st.pyplot(stx.plot_confidence(conf, kind,
                                           title=f"{kind} along chain {chain}"),
                       **FIT)
+            data_download(f"{kind} per residue", conf,
+                          f"confidence_{chain}.csv", key="dl_confidence",
+                          help="The curve above, one row per residue.")
             if kind == "pLDDT":
                 low = conf[conf["value"] < 70]
                 st.markdown(
@@ -325,6 +331,8 @@ behalf would mean this server making requests that look like they came from you.
         cols[2].metric("Free thiols", len(free))
 
         if len(found):
+            data_download("Disulfide bonds", found, "disulfides_measured.csv",
+                          key="dl_ss_found")
             st.dataframe(found, hide_index=True, **FIT,
                          column_config={
                              "chain_1": "Chain", "resnum_1": "Residue",
@@ -593,6 +601,8 @@ behalf would mean this server making requests that look like they came from you.
                 f"No group of {min_size} or more exposed hydrophobic residues. "
                 f"Loosen the thresholds to see smaller or less exposed clusters.")
         else:
+            data_download("Hydrophobic patches", patches, "patches.csv",
+                          key="dl_patches")
             st.dataframe(patches, hide_index=True, **FIT,
                          column_config={
                              "patch": "#", "n_residues": "Residues",
@@ -663,6 +673,9 @@ behalf would mean this server making requests that look like they came from you.
                 st.dataframe(
                     by_region.rename("ΔSASA (Å²)").reset_index(),
                     hide_index=True, **FIT)
+                data_download("Buried surface by region",
+                              by_region.rename("delta_sasa_A2").reset_index(),
+                              "buried_by_region.csv", key="dl_buried_region")
                 cdr_share = sum(v for k, v in by_region.items()
                                 if str(k).startswith("CDR"))
                 total = float(by_region.sum()) or 1.0
@@ -997,6 +1010,8 @@ def _af3_panel(bundle, sample, zip_raw, chain, partners, cif_chains) -> None:
         config["pair_pae_min"] = st.column_config.NumberColumn(
             f"Min PAE {chain}–{partners[0]} (Å)", format="%.1f")
     st.dataframe(table, hide_index=True, column_config=config, **FIT)
+    data_download("The models in this archive", table, "af3_models.csv",
+                  key="dl_af3_models")
 
     full = st_af3_full(zip_raw, sample.full_member)
     if full is None:
@@ -1006,6 +1021,11 @@ def _af3_panel(bundle, sample, zip_raw, chain, partners, cif_chains) -> None:
     left, right = st.columns([3, 2])
     with left:
         st.pyplot(af3.plot_pae(full, title=f"PAE, {sample.label}"), **FIT)
+        data_download("The PAE matrix drawn", pae_table_for(full),
+                      f"pae_{sample.label}.csv", index=True, key="dl_pae",
+                      help="One row and column per token, labelled by chain. "
+                           "A large complex makes a large file: the matrix "
+                           "grows with the square of the token count.")
     with right:
         st.markdown(
             "Each cell is the error AlphaFold3 expects in the position of the "

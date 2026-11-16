@@ -34,6 +34,7 @@ import codons as cdn
 import constructs as ctm
 import generator as gn
 import library as lib
+import ranking as rk
 import repertoire as rep
 import sabdab
 import sanger as sg
@@ -47,7 +48,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.16e"
+__version__ = "2026.11.16f"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -176,6 +177,18 @@ def png_charge(frame, seqs, ph):
     return fig_to_png(vc.plot_charge(frame, seqs, ph=ph), close=True)
 
 
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def charge_curves_for(seqs, ph):
+    """The titration curves the charge figure draws.
+
+    ``ph`` is not used by the curves, which span the whole grid, and is taken
+    all the same so that the cache key matches the figure's: a cached result
+    keyed on less than its figure is a CSV that can outlive the picture beside
+    it.
+    """
+    return vc.titration_curves(seqs)
+
+
 @st.cache_data(**_FIG_CACHE)
 def png_profiles(seqs, anns, window):
     return fig_to_png(vc.plot_profiles(seqs, anns, window=window), close=True)
@@ -215,6 +228,18 @@ def profiles_zip(seqs, anns, window):
             zf.writestr(f"profiles/{i:02d}_{safe}.png",
                         _profile_png(name, seq, (anns or {}).get(name), window))
     return buf.getvalue()
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def profile_table_for(seqs, anns, window):
+    """Per-residue charge and hydropathy, the data of the profile figures."""
+    return vc.profile_table(seqs, anns, window)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
+def chou_fasman_table_for(seq, window):
+    """Per-residue Chou-Fasman propensities and state, as drawn."""
+    return vc.chou_fasman_table(seq, window)
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -301,6 +326,12 @@ def png_liability_profile(liabs):
     return fig_to_png(fig, close=True) if fig else None
 
 
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def liability_matrix_for(liabs):
+    """Summed liability score per sequence and type, the stacked bar's data."""
+    return vc.liability_profile_matrix(liabs)
+
+
 @st.cache_data(ttl=CACHE_TTL, max_entries=CACHE_MAX_ENTRIES, show_spinner=False)
 def families_for(seqs, anns, cutoff, linkage_method, same_length):
     """Clonal families, cached, because the pairwise alignments dominate."""
@@ -316,6 +347,13 @@ def png_family_dendrogram(seqs, anns, cutoff, linkage_method, same_length):
         return None
     fig, _ = vc.plot_family_dendrogram(result)
     return fig_to_png(fig, close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def linkage_table_for(seqs, anns, cutoff, linkage_method, same_length):
+    """The dendrogram as a merge table, from the same clustering it draws."""
+    return vc.linkage_table(families_for(seqs, anns, cutoff, linkage_method,
+                                         same_length))
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)
@@ -406,6 +444,28 @@ def triage_for(seqs, anns, kinds, ph, include_added, annotation_is_imgt=False):
                            annotation_is_imgt=annotation_is_imgt)
 
 
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def comparison_for_set(table, axes, gates, exclude_gated):
+    """Ranks, gates and the Pareto front for one triage table.
+
+    Keyed on the triage table itself rather than on the sequences, so the three
+    layers cannot be computed from a different table than the one on screen.
+    """
+    return rk.comparison_frame(table, list(axes), list(gates),
+                               exclude_gated=exclude_gated)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_rank_heatmap(ranks, values, gates, title):
+    return fig_to_png(rk.plot_rank_heatmap(ranks, values, gates, title),
+                      close=True)
+
+
+@st.cache_data(**_FIG_CACHE)
+def png_pareto(values, x, y, front, gates):
+    return fig_to_png(rk.plot_pareto(values, x, y, front, gates), close=True)
+
+
 @st.cache_resource
 def specificity_reference():
     """The polyreactivity model, both backgrounds and the peptide table.
@@ -450,6 +510,24 @@ def png_gc_comparison(dna, gc_window, strategy, avoid, min_usage):
     return fig_to_png(cdn.plot_gc_comparison(dna, fix["dna"],
                                              fix["suggestions"], gc_window),
                       close=True)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def gc_profiles_for(dna, gc_window, strategy, avoid, min_usage):
+    """The two GC profiles the comparison figure draws, before and after.
+
+    Both come from `codons.gc_windows`, the function the figure itself calls,
+    so the CSV is the curves rather than a second sliding window over the same
+    sequence. ``None`` when the suggestion step changed nothing, which is also
+    when no figure is drawn.
+    """
+    fix = gc_fix_for(dna, gc_window, strategy, avoid, min_usage)
+    if not fix["n_changes"]:
+        return None
+    before = cdn.gc_windows(dna, gc_window).rename(columns={"gc": "gc_before"})
+    after = cdn.gc_windows(fix["dna"], gc_window).rename(
+        columns={"gc": "gc_after"})
+    return before.merge(after[["start", "gc_after"]], on="start", how="outer")
 
 
 @st.cache_data(**_FIG_CACHE)
@@ -510,6 +588,19 @@ def png_quality(payload, cutoff):
     reads = [sg.read_ab1(data, name=name, cutoff=cutoff) for name, data in payload]
     fig = sg.plot_quality(reads)
     return fig_to_png(fig, close=True) if fig else None
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
+def quality_table_for(payload, cutoff):
+    """Phred per base for the reads the quality figure draws, same slice."""
+    reads = [sg.read_ab1(data, name=name, cutoff=cutoff) for name, data in payload]
+    return sg.quality_table(reads)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=8)
+def pae_table_for(full):
+    """The PAE matrix as a labelled square table, as drawn."""
+    return af3.pae_table(full)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)

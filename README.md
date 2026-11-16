@@ -112,12 +112,23 @@ a fresh export and rerunning that script.
 
 Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
 `structure.py`, `codons.py`, `bench.py`, `buffers.py`, `repertoire.py`,
-`sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `library.py`,
-`reference.py`, `af3.py`. Plus two files that describe the app rather than
+`sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `ranking.py`,
+`specificity.py`, `tnp.py`, `sabdab.py`, `library.py`, `reference.py`,
+`af3.py`. Plus three files that describe the app rather than
 compute with it: `session.py`, which writes the inputs of a run to a file so
-the run can be repeated, and `provenance.py`, which names the module and
+the run can be repeated, `provenance.py`, which names the module and
 attribute that owns each constant so the register reads live values instead of
-a second copy.
+a second copy, and `elsewhere.py`, which lists the questions this app does not
+answer and who answers them.
+
+This paragraph is checked rather than trusted: `tests/test_metadata.py` fails
+on a module at the root that neither it nor the table above names. It was
+written out by hand and had already lost `specificity.py`, `tnp.py`,
+`sabdab.py` and `elsewhere.py`, which is what a hand-kept list of something
+the repository already knows does, and is the same failure as the line count
+below. The list is still written out, because a sentence that groups the
+modules by what they are for says more than a generated enumeration; what the
+test removes is the possibility of it being wrong.
 
 This table used to carry a line count per file, typed in by hand. It drifted,
 which is what a hand-kept count of something the repository already knows does:

@@ -110,16 +110,44 @@ with a
 selector across the top, see §3.0, which also explains why it is a selector and
 not another row of tabs.
 
+### 2.1 Every figure and table comes with its numbers
+
+Throughout the app, a figure or a table carries a CSV of the data it was drawn
+from, either as a button beside it or, where a tab draws several views of one
+computation, as a single button in that tab holding exactly those rows. A
+figure read off the screen is a figure you cannot put in a statistic; the point
+of the download is that the curve in a manuscript and the number in a table can
+come from the same file you keep.
+
+The rule the code follows, which is what makes the download worth having: the
+drawing and the CSV come from **one call**. The plot functions ask for their
+numbers and are handed a frame; they do not compute their own. A download that
+recomputed the same thing would agree with its figure until one of the two was
+edited, and nothing would say which one you were holding.
+
+Three figures have no table behind them and say so rather than offering a
+substitute: the alignment and the sequence logo are drawn from the alignment
+itself, which is offered as FASTA (the logo also offers its position matrix),
+and the 3D viewer is a structure, which is the file you uploaded. A picture of
+letters is not data a CSV carries better.
+
+Where a figure's numbers are theoretical or derived rather than measured, the
+CSV carries the same caveat as the screen: a titration curve is Biopython's
+charge model on the composition, not the charge of your protein in your buffer,
+and a per-residue profile is a sliding-window mean, so a value is not a
+property of the residue it sits on. The column that says which window was used
+travels with the file for that reason.
+
 ---
 
 ## 3. Sequence analysis
 
 ### 3.0 How the analysis is laid out
 
-The analysis produces nineteen different views of a set of sequences. Showing
+The analysis produces twenty different views of a set of sequences. Showing
 them as one tab each made two problems at once: nobody could find anything, and
 **Streamlit executes the body of every tab on every interaction**: including the
-tabs you never open. Moving one slider redrew nineteen figures.
+tabs you never open. Moving one slider redrew every one of those figures.
 
 So the views are grouped into six **families**, chosen with the selector across
 the
@@ -127,7 +155,7 @@ top. Each family answers one question:
 
 | Family | The question |
 |---|---|
-| 🎯 **Triage** | Which of these do I keep? (§3.2b) |
+| 🎯 **Triage** | Which of these do I keep? (§3.2b, §3.2c) |
 | 🔍 **Identity** | What is each sequence? (§3.3–3.6) |
 | ⚠️ **Developability** | Will it behave? (§3.7–3.8, 3.8b, 3.8c, 3.8d) |
 | 🔗 **Comparison** | How do they compare with each other? (§3.9, 3.10, 3.12) |
@@ -385,9 +413,10 @@ The caption under the selector tells you which annotator is live. If it says
 *not
 installed*, every CDR boundary you see comes from the regex anchors.
 
-### 3.2b Triage
+### 3.2b Triage, the table
 
-The first tab, and the one for the moment you have to **decide** rather than
+The first tab of the Triage family, and the one for the moment you have to
+**decide** rather than
 study: sixteen clones out of a screening, ten slots in a synthesis order. Every
 flag the app can raise, one row per sequence, sortable by whichever column
 matters today.
@@ -414,6 +443,100 @@ that
 is not an antibody domain has no hallmark score, and its cysteines are not read
 against the VHH canonical pair, lysozyme's eight cysteines form four ordinary
 disulfides and are not eight orphan thiols.
+
+### 3.2c Compare
+
+The same numbers as the table, read as a comparison **between the sequences you
+submitted**. The table is the right shape for sorting on the column that
+matters today; it is a poor shape for the question "which of these eight is
+different from the others, and where", which is what this tab answers.
+
+Three layers, and the fact that they are three rather than one is the whole
+design. Nothing here is added to anything else.
+
+**Ranks.** A heatmap, one row per sequence and one column per axis, coloured by
+that sequence's rank among the sequences you submitted, on that axis alone. The
+number written in each cell is the raw value. Those two facts together are the
+point: the colour tells you who is ahead, the number tells you whether being
+ahead is worth anything, and a set where the best liability score is still 48
+looks exactly as bad as it is.
+
+What the colour does **not** mean, stated because a heatmap invites both
+mistakes:
+
+* **Nothing across columns.** Two cells of the same shade on two axes are both
+  "best of these", of two different things. There is no common scale.
+* **Nothing across submissions.** The ranks are relative to what you submitted.
+  Add a ninth sequence and all eight others move. A rank is not a property of a
+  sequence, it is a property of a comparison.
+
+Grey is a value that does not exist for that sequence, not a zero and not a
+worst case. A sequence that is not a variable domain has no humanness; one
+whose CDRs could not be placed has no polyreactivity percentile. Ranking those
+against the sequences that have them would invent an order.
+
+Below three sequences the tab says so and asks you to read the numbers rather
+than the colours. With two of them every axis has a winner and a loser by
+construction, whatever the actual difference between the two.
+
+**Only axes with a defensible direction are offered.** There is no good pI, no
+good molecular weight and no good CDR3 length, so those stay in the table where
+they read as descriptions. The hallmark score says how camelid-like a framework
+is, which is an identity and not a quality. Each axis offered carries, in the
+panel at the bottom of the tab, the direction that is better and the reason it
+is defensible; GRAVY is the weakest of them and says so, because a VHH needs
+hydrophobic residues in its core and a paratope is often hydrophobic.
+
+**Gates.** The flags of the triage table, read as go or no-go rather than as
+points off. A gated sequence is marked in the margin of the heatmap and keeps
+its ranks: it may well be the sequence you take, with the flag on your list of
+things to watch. Two gates are on when the tab opens, an orphan cysteine and a
+high-risk liability, which are the two closest to a decision when a protein is
+meant to be produced and kept. Both can be switched off, and the other flags
+can be switched on, because whether a flag disqualifies a candidate depends on
+what the protein is for.
+
+A gate reading False can mean "not flagged" or "not assessed", which is the
+same caveat as an empty cell in the table: a sequence whose CDRs could not be
+placed is not flagged polyreactive because it has no percentile, and that is
+not the same as being clean.
+
+**The Pareto front.** The only answer to "which is best" that does not need
+weights. A sequence is *dominated* when some other sequence in the set is at
+least as good as it on every axis you chose and strictly better on at least
+one; the front is what is left. That names the few candidates worth arguing
+about without ever saying how much an axis is worth against another.
+
+A front holding every sequence is a real answer, not a failure: it says the
+axes disagree with each other and nothing dominates. Narrowing the axes to the
+ones that matter for this particular protein is what makes a front small, and
+choosing those axes is the judgement the app will not make for you.
+
+A sequence missing a value on any chosen axis is **not comparable** and is
+reported as such rather than dropped or treated as worst: it could dominate or
+be dominated and there is no way to tell. Drop the axis or the sequence.
+
+The scatter below the front draws two axes at a time, which is the number a
+scatter can show honestly, with both axes oriented so that up and to the right
+is preferable. The filled points are the front computed over **every** axis
+chosen, not over the two drawn, so a point can be filled while looking
+unremarkable in that view; that is the figure telling you the other axes are
+carrying it.
+
+**What this tab will not do.** There is no composite score, no weighting, no
+grade and no star rating, and that is not an omission waiting to be filled.
+Weighting a deamidation site against a hydrophobic patch means choosing what
+matters, which depends on what the VHH is for; a single number would hide that
+choice behind a decimal point, and it would let three comfortable axes outvote
+one unpaired cysteine. A number also travels: the screenshot of a score reaches
+a meeting, the sentence of caveats under it does not.
+
+Nor does anything here say a sequence is suitable for use in people. Humanness
+is identity to the closest human germline V gene, which is relevant when the
+plan is to humanise and is not a prediction of immunogenicity; polyreactivity
+is a pre-screen ranking from one synthetic library in one framework (§3.8c).
+Both are useful for putting eight clones in an order. Neither is a claim about
+a patient.
 
 ### 3.3 Properties
 
@@ -1501,6 +1624,9 @@ restriction-site avoidance as the DNA tab and the same round-trip verification,
 the DNA is translated back and compared to the construct before it is shown.
 
 ### 3.15 Download
+
+This tab is the whole run in one place; each individual figure and table also
+carries its own data beside it, throughout the app (§2.1).
 
 The results table as CSV, the figures as 200 dpi PNG, and a full PDF report.
 Above 10 sequences the charge and hydropathy profiles come as a ZIP with one

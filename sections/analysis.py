@@ -34,6 +34,7 @@ import codons as cdn
 import constructs as ctm
 import generator as gn
 import repertoire as rep
+import ranking as rk
 import sabdab
 import specificity as sp
 import tnp
@@ -41,14 +42,18 @@ import triage as tg
 import vhh_core as vc
 from compute import (aggregation_for, analyze_with_progress, annotation_for,
     annotations, cdr3_identity_example,
-    classify_cached, comparison_for, ctm, disulfides_for, dna_for,
+    charge_curves_for, chou_fasman_table_for,
+    classify_cached, comparison_for, comparison_for_set, ctm, disulfides_for,
+    dna_for,
     families_for, generate_cached, generator_matrix, germline_data, gn,
     hallmark_data, humanness_for, identity_for, liabilities_for, pd, plt,
     png_aggregation, png_cdr_lengths, png_charge, png_chou_fasman,
     png_composition, png_construct, png_differences, png_family_dendrogram,
+    liability_matrix_for, linkage_table_for,
     png_identity, png_liability_map, png_liability_profile, png_logo,
-    png_msa, png_profile_one, png_profiles, png_rarity,
-    png_secondary_structure, profiles_zip, PROFILES_COMBINED_MAX,
+    png_msa, png_pareto, png_profile_one, png_profiles, png_rank_heatmap,
+    png_rarity, png_secondary_structure, profile_table_for, profiles_zip,
+    PROFILES_COMBINED_MAX,
     proteases_for, rarity_tables, rep, repairs_for,
     repertoire_reference, repertoire_stats,
     sabdab_closest, specificity_for, specificity_reference, st,
@@ -57,9 +62,10 @@ import session as ses
 from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    FIT, RELEASE, REPO_URL, VERSION, Settings,
                    anarci_requirement, anarci_status, current_sequences,
-                   fig_to_png, footer, go_to, runtime_versions, usage_prompt)
+                   data_download, fig_to_png, footer, go_to, runtime_versions,
+                   usage_prompt)
 
-__version__ = "2026.11.16c"
+__version__ = "2026.11.16d"
 
 
 @dataclass
@@ -108,9 +114,10 @@ class Run:
 # second list of views written out by hand is exactly the kind of duplicate
 # that goes stale without saying so.
 _FAMILIES = {
-    "🎯 Triage": ("triage", [],
-                  "Every flag in one table, the view for deciding which "
-                  "sequences to carry forward."),
+    "🎯 Triage": ("triage", ["Table", "Compare"],
+                  "Every flag in one table, and the same flags read as a "
+                  "comparison between the sequences you submitted: the views "
+                  "for deciding which to carry forward."),
     "🔍 Identity": ("identity",
                     ["Properties", "Plots", "CDR / Framework",
                      "Hallmarks & germline"],
@@ -189,8 +196,18 @@ def _triage(r: Run) -> None:
     ph = r.ph
     tabs = r.tabs
 
-    # --- Triage ----------------------------------------------------------------- #
-    with tabs["Triage"]:
+    # Both tabs of this family read the same table, so it is collected once
+    # here rather than in each of them. The call is cached, so a second call
+    # would be cheap; what it would not be is guaranteed to be the same table,
+    # if one day one tab passed a different argument than the other.
+    with st.spinner("Collecting…"):
+        table = triage_for(sequences, annotations, kinds, ph,
+                           include_added=True,
+                           annotation_is_imgt=_annotator_used(
+                               sequences, r.method) == "ANARCI / IMGT")
+
+    # --- Table ------------------------------------------------------------------ #
+    with tabs["Table"]:
         st.markdown(
             "Every flag the app can raise, one row per sequence. This is the tab for "
             "the moment you have to **decide**, which clones to carry forward, which "
@@ -214,12 +231,6 @@ def _triage(r: Run) -> None:
                      "cysteine, an unusual framework residue, an "
                      "aggregation-prone region, or a polyreactivity percentile "
                      "at or above the flag.")
-
-        with st.spinner("Collecting…"):
-            table = triage_for(sequences, annotations, kinds, ph,
-                               include_added=True,
-                               annotation_is_imgt=_annotator_used(
-                                   sequences, r.method) == "ANARCI / IMGT")
 
         view = table
         if flagged_only and len(view):
@@ -250,6 +261,174 @@ def _triage(r: Run) -> None:
 
         st.download_button("Triage table (CSV)", table.to_csv(index=False),
                            file_name="triage.csv", mime="text/csv")
+
+    # --- Compare ---------------------------------------------------------------- #
+    with tabs["Compare"]:
+        st.markdown(
+            "The same numbers as the table, read as a comparison **between the "
+            "sequences you submitted**: which one differs from the others, and "
+            "on which axis. Three layers, none of them added to another.")
+        st.info(
+            "**Still no overall score.** Each axis is ranked on its own, within "
+            "this set. A colour says \"best of these on this axis\", never "
+            "\"good\": the number in the cell is the raw value, which is what "
+            "says whether the best of a bad set is worth having. Flags are "
+            "shown as gates rather than as points off, because an unpaired "
+            "cysteine is a go or no-go and three good axes should not be able "
+            "to outvote it.", icon="ℹ️")
+
+        if len(table) < 2:
+            st.info("Comparing needs at least two sequences. Submit a few and "
+                    "this tab fills in.")
+        else:
+            axis_choices = list(rk.AXES)
+            picked = st.multiselect(
+                "Axes", axis_choices,
+                default=[c for c in rk.DEFAULT_AXES if c in axis_choices],
+                format_func=lambda c: rk.AXES[c].label, key="cmp_axes",
+                help="Only the columns where one end is defensibly better than "
+                     "the other are offered. There is no good pI and no good "
+                     "molecular weight, so those stay in the table.")
+            gate_choices = list(tg.FLAG_COLUMNS)
+            gated_on = st.multiselect(
+                "Gates", gate_choices,
+                default=[g for g in rk.DEFAULT_GATES if g in gate_choices],
+                format_func=lambda g: rk.GATE_LABELS.get(g, g), key="cmp_gates",
+                help="Which flags you treat as disqualifying. Two are on by "
+                     "default and both can be switched off: whether a flag "
+                     "rules a candidate out depends on what the protein is "
+                     "for.")
+            exclude_gated = st.checkbox(
+                "Leave gated sequences out of the front", value=False,
+                key="cmp_exclude",
+                help="Off, a gated sequence can sit on the front and can keep "
+                     "another sequence off it. On, it is set aside entirely.")
+
+            if not picked:
+                st.warning("Pick at least one axis.")
+            else:
+                layers = comparison_for_set(table, tuple(picked),
+                                            tuple(gated_on), exclude_gated)
+                ranks, values = layers["ranks"], layers["values"]
+                gate_table, front = layers["gates"], layers["pareto"]
+                dropped = [c for c in picked if c not in layers["axes"]]
+                if dropped:
+                    st.caption(
+                        "Left out for want of a value in any sequence: "
+                        + ", ".join(rk.AXES[c].label for c in dropped) + ".")
+
+                if len(table) < rk.MIN_FOR_RANKS:
+                    st.warning(
+                        f"With {len(table)} sequences a rank only says which "
+                        "of the two is ahead, which the two raw values say "
+                        "better. Read the numbers in the cells, not the "
+                        "colours.", icon="⚠️")
+
+                st.subheader("Where each sequence stands, axis by axis")
+                st.image(png_rank_heatmap(
+                    ranks, values, gate_table,
+                    f"Within-set comparison, {len(table)} sequences"), **FIT)
+                st.caption(
+                    "Colour is the rank within this submission, 100 being the "
+                    "best of these on that axis alone. **Colour means nothing "
+                    "across columns**, and nothing across submissions: add a "
+                    "sequence and every rank moves. Grey is a value that does "
+                    "not exist for that sequence, not a zero. A row marked ⚠ "
+                    "raises one of the gates below and keeps its ranks.")
+                heat = st.columns(2)
+                data_download("Ranks", ranks, "within_set_ranks.csv",
+                              index=True, key="dl_cmp_ranks",
+                              container=heat[0])
+                data_download("Values behind the ranks", values,
+                              "within_set_values.csv", index=True,
+                              key="dl_cmp_values", container=heat[1])
+
+                if gated_on:
+                    st.subheader("Gates")
+                    blocked = gate_table[gate_table["blocked"]]
+                    if len(blocked):
+                        st.warning(
+                            f"{len(blocked)} of {len(gate_table)} sequence(s) "
+                            "raise a gate you selected.", icon="⚠️")
+                    else:
+                        st.success("No sequence raises a gate you selected.")
+                    st.dataframe(gate_table.reset_index(), hide_index=True,
+                                 **FIT)
+                    st.caption(
+                        "A gate reading False can mean \"not flagged\" or "
+                        "\"not assessed\": a sequence whose CDRs could not be "
+                        "placed is not flagged polyreactive because it has no "
+                        "percentile, which is not the same as being clean. The "
+                        "tab that owns each flag gives the reason.")
+                    data_download("Gates", gate_table.reset_index(),
+                                  "gates.csv", key="dl_cmp_gates")
+
+                st.subheader("Which ones are worth arguing about")
+                on_front = front[front["front"]]
+                st.markdown(
+                    f"**{len(on_front)} of {len(front)} sequence(s) sit on the "
+                    f"front** over the "
+                    f"{len(layers['axes'])} axis(es) chosen: no other sequence "
+                    "in the set is at least as good on every one of them and "
+                    "better on one."
+                    + (f" They are: {', '.join(on_front['name'])}."
+                       if len(on_front) else ""))
+                if len(on_front) == len(front) and len(front) > 2:
+                    st.caption(
+                        "Everything is on the front, which is a real answer: "
+                        "on these axes the sequences disagree with each other "
+                        "and nothing dominates. Narrowing the axes to the ones "
+                        "that matter for this protein is what makes the front "
+                        "small.")
+                not_comparable = front[~front["comparable"]]
+                if len(not_comparable):
+                    st.caption(
+                        f"{len(not_comparable)} sequence(s) are missing a "
+                        "value on at least one chosen axis, so they are "
+                        "neither on the front nor off it: "
+                        f"{', '.join(not_comparable['name'])}. Drop the axis "
+                        "or the sequence rather than reading them as worst.")
+                st.dataframe(front, hide_index=True, **FIT)
+                data_download("Pareto front", front, "pareto_front.csv",
+                              key="dl_cmp_front")
+
+                if len(layers["axes"]) >= 2:
+                    st.markdown("**Two axes at a time**")
+                    pair = st.columns(2)
+                    x_axis = pair[0].selectbox(
+                        "Horizontal", layers["axes"], index=0,
+                        format_func=lambda c: rk.AXES[c].label, key="cmp_x")
+                    y_options = [c for c in layers["axes"] if c != x_axis]
+                    y_axis = pair[1].selectbox(
+                        "Vertical", y_options, index=0,
+                        format_func=lambda c: rk.AXES[c].label, key="cmp_y")
+                    st.image(png_pareto(values, x_axis, y_axis, front,
+                                        gate_table), **FIT)
+                    st.caption(
+                        "Both axes are drawn with their better end towards the "
+                        "top right, so one of them may run backwards. The "
+                        "filled points are the front computed over **every** "
+                        "axis you chose, not over these two: a point can be "
+                        "filled while looking unremarkable here, which is the "
+                        "figure telling you the other axes are carrying it.")
+
+                with st.expander("What each axis is, and why its direction"):
+                    st.dataframe(pd.DataFrame(
+                        [{"Axis": rk.AXES[c].label,
+                          "Better": rk.AXES[c].better,
+                          "Basis": rk.AXES[c].basis,
+                          "Why": rk.AXES[c].why} for c in layers["axes"]]),
+                        hide_index=True, **FIT)
+                    st.caption(
+                        "Basis in the app's own three words for a result: "
+                        "derived is computed from the sequence by a published "
+                        "or in-house rule, theoretical is an index with no "
+                        "measurement behind it. The third word, measured, "
+                        "cannot appear here: this section reads sequences and "
+                        "never sees the protein. None of these says a sequence "
+                        "is fit for use in people either, humanness is "
+                        "identity to the closest human germline and not a "
+                        "prediction of immunogenicity.")
 
 
 # Columns of the Properties table that do not take the two-decimal default.
@@ -347,9 +526,16 @@ def _identity(r: Run) -> None:
                 else:
                     st.markdown("- ✅ No flag raised")
 
+        data_download("The properties table", df[main_cols],
+                      "properties.csv", key="dl_properties",
+                      help="The columns as shown. The Outputs family carries "
+                           "the same run with every column computed.")
+
         st.subheader("Custom features")
         feature_cols = ["name"] + [c for c in vc.FEATURE_REGISTRY if c in df.columns]
         st.dataframe(df[feature_cols], hide_index=True, **FIT)
+        data_download("Custom features", df[feature_cols], "features.csv",
+                      key="dl_features")
         with st.expander("Feature definitions"):
             for name, entry in vc.FEATURE_REGISTRY.items():
                 st.markdown(f"- **`{name}`**, {entry['doc']}")
@@ -393,10 +579,26 @@ def _identity(r: Run) -> None:
     # --- Plots ----------------------------------------------------------------- #
     with tabs["Plots"]:
         st.image(png_secondary_structure(df), **FIT)
+        ss_cols = [c for c in ("name", "sheet_frac", "helix_frac", "turn_frac")
+                   if c in df.columns]
+        data_download("Propensity fractions", df[ss_cols],
+                      "secondary_structure_propensity.csv", key="dl_ss_frac")
 
         st.image(png_charge(df, sequences, ph), **FIT)
         st.caption("Each titration curve crosses zero at the theoretical pI of that "
                    "sequence.")
+        charge_cols = st.columns(2)
+        data_download("Titration curves", charge_curves_for(sequences, ph),
+                      "titration_curves.csv", key="dl_titration",
+                      container=charge_cols[0],
+                      help="Net charge against pH, over the range the figure "
+                           "is drawn on.")
+        data_download("Net charge at this pH",
+                      df[[c for c in ("name", "net_charge") if c in df.columns]],
+                      f"net_charge_ph{ph}.csv", key="dl_net_charge",
+                      container=charge_cols[1],
+                      help="The right-hand panel. It is also a column of the "
+                           "properties table.")
 
         st.subheader("Charge and hydropathy profiles")
         # One panel per sequence: drawn all at once for 50 sequences this was the
@@ -416,6 +618,15 @@ def _identity(r: Run) -> None:
                                      window), **FIT)
         st.caption("Sliding-window charge (blue) and Kyte–Doolittle hydropathy (orange). "
                    "Shaded bands are the CDRs.")
+        data_download(
+            "The profiles drawn, per residue",
+            profile_table_for({n: sequences[n] for n in prof_shown},
+                              {n: annotations.get(n) for n in prof_shown},
+                              window),
+            "profiles.csv", key="dl_profiles",
+            help="One row per residue of each sequence shown above. Both "
+                 "tracks are means over the window, so a value is not a "
+                 "property of its residue alone.")
 
         st.subheader("Predicted secondary structure")
         cf_window = st.slider("Chou–Fasman window", 3, 11,
@@ -438,6 +649,10 @@ def _identity(r: Run) -> None:
             st.caption(f"{name}: {prof['fractions']['E']:.0%} sheet, "
                        f"{prof['fractions']['H']:.0%} helix, "
                        f"{prof['fractions']['C']:.0%} coil by this heuristic.")
+            data_download(f"Propensities and state, {name}",
+                          chou_fasman_table_for(seq, cf_window),
+                          f"chou_fasman_{vc.seq_id(seq)[:8]}.csv",
+                          key=f"dl_cf_{name}")
         st.caption("The Chou–Fasman heuristic is roughly 50–60% accurate: it shows where "
                    "the sequence tends towards each conformation, it does not predict the "
                    "fold. A VHH is an immunoglobulin β-sandwich, so a sheet-dominated "
@@ -460,7 +675,10 @@ def _identity(r: Run) -> None:
                      "CDR2 len": len(heavy_annotations[n]["CDR2"]["seq"]),
                      "CDR3 len": len(heavy_annotations[n]["CDR3"]["seq"])}
                     for n in heavy_annotations]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, **FIT)
+            cdr_table = pd.DataFrame(rows)
+            st.dataframe(cdr_table, hide_index=True, **FIT)
+            data_download("CDRs and their lengths", cdr_table, "cdrs.csv",
+                          key="dl_cdr_table")
 
             st.subheader("Annotated sequences")
             st.markdown(
@@ -474,10 +692,13 @@ def _identity(r: Run) -> None:
                                 for n in heavy_annotations), unsafe_allow_html=True)
 
             with st.expander("Framework regions"):
-                st.dataframe(pd.DataFrame(
+                fr_table = pd.DataFrame(
                     [{"name": n, **{r: heavy_annotations[n][r]["seq"]
                                     for r in ("FR1", "FR2", "FR3", "FR4")}}
-                     for n in heavy_annotations]), hide_index=True, **FIT)
+                     for n in heavy_annotations])
+                st.dataframe(fr_table, hide_index=True, **FIT)
+                data_download("Framework regions", fr_table, "frameworks.csv",
+                              key="dl_fr_table")
 
             with st.expander("How the two annotation methods work"):
                 st.markdown("""
@@ -524,7 +745,10 @@ def _identity(r: Run) -> None:
                                     "J identity (%)": g["j_identity"]})
 
         if hm_rows:
-            st.dataframe(pd.DataFrame(hm_rows), hide_index=True, **FIT)
+            hm_table = pd.DataFrame(hm_rows)
+            st.dataframe(hm_table, hide_index=True, **FIT)
+            data_download("Hallmark positions", hm_table, "hallmarks.csv",
+                          key="dl_hallmarks")
             st.caption("A score of 4/4 is the canonical camelid profile. IMGT 49 is "
                        "shared with VH3, so 3/4 with a G at 49 is common and still a "
                        "genuine VHH. Engineered or humanised constructs sit between the "
@@ -535,7 +759,10 @@ def _identity(r: Run) -> None:
 
         if gl_rows:
             st.subheader("Closest germline")
-            st.dataframe(pd.DataFrame(gl_rows), hide_index=True, **FIT)
+            gl_table = pd.DataFrame(gl_rows)
+            st.dataframe(gl_table, hide_index=True, **FIT)
+            data_download("Closest germline genes", gl_table, "germlines.csv",
+                          key="dl_germlines")
             st.caption("Identity to the closest human germline is a first-pass humanness "
                        "indicator, not an immunogenicity prediction, a sequence can be "
                        "germline-like and still contain a T-cell epitope.")
@@ -639,7 +866,8 @@ def _risk(r: Run) -> None:
             summaries.append(vc.liability_summary(name, liab_by_seq[name],
                                                   prot_by_seq[name]))
 
-        st.dataframe(pd.DataFrame(summaries), hide_index=True, **FIT,
+        summary_table = pd.DataFrame(summaries)
+        st.dataframe(summary_table, hide_index=True, **FIT,
                      column_config={
                          "total_score": st.column_config.NumberColumn("Total score",
                                                                        format="%.1f"),
@@ -661,6 +889,17 @@ def _risk(r: Run) -> None:
         if img_profile:
             st.image(img_profile, **FIT)
         plt.close("all")
+
+        liab_dl = st.columns(2)
+        data_download("Per-sequence summary", summary_table,
+                      "liability_summary.csv", key="dl_liab_summary",
+                      container=liab_dl[0])
+        data_download("Score by sequence and type",
+                      liability_matrix_for(liab_by_seq),
+                      "liability_profile.csv", key="dl_liab_matrix",
+                      index=True, container=liab_dl[1],
+                      help="The stacked bar above. The map is the liabilities "
+                           "table itself, offered below.")
 
         st.caption(
             "Scores come from the in-house scale: N-glycosylation sequon 15, NG and DG "
@@ -707,6 +946,9 @@ def _risk(r: Run) -> None:
                 if not prot.empty:
                     in_cdr = prot[prot["in_CDR"]]
                     st.caption(f"{len(in_cdr)} inside a CDR")
+                    data_download(f"Sites, {name}", prot,
+                                  f"protease_sites_{vc.seq_id(sequences[name])[:8]}.csv",
+                                  key=f"dl_prot_{name}")
                     st.dataframe(prot.head(40), hide_index=True, **FIT,
                                  column_config={"note": st.column_config.TextColumn(
                                      "Note", width="large")})
@@ -741,8 +983,14 @@ def _risk(r: Run) -> None:
                              f"{ds['verdict']}", expanded=len(sequences) == 1):
                 if len(ds["cysteines"]):
                     st.dataframe(ds["cysteines"], hide_index=True, **FIT)
+                    data_download(f"Cysteines, {name}", ds["cysteines"],
+                                  f"cysteines_{vc.seq_id(seq)[:8]}.csv",
+                                  key=f"dl_cys_{name}")
                 if len(ds["pairs"]):
                     st.dataframe(ds["pairs"], hide_index=True, **FIT)
+                    data_download(f"Pairs, {name}", ds["pairs"],
+                                  f"disulfide_pairs_{vc.seq_id(seq)[:8]}.csv",
+                                  key=f"dl_pairs_{name}")
                 if ds["has_extra_pair"] and not kinds[name]["is_vhh"]:
                     st.info(
                         "An extra cysteine pair was found, but the CDR1–CDR3 pattern "
@@ -787,6 +1035,8 @@ def _risk(r: Run) -> None:
             st.dataframe(doable, hide_index=True, **FIT,
                          column_config={"rationale": st.column_config.TextColumn(
                              "Rationale", width="large")})
+            data_download("Suggested repairs", doable, "repairs.csv",
+                          key="dl_repairs")
             if len(refused):
                 st.caption("Offered no substitution, deliberately:")
                 st.dataframe(refused[["liability", "position", "region", "rationale"]],
@@ -794,6 +1044,8 @@ def _risk(r: Run) -> None:
                              column_config={"rationale":
                                             st.column_config.TextColumn("Reason",
                                                                         width="large")})
+                data_download("Refused, with the reason", refused,
+                              "repairs_refused.csv", key="dl_repairs_refused")
 
             # Several liabilities offer alternatives at the SAME position (a free
             # cysteine can go to S or to A). Selecting both by default would make
@@ -910,6 +1162,15 @@ def _risk(r: Run) -> None:
                              **FIT)
                 st.markdown("**Weakest windows**")
                 st.dataframe(weakest, hide_index=True, **FIT)
+                agg_dl = st.columns(2)
+                data_download(f"Weakest windows, {name}", weakest,
+                              f"weakest_windows_{vc.seq_id(seq)[:8]}.csv",
+                              key=f"dl_agg_weak_{name}", container=agg_dl[0])
+                data_download(f"The profile drawn, {name}", profile,
+                              f"aggregation_profile_{vc.seq_id(seq)[:8]}.csv",
+                              key=f"dl_agg_profile_{name}", container=agg_dl[1],
+                              help="Per-window solubility score along the "
+                                   "sequence, which is the curve above.")
                 if len(regions):
                     st.markdown("**Regions below the threshold**")
                     st.dataframe(regions, hide_index=True, **FIT)
@@ -1163,6 +1424,8 @@ def _plastic(r: Run) -> None:
                          "source": st.column_config.TextColumn("Source",
                                                                 width="large"),
                          "source_kind": st.column_config.TextColumn("Checked")})
+        data_download("The reference peptides", sp.reference_peptides(),
+                      "plastic_reference_peptides.csv", key="dl_plastic_ref")
         st.caption(
             "Every sequence was read off the publication in its own row. Where "
             "the kind is `review`, the sequence comes from a review that "
@@ -1245,6 +1508,8 @@ def _clinical_context(r: Run) -> None:
 
     st.markdown("**The guidelines**")
     st.dataframe(tnp.metric_table(), hide_index=True, **FIT)
+    data_download("The guidelines", tnp.metric_table(), "tnp_guidelines.csv",
+                  key="dl_tnp_guidelines")
 
     st.info(
         "Four of the six metrics need a structure. **CDR3 compactness** is "
@@ -1317,7 +1582,10 @@ def _compare(r: Run) -> None:
                 img_msa, aln_text = png_msa(aln_seqs, aln_anns, int(msa_wrap))
             st.image(img_msa, **FIT)
             st.caption("FAMSA alignment rendered with pymsaviz. CDR bands refer "
-                       "to the first sequence submitted.")
+                       "to the first sequence submitted. This figure has no "
+                       "table behind it: it is drawn from the alignment "
+                       "itself, which is the FASTA below, and a column of "
+                       "letters is not data a CSV would carry better.")
             st.download_button("Download alignment (FASTA)", aln_text,
                                file_name="alignment.fasta", mime="text/plain")
 
@@ -1580,6 +1848,15 @@ def _compare(r: Run) -> None:
                            "a thick bar on that line, with a dot on each of them. "
                            "Move the slider and watch which groups merge, that is "
                            "the honest way to see how robust a family is.")
+                data_download(
+                    "The merges drawn",
+                    linkage_table_for(heavy_sequences, heavy_annotations,
+                                      float(cutoff), linkage_method,
+                                      bool(same_length)),
+                    "dendrogram_merges.csv", key="dl_dendrogram",
+                    help="One row per join, in order: what merged with what, "
+                         "and at what identity under this linkage. An "
+                         "internal group is named by the step that made it.")
 
             st.subheader("Per-sequence assignment")
             st.dataframe(fam["assignment"].assign(
@@ -1733,6 +2010,13 @@ def _repertoire(r: Run) -> None:
                             "grey figure next to each marker is how common that "
                             "length is among real VHHs.")
 
+                    data_download("The distribution drawn", distribution,
+                                  "cdr_length_distribution.csv",
+                                  key="dl_cdr_dist",
+                                  help="Your set and the reference repertoire, "
+                                       "each as fractions of its own total, "
+                                       "which is the figure above.")
+
                     context = rep.cdr_length_context(per_seq, distribution)
                     if len(context):
                         st.markdown("**Where each CDR length sits**")
@@ -1753,7 +2037,13 @@ def _repertoire(r: Run) -> None:
                             "unusual below the 5th or above the 95th percentile, "
                             "unusual is not wrong, and a long CDR3 is often exactly "
                             "what you selected for.")
+                        data_download("Where each length sits", context,
+                                      "cdr_length_context.csv",
+                                      key="dl_cdr_context")
                     st.dataframe(per_seq, hide_index=True, **FIT)
+                    data_download("Your lengths, per sequence", per_seq,
+                                  "cdr_lengths_per_sequence.csv",
+                                  key="dl_cdr_per_seq")
 
                     st.subheader("Amino-acid composition")
                     regions = st.multiselect(
@@ -2069,6 +2359,8 @@ def _outputs(r: Run) -> None:
 
             st.markdown("**Full properties**")
             st.dataframe(built["properties"], hide_index=True, **FIT)
+            data_download("Construct properties", built["properties"],
+                          "construct_properties.csv", key="dl_construct_props")
 
             st.markdown("**Protein sequence**")
             st.code(built["sequence"], language="text")

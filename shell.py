@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -334,6 +334,32 @@ def fig_to_png(fig, dpi: int = 200, close: bool = False) -> bytes:
     if close:
         plt.close(fig)
     return buf.getvalue()
+
+
+def data_download(label: str, frame, file_name: str, *,
+                  key: str | None = None, index: bool = False,
+                  help: str | None = None, container=None) -> bool:
+    """Offer, next to a figure or a table, the data it was drawn from.
+
+    The rule this exists to enforce: **the frame handed to this function is the
+    frame that was drawn**, not a second computation of the same thing. Every
+    call site either already holds the frame it displayed or takes it from the
+    same cached function in `compute.py` that the figure took it from. A
+    download that recomputes its own numbers is a second implementation that
+    agrees with the figure until one of the two is edited, and nothing says
+    which one the user is holding.
+
+    Returns whether a button was drawn, so a caller can say "no tabular data"
+    instead of leaving a silent gap. An empty or missing frame draws nothing:
+    there is no data to hand over, and a button yielding a header row and no
+    rows looks like a bug in the analysis rather than an empty result.
+    """
+    if frame is None or not len(frame):
+        return False
+    (container or st).download_button(
+        f"{label} (CSV)", frame.to_csv(index=index), file_name=file_name,
+        mime="text/csv", key=key, help=help)
+    return True
 
 
 @st.cache_resource

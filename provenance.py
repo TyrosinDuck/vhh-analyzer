@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "entries", "resolve", "value_text",
@@ -1014,6 +1014,17 @@ NOT_SCIENTIFIC: dict[str, str] = {
                                  "inches; a measured rendering limit",
     "vhh_core.IDENTITY_LABEL_MAX": "above this many sequences the heatmap "
                                    "cells stop carrying a number",
+    "ranking.HEATMAP_FIG_MAX": "longest side of the within-set comparison "
+                               "heatmap, in inches; the same rendering limit "
+                               "as the identity heatmap",
+    "ranking.HEATMAP_LABEL_MAX": "above this many sequences the comparison "
+                                 "cells stop carrying a number",
+    "ranking.MIN_FOR_RANKS": "below this many sequences the comparison tab "
+                             "says a rank is not worth reading, because with "
+                             "two of them every axis has a winner and a loser "
+                             "by construction. A presentation threshold: "
+                             "nothing is computed differently above or below "
+                             "it",
     "shell.CACHE_TTL": "how long a cached result lives",
     "shell.CACHE_MAX_ENTRIES": "how many cached results are kept",
     "cloning.MAX_TAG_NT": "longest annotation still read as an affinity or "
@@ -1036,6 +1047,11 @@ NOT_SCIENTIFIC: dict[str, str] = {
 
     # Widget defaults and bounds. A default is recorded with every run rather
     # than assumed, which is why it is not a hidden constant.
+    "vhh_core.TITRATION_GRID": "the pH range and step the charge figure is "
+                               "drawn over, 2 to 12 in tenths. The span of "
+                               "the picture, not a property of a protein; the "
+                               "curve itself is Biopython's charge_at_pH at "
+                               "each step",
     "vhh_core.DEFAULTS": "the starting values of the sliders, including the "
                          "working pH and the profile windows. Every one is "
                          "written into the session file with the run, so a "

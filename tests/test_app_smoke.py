@@ -197,6 +197,61 @@ def test_analysis_renders_every_family(app):
         _no_failure(app, f"family {family}")
 
 
+def test_the_comparison_view_draws_its_three_layers(app):
+    """Ranks, gates and a front all draw, and the refusal is on the screen."""
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    triage = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+              if "Triage" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(triage).run()
+    _no_failure(app, "Triage family")
+
+    axes = [m for m in app.multiselect if m.key == "cmp_axes"]
+    assert axes, "the axis selector did not render"
+    assert axes[0].value, "the comparison opens with no axis chosen"
+    assert [m for m in app.multiselect if m.key == "cmp_gates"], \
+        "the gate selector did not render"
+
+    downloads = [b.label for b in app.get("download_button")]
+    for expected in ("Ranks (CSV)", "Pareto front (CSV)"):
+        assert expected in downloads, \
+            f"{expected} is not offered; downloads were {downloads}"
+
+    headings = " ".join(str(h.value) for h in app.subheader).lower()
+    assert "axis by axis" in headings
+
+    # The refusal is on the screen, not only in the module docstring. What the
+    # view must not *do* is checked in tests/test_ranking.py, which asserts
+    # that no layer handed to the figures carries a composite column.
+    said = " ".join(str(i.value) for i in app.info).lower()
+    assert "no overall score" in said
+
+
+def test_a_figure_offers_the_data_it_was_drawn_from(app):
+    """Every figure's numbers are one click away, which is the point of them.
+
+    Checked on the Plots tab, where three figures are drawn from three
+    different cached frames: a regression here means a figure went back to
+    computing its own data, or a download was lost in a refactor.
+    """
+    _goto(app, "🔬 Sequence analysis")
+    if not [r for r in app.radio if r.label == "Section"]:
+        app.text_area[0].set_value(FASTA)
+        _click(app, "Analyze")
+    identity = [o for o in [r for r in app.radio if r.label == "Section"][0].options
+                if "Identity" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(identity).run()
+    _no_failure(app, "Identity family")
+
+    labels = [b.label for b in app.get("download_button")]
+    for expected in ("Propensity fractions (CSV)", "Titration curves (CSV)",
+                     "The profiles drawn, per residue (CSV)"):
+        assert expected in labels, \
+            f"{expected} is not offered beside its figure; got {labels}"
+
+
 def test_profiles_draw_one_sequence_unless_all_are_asked_for(app):
     """With 50 sequences, the profile figure alone took 516 MB to draw.
 

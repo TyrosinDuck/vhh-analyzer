@@ -17,9 +17,10 @@ import streamlit as st
 
 import elsewhere as ew
 import reference as rf
-from shell import FIT, Settings, embed_html, follow_app_theme, go_to
+from shell import (FIT, Settings, data_download, embed_html,
+                   follow_app_theme, go_to)
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.16a"
 
 VIEWS = ["🧬 Genetic code", "🔤 Amino acids", "🧰 Elsewhere"]
 
@@ -138,6 +139,8 @@ def _genetic_code() -> None:
                          format="%.2f"),
                      "w": st.column_config.NumberColumn("w", format="%.2f"),
                  })
+    data_download("The codon table as filtered", table, "codon_usage.csv",
+                  key="dl_ref_codons")
     st.caption(
         "Usage from `data/ecoli_codon_usage.csv`; stop codons have no share "
         "because they do not compete with a synonym for an amino acid.")
@@ -207,6 +210,8 @@ def _aminoacids() -> None:
         "the charge profile, where histidine counts as +0.1 rather than being "
         "treated as fully protonated or fully neutral.")
     st.dataframe(shown, **FIT, hide_index=True)
+    data_download("The amino-acid table", shown, "amino_acids.csv",
+                  key="dl_ref_amino_acids")
     st.caption(
         "Side-chain pKa values are Lehninger's, for the free amino acid. In a "
         "folded protein the local environment moves them, sometimes by "

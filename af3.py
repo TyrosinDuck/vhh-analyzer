@@ -60,10 +60,11 @@ __all__ = [
     "AF3Error", "AF3Sample", "AF3Bundle", "is_zip", "read_af3_zip",
     "read_member", "load_full_data", "chain_order", "pair_iptm", "pair_pae_min",
     "interface_pae", "iptm_verdict", "samples_table", "plot_pae",
+    "pae_table",
     "IPTM_HIGH", "IPTM_LOW", "MAX_MEMBER_BYTES", "__version__",
 ]
 
-__version__ = "2026.11.04a"
+__version__ = "2026.11.16a"
 
 IPTM_HIGH = 0.8
 IPTM_LOW = 0.6
@@ -361,6 +362,31 @@ def samples_table(bundle: AF3Bundle, chain_a: str | None = None,
         row["fraction_disordered"] = s.get("fraction_disordered")
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def pae_table(full: dict) -> "pd.DataFrame":
+    """The PAE matrix as a square table, rows and columns labelled by chain.
+
+    The data of the PAE figure, read out of the same ``full["pae"]`` the figure
+    draws. Labels are ``<chain><index within the chain>``, so a cell can be
+    traced back to a residue pair; the index is a position in the token list,
+    which for a protein chain is its residue number from one, and not an
+    author numbering read out of a CIF file.
+
+    Predicted, as the name says: this is AlphaFold3's own expectation of the
+    error in a position, in angstroms, not a comparison against a structure.
+    """
+    import pandas as pd
+
+    chains = list(full["token_chain_ids"])
+    seen: dict[str, int] = {}
+    labels = []
+    for chain in chains:
+        seen[chain] = seen.get(chain, 0) + 1
+        labels.append(f"{chain}{seen[chain]}")
+    frame = pd.DataFrame(full["pae"], index=labels, columns=labels)
+    frame.index.name = "aligned_token"
+    return frame
 
 
 def plot_pae(full: dict, title: str = "Predicted aligned error"):

@@ -34,12 +34,12 @@ from Bio.Seq import Seq
 
 __all__ = [
     "VECTORS", "DEFAULTS", "mott_trim", "read_ab1", "extract_cassette",
-    "process_reads", "plot_quality", "reads_to_fasta",
+    "process_reads", "plot_quality", "quality_table", "reads_to_fasta",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.16b"
+__version__ = "2026.11.16c"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -434,6 +434,29 @@ def reads_to_fasta(df: pd.DataFrame, only_usable: bool = True,
 # --------------------------------------------------------------------------- #
 # Figure
 # --------------------------------------------------------------------------- #
+
+def quality_table(reads: list[dict], max_reads: int = 12) -> pd.DataFrame:
+    """Phred quality per base for each read: the data of the quality figure.
+
+    One row per base, with ``kept`` marking the bases inside the trimmed
+    window, which is the blue part of the figure. The same ``max_reads`` slice
+    the figure applies is applied here, so the table covers what was drawn and
+    not more; a run with more reads than that is trimmed in both.
+
+    Measured, in the sense that the Phred scores come out of the basecaller's
+    own estimate in the .ab1 file. What the basecaller estimates is the
+    probability it called the wrong base, which is not a measurement of the
+    DNA.
+    """
+    rows = []
+    for read in reads[:max_reads]:
+        quals = read["quals"]
+        start, end = read["trim_start"], read["trim_end"]
+        for i, q in enumerate(quals):
+            rows.append({"read": read["read"], "position": i + 1,
+                         "phred": int(q), "kept": bool(start <= i < end)})
+    return pd.DataFrame(rows, columns=["read", "position", "phred", "kept"])
+
 
 def plot_quality(reads: list[dict], max_reads: int = 12):
     """Phred quality along each read, with the trimmed window highlighted."""

@@ -79,6 +79,7 @@ try:
     import generator
     import library
     import provenance
+    import ranking
     import reference
     import repertoire
     import sanger
@@ -124,37 +125,37 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.11.16a", "sanger": "2026.11.16b",
+REQUIRED_MODULES = {"vhh_core": "2026.11.16b", "sanger": "2026.11.16c",
                     "session": "2026.11.12a",
-                    "provenance": "2026.11.16b",
+                    "provenance": "2026.11.16c",
                     "sections.provenance": "2026.11.13a",
                     "cloning": "2026.11.16b", "generator": "2026.11.16a",
                     "constructs": "2026.10.21d",
                     "repertoire": "2026.11.16a",
-                    "triage": "2026.11.16a", "codons": "2026.11.12a",
+                    "triage": "2026.11.16a", "ranking": "2026.11.16a", "codons": "2026.11.12a",
                     "library": "2026.11.13b", "structure": "2026.11.16a",
-                    "shell": "2026.11.16a", "compute": "2026.11.16e",
-                    "af3": "2026.11.04a",
+                    "shell": "2026.11.16b", "compute": "2026.11.16f",
+                    "af3": "2026.11.16a",
                     "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.16c",
+                    "sections.analysis": "2026.11.16d",
                     "specificity": "2026.11.16a",
                     "tnp": "2026.11.12a",
                     "sabdab": "2026.11.12a",
                     "elsewhere": "2026.11.12b",
-                    "sections.bench": "2026.11.12d",
+                    "sections.bench": "2026.11.16a",
                     "sections.phage": "2026.11.12d",
                     "sections.buffers": "2026.11.12c",
                     "buffers": "2026.11.12b",
-                    "sections.reference": "2026.11.12c",
+                    "sections.reference": "2026.11.16a",
                     "bench": "2026.11.12d",
-                    "sections.cloning": "2026.11.16b",
-                    "sections.genes": "2026.11.12b",
+                    "sections.cloning": "2026.11.16c",
+                    "sections.genes": "2026.11.16a",
                     "sections.home": "2026.11.12c",
                     "sections.library": "2026.11.13d",
                     "sections.manual": "2026.11.12a",
-                    "sections.sequencing": "2026.11.16b",
-                    "sections.structure": "2026.11.16a"}
+                    "sections.sequencing": "2026.11.16c",
+                    "sections.structure": "2026.11.16b"}
 
 
 def _imported(name: str):

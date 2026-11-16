@@ -197,6 +197,34 @@ def test_plot_pae_draws():
     plt.close(fig)
 
 
+def test_the_pae_table_is_the_matrix_the_figure_draws():
+    """What the app offers as the CSV beside that figure.
+
+    Square, labelled by chain and token, and the same numbers: the figure
+    passes `full["pae"]` straight to `imshow`, and so does this.
+    """
+    import numpy as np
+
+    full = af3.load_full_data(server_zip(), "fold_test_job_full_data_0.json")
+    table = af3.pae_table(full)
+    pae = np.asarray(full["pae"], dtype=float)
+    assert table.shape == pae.shape
+    assert list(table.index) == list(table.columns)
+    assert np.allclose(table.to_numpy(dtype=float), pae)
+
+
+def test_every_pae_label_says_which_chain_and_which_token():
+    full = af3.load_full_data(server_zip(), "fold_test_job_full_data_0.json")
+    table = af3.pae_table(full)
+    chains = list(full["token_chain_ids"])
+    assert list(table.index)[0] == f"{chains[0]}1"
+    for chain in set(chains):
+        drawn = [label for label in table.index if label.startswith(chain)]
+        assert len(drawn) == chains.count(chain)
+        # Numbered from one within each chain, so a cell traces to a residue.
+        assert drawn[0] == f"{chain}1"
+
+
 # ---- refusals ---------------------------------------------------------------
 
 def test_a_zip_without_models_is_refused_with_a_reason():

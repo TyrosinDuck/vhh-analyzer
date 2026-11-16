@@ -38,6 +38,11 @@ __all__ = [
     "register_feature", "compute_features", "FEATURE_REGISTRY",
     "plot_secondary_structure", "plot_charge", "plot_profiles", "plot_msa",
     "plot_logo",
+    # The data behind each figure, so a notebook can have the numbers the app
+    # draws without reading them off a picture, and so the CSV the app offers
+    # beside a figure comes from the same call the figure came from.
+    "titration_curves", "TITRATION_GRID", "profile_table",
+    "chou_fasman_table", "liability_profile_matrix", "linkage_table",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS", "MIN_LENGTH",
     "classify", "classify_all", "VHH_KINDS", "HEAVY_KINDS",
     "KIND_VHH", "KIND_VH",
@@ -55,7 +60,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.16a"
+__version__ = "2026.11.16b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -890,8 +895,18 @@ def plot_liability_map(liabilities: dict[str, pd.DataFrame],
     return fig
 
 
-def plot_liability_profile(liabilities: dict[str, pd.DataFrame]):
-    """Stacked bar of the score contributed by each liability type, per VHH."""
+def liability_profile_matrix(liabilities: dict[str, pd.DataFrame]):
+    """Summed liability score per sequence and liability type, or ``None``.
+
+    The data of the liability profile figure, which calls this rather than
+    grouping the tables itself. Rows are sequences in the order given, columns
+    are the liability types that occur at least once in the set, so two sets
+    do not necessarily have the same columns.
+
+    Derived from the in-house score, which is a weighting of motifs decided in
+    this laboratory and not a measurement: a row that sums higher carries more
+    flagged motifs, weighted, and that is all it says.
+    """
     names = list(liabilities)
     frames = []
     for name in names:
@@ -903,7 +918,15 @@ def plot_liability_profile(liabilities: dict[str, pd.DataFrame]):
         frames.append(grouped)
     if not frames:
         return None
-    matrix = pd.concat(frames, axis=1).fillna(0).T.reindex(names).fillna(0)
+    return pd.concat(frames, axis=1).fillna(0).T.reindex(names).fillna(0)
+
+
+def plot_liability_profile(liabilities: dict[str, pd.DataFrame]):
+    """Stacked bar of the score contributed by each liability type, per VHH."""
+    names = list(liabilities)
+    matrix = liability_profile_matrix(liabilities)
+    if matrix is None:
+        return None
 
     fig, ax = plt.subplots(figsize=(1.5 * len(names) + 4, 4.4))
     bottom = np.zeros(len(matrix))
@@ -1137,15 +1160,42 @@ def plot_secondary_structure(df: pd.DataFrame):
     return fig
 
 
+TITRATION_GRID = (2.0, 12.0, 0.1)      # (first pH, last pH, step), as plotted
+
+
+def titration_curves(seqs: dict[str, str]) -> pd.DataFrame:
+    """Net charge against pH for each sequence: the data of the charge figure.
+
+    One row per sequence and pH step, over `TITRATION_GRID`, which is the grid
+    the figure draws. `plot_charge` calls this rather than computing the curves
+    itself, so the CSV the app offers beside that figure is the figure.
+
+    Derived, not measured: every value comes from Biopython's `charge_at_pH`,
+    which sums the Henderson-Hasselbalch contribution of each ionisable group
+    using one published pKa set on the free amino acid. It ignores the local
+    environment of a residue in a folded domain, so the curve is the charge of
+    the composition, not of the protein in your buffer.
+    """
+    first, last, step = TITRATION_GRID
+    grid = np.arange(first, last + step / 2, step)
+    rows = []
+    for name, seq in seqs.items():
+        pa = ProteinAnalysis(clean_sequence(seq))
+        for p in grid:
+            rows.append({"name": name, "pH": round(float(p), 2),
+                         "net_charge": float(pa.charge_at_pH(float(p)))})
+    return pd.DataFrame(rows)
+
+
 def plot_charge(df: pd.DataFrame, seqs: dict[str, str], ph: float | None = None):
     """Titration curves plus the net charge at the working pH."""
     ph = DEFAULTS["ph"] if ph is None else ph
-    grid = np.arange(2, 12.01, 0.1)
+    curves = titration_curves(seqs)
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.2),
                              gridspec_kw={"width_ratios": [1.6, 1]})
-    for name, seq in seqs.items():
-        pa = ProteinAnalysis(seq)
-        axes[0].plot(grid, [pa.charge_at_pH(p) for p in grid], lw=1.8, label=name)
+    for name in seqs:
+        one = curves[curves["name"] == name]
+        axes[0].plot(one["pH"], one["net_charge"], lw=1.8, label=name)
     axes[0].axhline(0, color="k", lw=0.8, ls="--")
     axes[0].axvline(ph, color="crimson", lw=0.9, ls=":", label=f"pH {ph}")
     axes[0].set(xlabel="pH", ylabel="Net charge", title="Titration curves")
@@ -1163,16 +1213,51 @@ def plot_charge(df: pd.DataFrame, seqs: dict[str, str], ph: float | None = None)
     return fig
 
 
+def profile_table(seqs: dict[str, str], annotations: dict | None = None,
+                  window: int | None = None) -> pd.DataFrame:
+    """Per-residue smoothed charge and hydropathy: the data of the profile figure.
+
+    One row per residue of each sequence, with the CDR the residue falls in
+    when an annotation is given. `plot_profiles` draws exactly these columns,
+    which is why it calls this instead of smoothing the sequence again.
+
+    Both tracks are sliding-window means over ``window`` residues, so the value
+    at a position is not a property of that residue alone; the window is kept
+    in its own column because a profile without its window is not comparable
+    with another one.
+    """
+    w = window or DEFAULTS["profile_window"]
+    rows = []
+    for name, seq in seqs.items():
+        charge = sliding(np.array([CHARGE.get(a, 0) for a in seq], float), w)
+        hydro = sliding(np.array([KD[a] for a in seq], float), w)
+        regions = {}
+        for region in ("CDR1", "CDR2", "CDR3"):
+            r = ((annotations or {}).get(name) or {}).get(region)
+            if r and r["start"]:
+                for pos in range(int(r["start"]), int(r["end"]) + 1):
+                    regions[pos] = region
+        for i, residue in enumerate(seq, start=1):
+            rows.append({"name": name, "position": i, "residue": residue,
+                         "hydropathy": float(hydro[i - 1]),
+                         "charge": float(charge[i - 1]),
+                         "region": regions.get(i, ""),
+                         "window": w})
+    return pd.DataFrame(rows)
+
+
 def plot_profiles(seqs: dict[str, str], annotations: dict | None = None,
                   window: int | None = None):
     """Per-residue charge and Kyte–Doolittle hydropathy, CDRs shaded."""
     w = window or DEFAULTS["profile_window"]
+    table = profile_table(seqs, annotations, w)
     fig, axes = plt.subplots(len(seqs), 1, figsize=(11, 2.4 * len(seqs)),
                              squeeze=False, sharex=True)
     for ax, (name, seq) in zip(axes[:, 0], seqs.items()):
-        x = np.arange(1, len(seq) + 1)
-        charge = sliding(np.array([CHARGE.get(a, 0) for a in seq], float), w)
-        hydro = sliding(np.array([KD[a] for a in seq], float), w)
+        one = table[table["name"] == name]
+        x = one["position"].to_numpy()
+        charge = one["charge"].to_numpy()
+        hydro = one["hydropathy"].to_numpy()
         ax.plot(x, hydro, color="#dd8452", lw=1.5)
         ax.axhline(0, color="k", lw=0.6)
         ax2 = ax.twinx()
@@ -1598,6 +1683,38 @@ def cluster_families(seqs: dict[str, str], annotations: dict,
             "skipped": skipped, "cutoff": cutoff,
             "linkage_method": linkage_method, "region": region,
             "n_families": int(families["family"].nunique())}
+
+
+def linkage_table(result: dict) -> pd.DataFrame:
+    """The dendrogram as a table: one row per merge, in the order they happen.
+
+    A dendrogram is a drawing of a linkage matrix, and the linkage matrix is
+    what this returns in readable form: which two things joined, at what
+    identity, and how many sequences the resulting group holds. Leaves are
+    named; an internal group is named ``group_<n>`` by the step that created
+    it, so a merge of two groups can be followed back.
+
+    ``identity_pct`` is ``100 - distance`` and is the x axis of the figure, the
+    identity at which the two sides join under the chosen linkage. It is a
+    property of the clustering, not a pairwise identity between two sequences:
+    for average linkage it is a mean over pairs. Empty for a set with nothing
+    to cluster.
+    """
+    link = result.get("linkage")
+    names = list(result["identity"].index)
+    if link is None or not len(names):
+        return pd.DataFrame(columns=["step", "joined_a", "joined_b",
+                                     "identity_pct", "n_sequences"])
+    labels = list(names)
+    rows = []
+    for step, (a, b, distance, size) in enumerate(link, start=1):
+        rows.append({"step": step,
+                     "joined_a": labels[int(a)],
+                     "joined_b": labels[int(b)],
+                     "identity_pct": round(100.0 - float(distance) * 100.0, 2),
+                     "n_sequences": int(size)})
+        labels.append(f"group_{step}")
+    return pd.DataFrame(rows)
 
 
 def plot_family_dendrogram(result: dict, title: str | None = None):
@@ -2664,6 +2781,27 @@ def chou_fasman_profile(seq: str, window: int = 5) -> dict:
     return {"helix": helix, "sheet": sheet, "state": state,
             "counts": counts, "window": window,
             "fractions": {s: round(counts[s] / len(seq), 3) for s in "HEC"}}
+
+
+def chou_fasman_table(seq: str, window: int = 5) -> pd.DataFrame:
+    """The Chou-Fasman figure as a table: propensities and state per residue.
+
+    A reshaping of `chou_fasman_profile`, which is where the heuristic lives,
+    rather than a second implementation of it. Theoretical throughout: these
+    are tabulated propensities from a statistical survey of solved structures,
+    not a prediction of this domain's fold, and the state track is right for
+    roughly half to three fifths of residues.
+    """
+    prof = chou_fasman_profile(seq, window)
+    clean = clean_sequence(seq)
+    return pd.DataFrame({
+        "position": np.arange(1, len(clean) + 1),
+        "residue": list(clean),
+        "helix_propensity": prof["helix"],
+        "sheet_propensity": prof["sheet"],
+        "state": prof["state"],
+        "window": window,
+    })
 
 
 STATE_COLORS = {"H": "#c44e52", "E": "#4c72b0", "C": "#d9d9d9"}
