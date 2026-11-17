@@ -18,6 +18,38 @@ ran, from its Zenodo record.
 
 ### Fixed
 
+Two defects found by driving the app with proteins that are not antibody
+domains. Both were in code that is not VHH-specific, which is where the app
+claims to work on any protein, and the first one also fires between two VHHs.
+
+- **Batch & QC kept the first protein's extinction coefficient and molar
+  mass.** Picking another protein at the top of the screen, or flipping the
+  cysteine state, left the previous numbers in the boxes, and the
+  concentration underneath was computed from those while being labelled
+  *derived* from the sequence now selected. A Streamlit rule is behind it: a
+  `number_input` with a `key` honours its `value` argument on the first render
+  only, after which the stored state wins and the argument is ignored. Five
+  fields were affected: the coefficient and mass under **Quantify**, the mass
+  under **Convert** and under **Couple two proteins**, and both under
+  **Purification**, which scales every row of the balance by them. Measured by
+  driving the real screen with two proteins whose coefficients differ by
+  4000 /M/cm: both read the first one's 37 970 /M/cm, so the second protein's
+  reported 0.189 mg/mL was the first one's arithmetic. The prefill now follows
+  the picked protein and the cysteine state, and a coefficient typed by hand
+  still survives an unrelated rerun; clearing the sequence empties the boxes
+  rather than leaving a departed protein's number behind. Two smoke tests
+  cover each half of that rule.
+
+- **One non-antibody sequence took down the whole Developability family.** The
+  clinical-context tab passed an empty annotation to the CDR-length helper,
+  which numbers the sequence itself when given none and raises `anchor not
+  found: FR2 motif WxRQ` on anything without an antibody framework. The four
+  other tabs in that family already skipped those sequences; this one did not,
+  so a submission mixing a VHH with any other protein lost the liabilities,
+  aggregation, polyreactivity and plastic-resemblance views as well. The tab
+  now uses the same heavy-chain guard as its neighbours, lists only the
+  sequences that carry an annotation, and says so when none of them does.
+
 A second independent audit, run in November 2026 by a reviewer that had not
 seen the code being written, over the roughly 19 000 lines added since the
 first one. Three of its findings were about who to credit, which is the kind of

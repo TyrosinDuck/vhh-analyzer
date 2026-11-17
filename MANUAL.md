@@ -963,6 +963,16 @@ numbers on a scale nobody has calibrated, and flagging those against the
 published thresholds would be worse than reporting nothing. Use the authors'
 own web application for them: <https://opig.stats.ox.ac.uk/webapps/tnp>.
 
+**Heavy-chain domains only.** The metrics are CDR lengths, so this view covers
+the VHHs and conventional VHs in the submission and leaves anything else out,
+naming how many it left out, the same rule as the other antibody-specific
+panels (§3.1c). A sequence that is a heavy-chain domain but whose annotation
+failed is left out too, because there are no CDRs to count. Until November
+2026 this tab instead tried to number every submitted sequence itself, and a
+single non-antibody protein in the list raised an error that took down the
+whole Developability family, including the four views that had nothing to do
+with it.
+
 **IMGT or no flag.** TNP counts CDR residues in IMGT numbering. When ANARCI is
 unavailable the app annotates with regex anchors instead, and those boundaries
 are not the same, on cAbLys3 the two differ by several residues. A profile
@@ -2191,6 +2201,18 @@ typing an A280 with no sequence loaded then produced an mg/mL that looked
 exactly like one computed from a real sequence. The same applies to the
 conjugation and purification views, where an arbitrary molar mass would have
 set a reagent excess or scaled a whole table of yields.
+
+**The prefill follows the protein you pick, and your own number survives.**
+Changing the protein at the top of the screen, or flipping the cysteine state,
+rewrites the extinction coefficient and the molar mass to match. Clearing the
+sequence empties them again rather than leaving the departed protein's numbers
+in place. A coefficient or mass you typed yourself is left alone until one of
+those things changes, so an A280 retyped against a hand-entered coefficient
+does not quietly revert to a predicted one. Until November 2026 none of this
+was true: the boxes kept whichever protein was selected first, and the mg/mL
+underneath was that protein's arithmetic under the new protein's name. The
+same prefill now applies in **Convert**, **Couple two proteins** and
+**Purification**.
 
 **Cystines formed or all reduced.** Pairing two cysteines adds exactly
 125 /M/cm, so the gap between the two values is 125 times the number of
