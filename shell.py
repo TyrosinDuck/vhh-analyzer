@@ -72,7 +72,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261116"
+BUILD = "20261117"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked

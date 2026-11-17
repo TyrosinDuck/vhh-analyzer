@@ -94,7 +94,13 @@ polystyrene-binding peptides [@kumada2006; @vodnik2012; @hu2016], a class of
 reagent reviewed by Mao et al. [@mao2024], is reported as a percentile against
 a naive library and labelled uncalibrated in every row, because no dataset
 labels VHHs for adsorption on plastic; the two are kept in separate views and
-never combined into one index.
+never combined into one index. A third view places each sequence against the
+developability guidelines of the Therapeutic Nanobody Profiler
+[@gordon2026], reporting the two metrics that follow from sequence and naming
+the three that need the authors' own patch implementation rather than
+approximating them, and a fourth searches a dated snapshot of the single-domain
+entries of SAbDab [@schneider2022] for a solved structure of the same
+sequence.
 
 **Antibody assumptions are not applied to non-antibodies.** Each sequence is
 classified, and a protein that is not a variable domain receives the generic

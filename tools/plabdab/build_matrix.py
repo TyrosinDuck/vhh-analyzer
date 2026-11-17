@@ -12,10 +12,19 @@ checked.
 This is the missing derivation, and the first thing it was used for was to
 rebuild the matrix that was already committed. It reproduces
 `data/vhh_position_freq.csv` byte for byte and every count in
-`data/vhh_position_meta.json`, from the PLAbDab-nano VHH download of April 2024.
-That is the only evidence that the filters written below are the ones that were
-originally applied; they were recovered by reproducing the output, not read off
-a note.
+`data/vhh_position_meta.json`, from the PLAbDab-nano VHH export behind the
+shipped matrix. That is the only evidence that the filters written below are
+the ones that were originally applied; they were recovered by reproducing the
+output, not read off a note.
+
+Two dates, and they are far apart. That export was downloaded on 2026-11-16 and
+its newest entry is dated 2024-04-10, which the metadata records as `downloaded`
+and `latest_entry`. Both are true and neither implies the other: PLAbDab-nano is
+self-updating, and a download taken today can still carry nothing newer than
+April 2024, because that is when its most recently published entry was
+published. An earlier version of this file called it "the April 2024 download"
+throughout, which reads as the day it was fetched and is not what the field
+says.
 
 Run:  python tools/plabdab/build_matrix.py <vhh_sequences.csv[.gz]>
       python tools/plabdab/build_matrix.py <vhh_sequences.csv[.gz]> --check
@@ -31,7 +40,7 @@ command is what you run when you rebuild.
 **Input.** The "VHH sequences (.csv.gz)" file from
 https://opig.stats.ox.ac.uk/webapps/plabdab-nano/, compressed or not. One row
 per database entry, so a nanobody deposited in three places appears three
-times: the April 2024 download carries 4457 entries and 1975 distinct
+times: the shipped export carries 4457 entries and 1975 distinct
 sequences. The columns read are `sequence` and `update_date`, and the header is
 checked before anything else happens. PLAbDab-nano is self-updating and its
 export format can change; a renamed column has to stop the build rather than
@@ -40,8 +49,8 @@ quietly change the reference the whole Repertoire screen is read against.
 **What is kept, with every count written to the metadata.**
 
 * **Distinct sequences.** The matrix is a census of sequences, not of entries.
-* **The twenty standard residues only.** Ten sequences in the April 2024
-  download carry an `X`. `vhh_core.clean_sequence` refuses those outright, and a
+* **The twenty standard residues only.** Ten sequences in the shipped
+  export carry an `X`. `vhh_core.clean_sequence` refuses those outright, and a
   frequency computed over a position some sequences cannot fill is not a
   frequency.
 * **At least `MIN_LENGTH` residues** (see that constant for how the value was
@@ -95,7 +104,7 @@ REQUIRED = ("sequence", "update_date")
 
 # Shortest sequence the matrix counts, in residues before numbering.
 #
-# Seven sequences in the April 2024 download are fragments of 70 to 98
+# Seven sequences in the shipped export are fragments of 70 to 98
 # residues, each missing FR1 or FR4 or both. ANARCI numbers them, so they are
 # not caught by the numbering step, and they would add counts to the middle
 # positions only: FR1 would then be a frequency over a different set of

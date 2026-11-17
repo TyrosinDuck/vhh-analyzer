@@ -16,6 +16,149 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+A second independent audit, run in November 2026 by a reviewer that had not
+seen the code being written, over the roughly 19 000 lines added since the
+first one. Three of its findings were about who to credit, which is the kind of
+defect no amount of testing the arithmetic would have found. Nothing below
+changes a number the app computes except where it says so.
+
+What the audit confirmed is worth recording too, because it is the part with
+the most at stake. The shipped polyreactivity weights are bit-identical to the
+authors' released model, 8420 features and 791 non-zero with a maximum
+coefficient difference of 0.0; the featurisation matches their published
+method including a quirk of their loop that the L1 normalisation cancels; the
+score parity, the quantile-grid cost and the sign convention all reproduce at
+the figures already claimed. The duplicate rows in their released pool move a
+percentile by at most 0.49 point, below the decimal the app shows.
+
+- **The polyreactivity training-set size was a row count.** The screen and
+  MANUAL.md §4.7 said the model was fitted on 141 474 nanobody sequences. That
+  is the number of rows in the two pool files the authors released, 69 702 plus
+  71 772. Their paper reports 65 147 unique low-polyreactivity and 69 155
+  unique high-polyreactivity sequences, carrying 51 308 and 59 623 distinct CDR
+  sets, and it is the CDR sets the model was fitted on. The row count is still
+  the right denominator for the anchor measurements, which were run over every
+  row of those files; it was never the right one for the paper.
+
+- **A denominator that was neither the file's nor the paper's, in three
+  places.** `specificity.py`, the annotator note on the screen and MANUAL.md
+  all said the anchors were calibrated over "the 141 204 sequences of their two
+  pools that carry a complete annotation". `tools/polyreactivity/build.py`
+  iterates every row and applies no annotation filter, so the figure is
+  141 474 and the qualifier named a filter that does not exist. The 66.6%
+  acceptance and the 99.2% agreement are unchanged and were re-measured
+  against the authors' real pools; what was wrong is what they are rates of.
+
+- **The 90th-percentile flag was credited to the model's authors.** Three
+  places called it "their own default". Harvey et al. give no score cutoff and
+  no percentile anywhere in the paper, and their released code carries none
+  either. The value stays, classified a convention as it already was, and the
+  credit goes: an attribution nobody can check is the failure this repository
+  calls worse than no reference at all.
+
+- **The anchor CDR length limits contradicted the file they claimed to measure.**
+  They were 4 to 19 for CDR1, 6 to 14 for CDR2 and 3 to 64 for CDR3, described
+  as the observed range of the solved single domains. Against
+  `data/sabdab/single_domain.csv` that was false: the snapshot holds a
+  20-residue CDR1 and CDR2 lengths of 15 and 19, all of which those limits
+  would refuse. They are now derived from the file at run time by
+  `specificity.observed_cdr_bounds()` rather than written down, so they cannot
+  drift from it again and refreshing the snapshot moves them. Two rows carry no
+  CDR2 and are left out of that range, because a missing annotation is not a
+  zero-length CDR; the one two-residue CDR1 is kept, which costs the check its
+  floor, and the docstring says so rather than quietly hand-picking the data.
+  With no snapshot on disk the check now passes everything instead of falling
+  back on numbers typed into the file.
+
+- **MANUAL.md capped the snapshot's longest CDR1 at seventeen residues.**
+  Eleven heavy-chain single domains carry one longer than twelve, at 13, 14,
+  15, 17, 19 and 20. The same paragraph gave 1 354 as the size of the whole
+  snapshot and said it included the VNARs; 1 354 is the heavy-chain subset and
+  the VNARs are the other 27, of 1 381. The anchor acceptance rates were
+  re-measured and are now given as both: 441 accepted, 32.6% of the
+  heavy-chain single domains and 31.9% of the file, with no VNAR accepted.
+
+- **Two database dates were read as one, in two different modules.** The
+  PLAbDab-nano export was downloaded on 2026-11-16 and carries nothing
+  published after 2024-04-10, which is what `downloaded` and `latest_entry` in
+  `data/vhh_position_meta.json` have always said; `build_matrix.py` called it
+  "the April 2024 download" throughout, which reads as the day it was fetched.
+  Separately, MANUAL.md turned the TNP thresholds' "July 2025" label into "the
+  36 clinical-stage sequences available in July 2025". That label comes from
+  the authors' web application, where it dates the most recent entry behind the
+  thresholds, not a calibration; table 2 of the paper carries no date at all,
+  as `tnp.py` already said.
+
+- **The PS19-6L row credited the wrong people.** The article at
+  10.1039/d5ra06185g is Retnadhas, Hegg and Ducat, RSC Adv 15:41115-41128
+  (2025), not Dedisch et al. Volume, first page, year and DOI were right, which
+  is how the error survived a DOI check; the sequence and the rest of the row
+  are confirmed by that same paper.
+
+- **"100 is the best and 0 the worst" promised a floor that never appears.**
+  `rank(pct=True)` divides by the number of sequences, so the bottom cell is
+  100/n: 12.5 for eight sequences, 50.0 for two. The screen now works the floor
+  out from the set in front of it and says what it is.
+
+- **PPC and PNC were described as red below 0.00.** They are patch scores
+  bounded below by zero whose clinical range starts there, so that band cannot
+  be reached. The guideline table derives the red column from a declared
+  `floor` per metric rather than from the shape of the amber bands, which
+  happened to agree for these two and said nothing about why. One consequence
+  worth naming: `flag()` now returns green rather than red for an impossible
+  negative patch score. Neither metric is computed by this app.
+
+- **Two counters in two units printed side by side.** In
+  `tools/sabdab/build_index.py` a row with no VH could only be counted in rows
+  while a non-standard sequence was counted once however many rows it came
+  from. They are `dropped_no_vh_rows` and `dropped_nonstandard_sequences` now,
+  in the script and in `data/sabdab/meta.json`.
+
+- **The JOSS manuscript cited neither method it ships.** `paper.md` now cites
+  the Therapeutic Nanobody Profiler and SAbDab, with both entries added to
+  `paper.bib` and every field confirmed against two independent records.
+
+### Changed
+
+- **The provenance register sees past module level.** Its completeness scan
+  read module-level assignments only, so a scientific constant living inside a
+  function was invisible to it, and the page claimed to cover every constant
+  the app computes with. That is exactly where the CDR length limits above were
+  sitting while they contradicted their own stated source. `scan_module` now
+  also reports upper-case names assigned inside a function and numeric default
+  arguments, which is where a threshold most often hides: `def mott_trim(quals,
+  cutoff=0.05)` is a scientific constant with a name and a line number.
+
+  That widening found 46 named numbers nobody had classified. Twenty-nine are
+  declared in `NOT_SCIENTIFIC`: identity defaults meaning "nothing applied",
+  input caps, figure sizes and batch sizes. The other seventeen decide a result
+  and nothing in the repository records why each value is the value, so they go
+  in a new third list, `UNCLASSIFIED`, which says per entry what is missing.
+  They are not given register entries, because a register entry has to state a
+  basis and a source and writing one from a guess is the failure this page
+  exists to prevent. The screen shows the count as an open gap rather than
+  filing it away, and the completeness test now refuses anything that is on
+  none of the three lists, with a message saying not to invent a source to
+  close it.
+
+  Clearing an entry means reading the code and moving it to the register with
+  its basis or to `NOT_SCIENTIFIC` with the reason it carries no claim. The
+  seventeen are listed in `provenance.py`; `vhh_core.cluster_families(cutoff)`
+  at 80% CDR3 identity and `sanger.mott_trim(cutoff)` at 0.05 are the two with
+  the most reach.
+
+  What the scan still cannot see is a bare literal in the middle of an
+  expression, which has no name to report and would drown the result in array
+  indices. The page says so now instead of claiming otherwise.
+
+- **The import test for `specificity.py` states what may not be imported**
+  rather than what may. The allow-list version failed the moment
+  `observed_cdr_bounds` started reading the SAbDab snapshot, a sibling module
+  with no dependency of its own beyond pandas, while the property that matters,
+  no heavy machine-learning runtime in the container, was never in question.
+
 ### Added
 
 - **A comparison view in the Triage family, which still refuses to score.**

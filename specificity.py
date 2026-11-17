@@ -69,16 +69,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Sequence
 
 import numpy as np
 import pandas as pd
 
-__version__ = "2026.11.16a"
+import sabdab
+
+__version__ = "2026.11.17a"
 
 __all__ = ["AA", "CdrSet", "FLAG_PERCENTILE", "N_FEATURES", "cdrs_from_annotation",
-           "cdrs_regex", "cdrs_to_kmer", "model_cdrs", "plastic_features",
+           "cdrs_regex", "cdrs_to_kmer", "model_cdrs", "observed_cdr_bounds",
+           "plastic_features",
            "PLASTIC_WEIGHTS", "plastic_resemblance", "polyreactivity",
            "polyreactivity_percentile",
            "polyreactivity_pool_size", "reference_peptides", "reference_report",
@@ -89,8 +93,14 @@ DATA = Path(__file__).parent / "data" / "specificity"
 AA = "ACDEFGHIKLMNPQRSTVWY"
 
 # The percentile against the authors' clean pool at or above which this app
-# calls a sequence polyreactive. Their own default; it is a convention, not a
-# measurement, and `provenance.py` says so.
+# calls a sequence polyreactive. This app's own convention, not a measurement,
+# and `provenance.py` says so.
+#
+# An earlier version of this comment called it "their own default". It is not:
+# Harvey et al. give no score cutoff and no percentile anywhere in the paper,
+# and their released code contains no threshold either. The round number is
+# this app's, chosen to flag the top tenth of a naive library, and nothing
+# downstream of it should be read as carrying the authors' authority.
 FLAG_PERCENTILE = 90.0
 
 
@@ -283,9 +293,14 @@ def _percentile_from_grid(grid: np.ndarray, values: np.ndarray) -> np.ndarray:
 # installed its CDRs are what this module should be given, through
 # `cdrs_from_annotation`. The anchors below are the fallback for a server
 # without HMMER. Their offsets were chosen by measurement against the authors'
-# IMGT columns, over the 141 204 sequences of their two pools that carry a
-# complete annotation: the anchors accept 66.6% of them, and of those accepted
-# 99.2% carry exactly the authors' CDRs. The rest are rejected rather than
+# IMGT columns, over all 141 474 rows of their two pool files, with no filter
+# applied: the anchors accept 66.6% of them, and of those accepted 99.2% carry
+# exactly the authors' CDRs. An earlier version of this comment said 141 204
+# and described those rows as the ones "carrying a complete annotation", which
+# named a filter `tools/polyreactivity/build.py` does not apply: it iterates
+# every row, and the 66.6% is the acceptance rate over all of them, which is
+# what makes the two percentages mean what they say. The rest are rejected
+# rather than
 # guessed, including an ambiguity no regex can settle, see `cdrs_regex`. On the
 # accepted sequences the percentile differs from the IMGT one by 0.14 point at
 # the 99th and the flag by 0.05%.
@@ -379,27 +394,80 @@ def cdrs_regex(seq: str) -> CdrSet:
     return CdrSet(cdr1, cdr2, cdr3, annotator="regex anchors", ok=True)
 
 
+@lru_cache(maxsize=1)
+def observed_cdr_bounds() -> dict[str, tuple[int, int]]:
+    """The CDR length range of the solved single domains, read from the file.
+
+    Derived rather than written down. These bounds used to be three pairs of
+    integers in `_implausible`, said to be "the observed range of those real
+    domains", and they were not: against `data/sabdab/single_domain.csv` the
+    CDR1 ceiling of 19 refused a 20-residue CDR1 that is in the snapshot, and
+    the CDR2 ceiling of 14 refused lengths of 15 and 19 that are in it too.
+    Hard-coding a property of a shipped file is the second list this project
+    does not keep, so the file is now measured instead and the bounds cannot
+    drift from it again. Refresh the snapshot and they follow.
+
+    Measured over the SD-H rows, the heavy-chain single domains, since the
+    VNAR entries are a different scaffold with its own loop lengths and the
+    anchors are not aimed at them. A row whose CDR column is empty is left out
+    of that CDR's range: two rows carry no CDR2 at all, and a missing
+    annotation is not a zero-length CDR. The one two-residue CDR1 in the file
+    is kept, because dropping a real row for looking wrong is how the previous
+    bounds came to disagree with their own source. It is almost certainly a
+    truncated construct, and it costs this check its floor, which the caller's
+    docstring says plainly.
+
+    What the columns hold is SAbDab's own CDR annotation. ANARCI is not run
+    here, so this says what the database records, not what ANARCI would return
+    for the same sequences.
+
+    Returns an empty mapping when the snapshot is not there. The caller then
+    skips the check rather than falling back on numbers typed into this file,
+    which is the whole defect being repaired: a check with no evidence behind
+    it is worse than no check, because it still refuses sequences.
+    """
+    try:
+        frame = sabdab.load_index()
+    except FileNotFoundError:
+        return {}
+    frame = frame[frame["type"] == "SD-H"]
+    bounds = {}
+    for column in ("cdr1", "cdr2", "cdr3"):
+        lengths = [len(value) for value in frame[column].astype(str)
+                   if len(value)]
+        bounds[column.upper()] = (min(lengths), max(lengths))
+    return bounds
+
+
 def _implausible(cdr1: str, cdr2: str, cdr3: str) -> str:
     """Length checks that catch an anchor that matched in the wrong place.
 
     Only for the anchors. A length is evidence about a regex match and nothing
-    at all about an IMGT numbering: when ANARCI says a CDR1 is nineteen
+    at all about an IMGT numbering: when a numbering says a CDR1 is nineteen
     residues long it is nineteen residues long, and this function used to
     refuse to score such a sequence with a note blaming anchors that had not
-    run. Measured over the 1 352 single domains of the SAbDab snapshot in
-    `data/sabdab/`, ANARCI gives CDR1 lengths of 13, 14, 15, 17 and 19 to ten
-    of them, every one of them a solved structure.
+    run.
 
-    The ranges below are therefore the observed range of those real domains,
-    not the narrow range of the authors' library, which would reject a long
-    CDR1 as nonsense: 4 to 19 for CDR1, 6 to 14 for CDR2, 3 to 64 for CDR3.
-    What has to be caught here is a match in the wrong place, which produces a
-    CDR of one or two residues or one that swallows a framework, and the
-    anchors' agreement with the IMGT CDRs is unchanged by the widening, see
-    `tools/polyreactivity/build.py`.
+    The range comes from `observed_cdr_bounds`, measured over the solved single
+    domains in `data/sabdab/`, rather than from three numbers typed here. What
+    has to be caught is a match in the wrong place, which produces a CDR that
+    swallows a framework or one far shorter than any real domain.
+
+    The floor is weak and that is deliberate: the snapshot holds a two-residue
+    CDR1, so a two-residue CDR1 from a misfiring anchor now passes this check.
+    In practice the ceiling is what catches a bad match, and a short CDR that
+    gets through still has to survive `cdrs_regex`, which refuses an anchor
+    pair it cannot place. Narrowing the floor back would mean refusing a length
+    the database contains, which is the defect this replaced.
+
+    With no snapshot on disk there is nothing to measure, and the check passes
+    everything rather than inventing a range.
     """
-    for name, cdr, lo, hi in (("CDR1", cdr1, 4, 19), ("CDR2", cdr2, 6, 14),
-                              ("CDR3", cdr3, 3, 64)):
+    bounds = observed_cdr_bounds()
+    if not bounds:
+        return ""
+    for name, cdr in (("CDR1", cdr1), ("CDR2", cdr2), ("CDR3", cdr3)):
+        lo, hi = bounds[name]
         if not (lo <= len(cdr) <= hi):
             return (f"{name} came out {len(cdr)} residues long, outside the "
                     f"{lo} to {hi} seen in solved single domains, so the "

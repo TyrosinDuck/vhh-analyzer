@@ -269,8 +269,11 @@ lengths taken from the same reference set.
 University of Oxford), numbered with ANARCI against the
 alpaca germlines by `tools/plabdab/build_matrix.py` (§3.11c). As shipped in
 November 2026 it holds 1958 unique VHH sequences over 212 IMGT positions with a
-median support of 1890 sequences per position, from a download whose newest
-sequence dates from April 2024. The panel states all of it, read from the file
+median support of 1890 sequences per position, from an export downloaded on
+16 November 2026 whose newest sequence is dated April 2024. Those two dates are
+both true and neither follows from the other: PLAbDab-nano is self-updating,
+and the file fetched in November 2026 carried nothing published after April
+2024. The panel states all of it, read from the file
 so that it stays true across a rebuild, because a
 frequency is
 only as good as the number of sequences behind it.
@@ -966,10 +969,16 @@ built on a regex annotation shows its lengths and carries **no flags at all**,
 with a warning saying why. A flag against the wrong boundary definition looks
 exactly like a correct one.
 
-**The thresholds are dated.** They were calibrated on the 36 clinical-stage
-sequences available in July 2025, and the authors state plainly that they will
-be revised as more candidates progress through trials. The app shows that date
-next to the flags. An amber flag today is not an amber flag for ever.
+**The thresholds are dated, and it is worth knowing what the date is.** They
+were calibrated on 36 clinical-stage nanobodies, and the authors state plainly
+that they will be revised as more candidates progress through trials. The app
+shows "July 2025" next to the flags. That label comes from the authors' own web
+application, where it is the date of the most recent entry in the set behind
+the thresholds, not the day anybody recalculated them: table 2 of the paper
+carries no date at all. An earlier version of this section read it as "the 36
+clinical-stage sequences available in July 2025", which claims a calibration
+date nothing here has evidence for. Either way an amber flag today is not an
+amber flag for ever.
 
 Source: Gordon GL, Gervasio J, Souders C, Deane CM. *Characterising nanobody
 developability to improve therapeutic design using the Therapeutic Nanobody
@@ -981,8 +990,18 @@ doi:[10.1038/s42003-026-09594-y](https://doi.org/10.1038/s42003-026-09594-y).
 How likely the CDRs are to bind things the clone was never selected against.
 This is a **published predictor**, reimplemented here from its authors' own
 fitted model: a logistic regression on the frequencies of CDR 3-mers, trained
-on 141 474 nanobody sequences that were sorted by flow cytometry into a
-polyreactive and a clean pool, with an AUC above 0.8 on held-out data.
+on nanobody sequences that were sorted by flow cytometry into a polyreactive
+and a clean pool. Their paper reports 65 147 unique low-polyreactivity and
+69 155 unique high-polyreactivity sequences, carrying 51 308 and 59 623
+distinct CDR sets, and it is those CDR sets the model was fitted on. AUC 0.83
+on held-out data.
+
+An earlier version of this section said the model was trained on 141 474
+sequences. That figure is the number of rows in the two pool files the authors
+released (69 702 plus 71 772), which is not the same thing as their training
+set and overstates it. The row count is still the right denominator for the
+anchor measurements in §4.7c, because those were run over every row of those
+files; it was never the right one for the paper.
 
 **Higher means more polyreactive, which is the opposite of the authors' own
 sign.** Their decision function is positive for *low* polyreactivity. It is
@@ -993,18 +1012,40 @@ flip.
 **The percentile is a position in a naive library, not among good antibodies.**
 It is read against the 69 702 sequences of their low-polyreactivity pool: a
 sequence at 95 is more polyreactive than 95% of the clones that survived their
-selection for cleanliness. The app flags at 90, which is their own default and
-a convention, not a measured threshold; the provenance screen lists it as one.
+selection for cleanliness. The app flags at 90, which is **this app's own
+convention** and not a measured threshold; the provenance screen lists it as
+one. An earlier version of this section called it the authors' own default. It
+is not: the paper gives no score cutoff and no percentile, and their released
+code carries none either, so nothing about that number should be read as
+carrying their authority.
 
 **A length is evidence about an anchor and nothing about a numbering.** The
 anchors refuse a CDR whose length falls outside the range of solved single
-domains, 4 to 19 for CDR1, 6 to 14 for CDR2 and 3 to 64 for CDR3, because a
-regex that matched in the wrong place usually produces one. Those limits are
-**not** applied to an ANARCI annotation, where the only thing that makes a
-sequence unscorable is an empty CDR: ANARCI gives ten of the single domains in
-the SAbDab snapshot a CDR1 longer than twelve residues, up to seventeen, and
-every one of them is a solved structure. A sequence with an unusually long
-CDR1 is scored, not refused.
+domains, because a regex that matched in the wrong place usually produces one.
+That range is **measured from the shipped SAbDab snapshot every time the app
+runs**, not written down: over its heavy-chain single domains it currently
+gives 2 to 20 for CDR1, 4 to 19 for CDR2 and 5 to 64 for CDR3, and refreshing
+the snapshot moves the limits with it. What is measured is SAbDab's own CDR
+annotation as the file records it, which is not a statement about what ANARCI
+would return for the same sequences.
+
+Two rows of the snapshot carry no CDR2 at all and are left out of that range,
+because a missing annotation is not a zero-length CDR. One row carries a
+two-residue CDR1, almost certainly a truncated construct; it is kept, because
+dropping a real row for looking wrong is how the previous limits came to
+disagree with the file they claimed to come from. The cost is that the floor no
+longer catches much: in practice it is the ceiling that catches a bad anchor
+match.
+
+An earlier version of this section gave the limits as 4 to 19, 6 to 14 and 3 to
+64, and said the snapshot's longest CDR1 was seventeen residues. Both were
+wrong against the file: eleven of its heavy-chain single domains carry a CDR1
+longer than twelve, at 13, 14, 15, 17, 19 and 20 residues, and the old CDR1 and
+CDR2 ceilings would have refused the longest of them.
+
+Those limits are **not** applied to an ANARCI annotation, where the only thing
+that makes a sequence unscorable is an empty CDR. A sequence with an unusually
+long CDR1 is scored, not refused.
 
 **Only IMGT CDRs are scored, and the screen says which annotator produced
 them.** The model was trained on IMGT boundaries, with one wrinkle: its CDR2 is
@@ -1020,9 +1061,9 @@ worth knowing:
   points, and would place the flag differently on 8.45% of sequences. So this
   tab does not use it.
 - Where ANARCI is unavailable, the app annotates with **anchors of its own**,
-  calibrated against the authors' IMGT columns over the 141 204 sequences of
-  their two pools that carry a complete annotation. They accept 66.6% of those
-  sequences and reproduce the IMGT CDRs exactly for 99.2% of what they accept;
+  calibrated against the authors' IMGT columns over all 141 474 rows of their
+  two pool files, with no filter applied. They accept 66.6% of those rows and
+  reproduce the IMGT CDRs exactly for 99.2% of what they accept;
   on the accepted sequences the percentile differs from the IMGT one by less
   than 0.2 point in 99 cases out of 100. **A sequence they refuse gets no
   score**, with the reason in its row, rather than an approximate one. One of
@@ -1031,13 +1072,24 @@ worth knowing:
   it in CDR2 about half the time and in the framework the other half.
 
   Their library is one synthetic framework, so that acceptance rate is the
-  optimistic one. On the 1 354 single domains of the SAbDab snapshot in
-  `data/sabdab/`, which are solved structures from every source including
-  engineered and humanised frameworks and VNARs, the anchors accept 32.6%:
-  two thirds of those sequences carry no recognisable FR2-end or FR3-start
-  motif and are refused. **On a server without HMMER, expect a third of a
-  diverse set to be scored and the rest to carry a reason.** With ANARCI,
-  1 351 of the 1 352 that it numbers are scored.
+  optimistic one. The SAbDab snapshot in `data/sabdab/` holds 1 381 solved
+  entries, 1 354 of them heavy-chain single domains and 27 of them shark
+  VNARs, from every source including engineered and humanised frameworks. The
+  anchors accept 441 of them, which is 32.6% of the heavy-chain single domains
+  and 31.9% of the file: two thirds carry no recognisable FR2-end or FR3-start
+  motif and are refused, and not one VNAR is accepted, which is the expected
+  answer for a different scaffold. **On a server without HMMER, expect a third
+  of a diverse set to be scored and the rest to carry a reason.**
+
+  With ANARCI, 1 351 of the 1 352 entries it numbers are scored. That figure
+  was measured on a machine with HMMER installed and is not reproduced by the
+  test suite, which skips every ANARCI test where HMMER is absent; the
+  acceptance rates above are, because the anchors are regexes and need
+  nothing.
+
+  An earlier version of this paragraph gave 1 354 as the size of the whole
+  snapshot and said it included the VNARs. It does not: 1 354 is the
+  heavy-chain subset, and the VNARs are the other 27.
 
 Where ANARCI does run, the two paths agree on every sequence both accept, and
 the ANARCI path reproduces the authors' CDRs for 96% of the sequences of the

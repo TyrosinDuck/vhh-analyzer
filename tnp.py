@@ -60,7 +60,7 @@ import pandas as pd
 
 import vhh_core as vc
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.17a"
 
 __all__ = [
     "METRICS", "SEQUENCE_METRICS", "STRUCTURAL_METRICS", "FLAG_ORDER",
@@ -77,10 +77,17 @@ REFERENCE = ("Gordon GL, Gervasio J, Souders C, Deane CM. Characterising "
 
 WEBAPP = "https://opig.stats.ox.ac.uk/webapps/tnp"
 
-# Table 2 of the paper carries no date of its own; the authors' web application
-# labelled the same values "July 2025" when this module was written, and the
-# paper says plainly that they will be updated as more candidates progress
-# through trials. Shown in the app so that a profile is never read as timeless.
+# Table 2 of the paper carries no date of its own. The authors' web application
+# labelled the same values "July 2025" when this module was written, and that
+# label is the date of the most recent entry in the clinical-stage set behind
+# the thresholds, not the day anybody recalculated them. The paper says plainly
+# that they will be updated as more candidates progress through trials. Shown
+# in the app so that a profile is never read as timeless.
+#
+# So what this string dates is the newest candidate the thresholds can know
+# about. An earlier version of MANUAL.md turned it into "the 36 clinical-stage
+# sequences available in July 2025", which claims a calibration date this
+# module has never had evidence for.
 THRESHOLD_DATE = "July 2025"
 
 # Table 2, Gordon et al. 2026. `clinical` is the full range observed across the
@@ -130,6 +137,11 @@ METRICS = {
         "clinical": (0.00, 1.18),
         "amber": ((0.39, 1.18),),
         "computed": "not computed",
+        # A patch score is a count of surface patches and cannot be negative,
+        # and the clinical range starts at that floor, so there is no reachable
+        # red band below it. `metric_table` reads this rather than guessing
+        # from the shape of `amber`.
+        "floor": 0.00,
         "detail": "TAP patch methodology on a structure. Not implemented "
                   "here; use the TNP web application.",
     },
@@ -139,6 +151,7 @@ METRICS = {
         "clinical": (0.00, 1.88),
         "amber": ((1.47, 1.88),),
         "computed": "not computed",
+        "floor": 0.00,
         "detail": "TAP patch methodology on a structure. Not implemented "
                   "here; use the TNP web application.",
     },
@@ -163,6 +176,12 @@ def flag(metric: str, value) -> str | None:
     everything else. Band edges are inclusive on both sides, which is how
     Table 2 is written; a value sitting exactly on an edge is therefore amber
     rather than green, the cautious reading of an ambiguous boundary.
+
+    One exception, and it is about a band that cannot be reached rather than
+    about a judgement: where a metric declares a `floor` and its clinical range
+    starts at that floor, nothing below the range exists to be red. PPC and PNC
+    are patch scores bounded below by zero with a clinical range starting at
+    0.00, so this used to promise a red verdict for a negative patch score.
     """
     if metric not in METRICS:
         raise KeyError(f"unknown TNP metric: {metric!r}")
@@ -176,7 +195,8 @@ def flag(metric: str, value) -> str | None:
         return None
 
     lo, hi = METRICS[metric]["clinical"]
-    if value < lo or value > hi:
+    floor = METRICS[metric].get("floor")
+    if value > hi or (value < lo and (floor is None or lo > floor)):
         return "red"
     for band_lo, band_hi in METRICS[metric]["amber"]:
         if band_lo <= value <= band_hi:
@@ -293,8 +313,15 @@ def metric_table() -> pd.DataFrame:
             "Metric": spec["label"],
             "Clinical range": f"{lo} to {hi}",
             "Amber band": amber,
-            "Red": f"below {lo} or above {hi}" if len(spec["amber"]) > 1
-                   else f"above {hi}",
+            # The lower half of the red band is printed only when a value can
+            # land in it. PPC and PNC are patch scores that cannot go below
+            # zero and whose clinical range starts there, so "below 0.00"
+            # described a band no sequence can reach. `floor` says so per
+            # metric; the condition used to be `len(spec["amber"]) > 1`, which
+            # happened to agree for these two and said nothing about why.
+            "Red": f"above {hi}" if spec.get("floor") is not None
+                   and lo <= spec["floor"]
+                   else f"below {lo} or above {hi}",
             "Computed from": spec["computed"],
             "Unit": spec["unit"],
         })

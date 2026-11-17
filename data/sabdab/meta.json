@@ -4,8 +4,8 @@
   "extracted": "2026-11-12",
   "export_rows": 4759,
   "sequences": 1381,
-  "dropped_no_vh": 88,
-  "dropped_nonstandard": 9,
+  "dropped_no_vh_rows": 88,
+  "dropped_nonstandard_sequences": 9,
   "types": {
     "SD-H": 1354,
     "VNAR": 27

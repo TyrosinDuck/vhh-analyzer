@@ -21,6 +21,7 @@ which needs a binary the suite may not have, and it skips.
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -352,13 +353,29 @@ def test_the_runtime_needs_nothing_but_numpy_and_pandas():
     scikit-learn opens the authors' pickle in the build script, where it
     belongs. An import of it here, or of torch, or of pickle, would mean the
     weights had stopped being plain numbers in an .npz.
+
+    Stated as what may not be imported rather than as what may. The allow-list
+    version of this test failed the day `observed_cdr_bounds` started reading
+    the SAbDab snapshot, which is a sibling module of this repository carrying
+    no dependency of its own beyond pandas, and the real property, no heavy
+    machine-learning runtime, was never in question. So: the standard library
+    and the repository's own modules are free, third-party imports are limited
+    to numpy and pandas, and the named offenders are refused by name in case
+    one of them arrives by a route this does not anticipate.
     """
-    source = (Path(__file__).parent.parent / "specificity.py").read_text()
+    root = Path(__file__).parent.parent
+    source = (root / "specificity.py").read_text()
     imported = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             imported.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
-    assert imported <= {"__future__", "re", "dataclasses", "pathlib", "typing",
-                        "numpy", "pandas"}, imported
+
+    banned = {"sklearn", "scikit_learn", "torch", "tensorflow", "pickle",
+              "joblib", "transformers", "scipy"}
+    assert not (imported & banned), imported & banned
+
+    first_party = {path.stem for path in root.glob("*.py")}
+    third_party = imported - set(sys.stdlib_module_names) - first_party
+    assert third_party <= {"numpy", "pandas"}, third_party

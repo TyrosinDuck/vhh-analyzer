@@ -187,7 +187,8 @@ def _required_modules() -> list[str]:
 
 
 def test_the_register_is_complete():
-    """Every public constant is either registered or declared non-scientific.
+    """Every named number is registered, declared non-scientific, or listed as
+    not yet classified.
 
     This is the test the register was missing until November 2026. Without it
     the page listed what somebody had remembered to add, while the manual
@@ -202,12 +203,13 @@ def test_the_register_is_complete():
     """
     missing = pv.unclassified(_required_modules())
     assert not missing, (
-        "these constants are neither on the register nor declared in "
-        "NOT_SCIENTIFIC:\n" + "\n".join(
+        "these constants are on none of the three lists:\n" + "\n".join(
             f"  {key} (line {line})" for key, line in sorted(missing.items()))
         + "\nRegister it in provenance.py with what its value is worth and "
-          "where it came from, or name it in NOT_SCIENTIFIC with the reason "
-          "it carries no scientific claim.")
+          "where it came from, name it in NOT_SCIENTIFIC with the reason "
+          "it carries no scientific claim, or, if it decides a result and you "
+          "cannot say where the value comes from, put it in UNCLASSIFIED "
+          "saying exactly that. Never invent a source to close this test.")
 
 
 def test_nothing_is_declared_non_scientific_and_registered_too():
@@ -216,6 +218,9 @@ def test_nothing_is_declared_non_scientific_and_registered_too():
                   for entry in pv.entries()}
     both = registered & set(pv.NOT_SCIENTIFIC)
     assert not both, f"classified twice: {sorted(both)}"
+    assert not (registered & set(pv.UNCLASSIFIED)), "registered and unclassified"
+    assert not (set(pv.NOT_SCIENTIFIC) & set(pv.UNCLASSIFIED)), (
+        "declared harmless and unclassified at once")
 
 
 def test_the_declarations_do_not_outlive_their_constants():
@@ -225,13 +230,13 @@ def test_the_declarations_do_not_outlive_their_constants():
     standing exemption for a name, and the next constant to be given that name
     would inherit it without anybody choosing that.
     """
-    for key in pv.NOT_SCIENTIFIC:
+    for key in {**pv.NOT_SCIENTIFIC, **pv.UNCLASSIFIED}:
         module, _dot, constant = key.rpartition(".")
         assert module, f"{key} does not name a module"
         found = pv.scan_module(module)
         assert constant in found, (
-            f"{key} is declared non-scientific but {module}.py no longer has "
-            f"a public constant by that name")
+            f"{key} is declared but {module}.py no longer has a public "
+            f"constant or default argument by that name")
 
 
 def test_the_declarations_say_why():
@@ -240,7 +245,7 @@ def test_the_declarations_say_why():
     "Not scientific" asserted without a reason is the same claim the register
     was built to stop: a number somebody vouched for in passing.
     """
-    for key, reason in pv.NOT_SCIENTIFIC.items():
+    for key, reason in {**pv.NOT_SCIENTIFIC, **pv.UNCLASSIFIED}.items():
         assert len(reason.strip()) > 20, f"{key}: {reason!r}"
 
 

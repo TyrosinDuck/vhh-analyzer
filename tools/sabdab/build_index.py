@@ -110,15 +110,19 @@ def build(export: Path) -> dict:
         rows = list(reader)
 
     by_sequence: dict[str, list[dict]] = defaultdict(list)
-    dropped_no_vh = 0
-    dropped_nonstandard = set()
+    # Two counters in two units, which the metadata has to spell out rather
+    # than print side by side as if they were comparable: a row with no VH has
+    # no sequence to deduplicate by, so it can only be counted in rows, while a
+    # non-standard sequence can appear in several rows and is counted once.
+    dropped_no_vh_rows = 0
+    dropped_nonstandard_sequences = set()
     for row in rows:
         sequence = (row["VH"] or "").strip().upper()
         if not sequence:
-            dropped_no_vh += 1
+            dropped_no_vh_rows += 1
             continue
         if set(sequence) - STANDARD:
-            dropped_nonstandard.add(sequence)
+            dropped_nonstandard_sequences.add(sequence)
             continue
         by_sequence[sequence].append(row)
 
@@ -188,8 +192,8 @@ def build(export: Path) -> dict:
         "extracted": extracted,
         "export_rows": len(rows),
         "sequences": len(out),
-        "dropped_no_vh": dropped_no_vh,
-        "dropped_nonstandard": len(dropped_nonstandard),
+        "dropped_no_vh_rows": dropped_no_vh_rows,
+        "dropped_nonstandard_sequences": len(dropped_nonstandard_sequences),
         "types": {t: sum(1 for r in out if r["type"] == t)
                   for t in sorted({r["type"] for r in out})},
         "built_by": "tools/sabdab/build_index.py",
@@ -210,8 +214,8 @@ def main() -> int:
         return 2
     meta = build(Path(sys.argv[1]))
     print(f"{meta['export_rows']} rows in, {meta['sequences']} distinct "
-          f"sequences out, {meta['dropped_no_vh']} dropped for having no VH, "
-          f"{meta['dropped_nonstandard']} for carrying a non-standard "
+          f"sequences out, {meta['dropped_no_vh_rows']} rows dropped for having no VH, "
+          f"{meta['dropped_nonstandard_sequences']} distinct sequences for a non-standard "
           f"residue.")
     print(f"types: {meta['types']}")
     print(f"extracted: {meta['extracted']}")

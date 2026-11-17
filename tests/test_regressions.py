@@ -18,6 +18,7 @@ docstring first: it tells you what the wrong behaviour looked like.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -26,7 +27,10 @@ import pytest
 
 import codons as cdn
 import library as lib
+import provenance as pv
 import repertoire as rp
+import sabdab
+import specificity as sp
 import triage as tg
 import vhh_core as vc
 
@@ -958,3 +962,233 @@ def test_no_constant_claims_a_source_the_repository_cannot_show():
     assert manual.count("Day's relation") == 1
     assert 'called it "Day\'s relation"' in manual
     assert "the standard filamentous-phage relation" in manual
+
+
+# --------------------------------------------------------------------------- #
+# The second independent audit, November 2026. Every one of these was a claim
+# the app or the manual made that the code or the data beside it did not
+# support. Three of them were about who to credit, which is the kind of defect
+# no amount of testing the arithmetic would have found.
+# --------------------------------------------------------------------------- #
+
+def _text(*parts) -> str:
+    return (ROOT.joinpath(*parts)).read_text(encoding="utf-8")
+
+
+def test_the_training_set_size_is_the_papers_and_not_a_row_count():
+    """141 474 was presented as the size of Harvey et al.'s training set.
+
+    It is the number of rows in the two pool files they released, 69 702 plus
+    71 772. Their paper reports 65 147 unique low-polyreactivity and 69 155
+    unique high-polyreactivity sequences, carrying 51 308 and 59 623 distinct
+    CDR sets, and the CDR sets are what the model was fitted on. The row count
+    is still the right denominator for the anchor measurements, which were run
+    over every row, and the two must not be confused again.
+    """
+    screen = _text("sections", "analysis.py")
+    manual = _text("MANUAL.md")
+    for source in (screen, manual):
+        assert "65 147" in source and "69 155" in source
+        assert "51 308" in source and "59 623" in source
+    # The row count may only appear where it is the right denominator.
+    assert "fitted by its authors on 141 474" not in screen
+    assert "trained\non 141 474" not in manual
+
+
+def test_the_anchor_denominator_is_every_row_with_no_filter():
+    """141 204 appeared three times, and named a filter nothing applies.
+
+    `tools/polyreactivity/build.py` iterates every row of both pool files and
+    applies no annotation filter, so the acceptance rate it reports is over all
+    141 474 of them. A denominator that is neither the file's nor the paper's
+    makes both percentages beside it mean nothing.
+    """
+    build = _text("tools", "polyreactivity", "build.py")
+    assert "141 474" in build
+    # The wrong figure survives only where the comment says it was wrong, which
+    # is this project's way of keeping a correction from being re-made.
+    assert _text("specificity.py").count("141 204") == 1
+    assert "said 141 204" in _text("specificity.py")
+    for source in (_text("sections", "analysis.py"), _text("MANUAL.md")):
+        assert "141 204" not in source
+    assert "with no filter\n# applied" in _text("specificity.py")
+
+
+def test_no_threshold_is_credited_to_the_model_authors():
+    """The 90th-percentile flag was called the authors' own default, in three
+    places.
+
+    Harvey et al. give no score cutoff and no percentile anywhere in the paper,
+    and their released code carries none either. The value is this app's and is
+    classified a convention; what was wrong was the credit, which is the one
+    kind of error this project calls worse than no reference at all.
+    """
+    assert sp.FLAG_PERCENTILE == 90.0
+    # Once each, inside the sentence saying the credit was wrong.
+    assert _text("specificity.py").lower().count("their own default") == 1
+    assert 'called it "their own default"' in _text("specificity.py")
+    for source in (_text("provenance.py"), _text("MANUAL.md")):
+        assert "their own default" not in source.lower()
+    for source in (_text("specificity.py"), _text("provenance.py"),
+                   _text("MANUAL.md")):
+        assert "default of the model's authors" not in source
+    entry = next(e for e in pv.entries() if e.key == "polyreactivity_flag")
+    assert entry.basis == "convention"
+    assert "This app's own convention" in entry.source
+
+
+def test_the_cdr_bounds_are_measured_from_the_snapshot_not_typed():
+    """The anchor length limits contradicted the file they claimed to measure.
+
+    They were 4 to 19, 6 to 14 and 3 to 64, said to be the observed range of
+    the solved single domains. The snapshot holds a 20-residue CDR1 and CDR2
+    lengths of 15 and 19, so the limits refused lengths their own stated source
+    contains. They are derived from the file now, so they cannot drift from it
+    again, and refreshing the snapshot moves them.
+    """
+    bounds = sp.observed_cdr_bounds()
+    frame = sabdab.load_index()
+    frame = frame[frame["type"] == "SD-H"]
+    for column in ("cdr1", "cdr2", "cdr3"):
+        lengths = [len(v) for v in frame[column].astype(str) if len(v)]
+        assert bounds[column.upper()] == (min(lengths), max(lengths))
+    # The specific lengths that used to be refused.
+    assert bounds["CDR1"][1] >= 20
+    assert bounds["CDR2"][1] >= 19
+    # A missing annotation is not a zero-length CDR.
+    assert bounds["CDR2"][0] > 0
+    assert "4, 19" not in _text("specificity.py")
+
+
+def test_the_manual_does_not_cap_the_snapshot_cdr1_at_seventeen():
+    """MANUAL said the longest CDR1 in the snapshot was seventeen residues.
+
+    Eleven heavy-chain single domains carry a CDR1 longer than twelve, at 13,
+    14, 15, 17, 19 and 20 residues. The figure is read from the file here so a
+    sentence cannot outlive the data again.
+    """
+    frame = sabdab.load_index()
+    frame = frame[frame["type"] == "SD-H"]
+    long_cdr1 = sorted(len(v) for v in frame["cdr1"].astype(str) if len(v) > 12)
+    assert len(long_cdr1) == 11 and max(long_cdr1) == 20
+    manual = _text("MANUAL.md")
+    assert "up to seventeen" not in manual
+    assert "1 381 solved" in manual
+
+
+def test_the_two_database_dates_are_not_read_as_one():
+    """A download date and a database's newest entry are different facts.
+
+    The PLAbDab-nano export was fetched in November 2026 and carries nothing
+    published after April 2024; the build script called it "the April 2024
+    download" throughout, which reads as the day it was fetched. The TNP
+    threshold label is the same shape of mistake in the other module: "July
+    2025" dates the newest clinical-stage entry behind the thresholds, not a
+    calibration anybody performed.
+    """
+    build = _text("tools", "plabdab", "build_matrix.py")
+    assert build.count("April 2024 download") == 1      # only the note saying so
+    assert "downloaded on 2026-11-16" in build
+    meta = json.loads(_text("data", "vhh_position_meta.json"))
+    assert meta["provenance"]["downloaded"] == "2026-11-16"
+    assert meta["provenance"]["latest_entry"] == "2024-04-10"
+
+    assert "not the day anybody recalculated them" in _text("tnp.py")
+    manual = _text("MANUAL.md")
+    assert manual.count("sequences available in July 2025") == 1
+    assert 'read it as "the 36' in manual
+
+
+def test_the_worst_rank_is_not_zero():
+    """"100 is the best and 0 the worst" promised a floor nothing reaches.
+
+    `rank(pct=True)` divides by the number of sequences, so the bottom cell is
+    100/n: 12.5 for eight sequences and 50.0 for two.
+    """
+    import ranking as rk
+    table = pd.DataFrame({
+        "name": list("abcdefgh"),
+        "liability_score": [1, 2, 3, 4, 5, 6, 7, 8],
+    })
+    ranks = rk.within_set_ranks(table, ["liability_score"])
+    assert ranks["liability_score"].min() == pytest.approx(12.5)
+    assert ranks["liability_score"].max() == pytest.approx(100.0)
+    assert _text("ranking.py").count("0 the worst") == 1
+    assert 'said "0 the worst"' in _text("ranking.py")
+
+
+def test_no_metric_promises_a_red_band_below_its_own_floor():
+    """PPC and PNC were described as red below 0.00, which cannot happen.
+
+    They are patch scores bounded below by zero whose clinical range starts at
+    zero. The guideline table now derives the red column from a declared floor
+    rather than from the shape of the amber bands, which happened to agree for
+    these two and said nothing about why.
+    """
+    import tnp
+    table = tnp.metric_table().set_index("Metric")
+    for key in ("ppc", "pnc"):
+        spec = tnp.METRICS[key]
+        assert spec["floor"] == 0.00
+        assert table.loc[spec["label"], "Red"].startswith("above")
+        assert tnp.flag(key, -1.0) != "red"
+    # A metric with a real lower band keeps it.
+    assert table.loc[tnp.METRICS["cdr3_length"]["label"], "Red"].startswith(
+        "below")
+    assert tnp.flag("cdr3_length", 3) == "red"
+
+
+def test_the_peptide_reference_credits_the_paper_it_cites():
+    """The PS19-6L row credited Dedisch et al. for a paper by other people.
+
+    The article at 10.1039/d5ra06185g is Retnadhas, Hegg and Ducat, RSC Adv
+    15:41115-41128 (2025). The volume, first page, year and DOI were right and
+    only the authors were wrong, which is the kind of error that survives a
+    DOI check.
+    """
+    csv = _text("data", "specificity", "plastic_binding_peptides.csv")
+    assert "Dedisch" not in csv
+    assert "Retnadhas, Hegg and Ducat" in csv
+    assert "10.1039/d5ra06185g" in csv
+
+
+def test_the_manuscript_cites_every_method_it_ships():
+    """`paper.md` cited neither TNP nor SAbDab, and the app ships both.
+
+    Also the property the previous round checked: every key cited exists, and
+    every entry is cited.
+    """
+    paper = _text("paper", "paper.md")
+    bib = _text("paper", "paper.bib")
+    cited = set(re.findall(r"@([A-Za-z][A-Za-z0-9_-]*)", paper))
+    defined = set(re.findall(r"@article\{([^,]+),", bib))
+    assert cited == defined, (cited ^ defined)
+    assert {"gordon2026", "schneider2022"} <= cited
+
+
+def test_the_provenance_scan_sees_past_module_level():
+    """A constant inside a function was invisible to the completeness test.
+
+    Which is where the CDR length limits were sitting while they contradicted
+    their own stated source. The scan now reports numeric default arguments
+    and upper-case names assigned in a body, and anything it finds has to be
+    registered, declared harmless, or admitted as not yet classified.
+    """
+    found = pv.scan_module("vhh_core")
+    assert "cluster_families(cutoff)" in found
+    assert "chou_fasman_profile(window)" in found
+    # Still a module-level scan as well.
+    assert "CHOU_FASMAN" in found
+    # Private helpers are not public surface.
+    assert not [key for key in found if key.startswith("_")]
+    assert not pv.unclassified(_required_modules_for_test())
+    # The admission is an admission, not a dumping ground: every entry says
+    # what is missing rather than asserting a source.
+    for key, reason in pv.UNCLASSIFIED.items():
+        assert len(reason.strip()) > 20, key
+
+
+def _required_modules_for_test():
+    import app
+    return [name for name in app.REQUIRED_MODULES
+            if not name.startswith("sections.")]

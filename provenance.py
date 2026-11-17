@@ -46,10 +46,10 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.16d"
+__version__ = "2026.11.17a"
 
 __all__ = [
-    "BASES", "Constant", "NOT_SCIENTIFIC", "entries", "resolve", "value_text",
+    "BASES", "Constant", "NOT_SCIENTIFIC", "UNCLASSIFIED", "entries", "resolve", "value_text",
     "by_basis", "scan_module", "unclassified", "__version__",
 ]
 
@@ -209,11 +209,14 @@ _REGISTRY = (
         where=("specificity", "FLAG_PERCENTILE"),
         unit="percentile of the reference pool",
         basis="convention",
-        source="The default of the model's authors, Harvey et al., Nat Commun "
-               "13, 7554 (2022). It is a cut on a continuous ranking, chosen "
-               "to flag the top tenth of a naive library, not a threshold "
-               "anything measured: a sequence at 89 and one at 91 differ by "
-               "nothing a plate would show.",
+        source="This app's own convention, not the model authors'. Harvey et "
+               "al., Nat Commun 13, 7554 (2022), give no score cutoff and no "
+               "percentile anywhere in the paper, and their released code "
+               "carries none either; an earlier version of this entry credited "
+               "them with this threshold. It is a cut on a continuous ranking, "
+               "chosen to flag the top tenth of a naive library, not a "
+               "threshold anything measured: a sequence at 89 and one at 91 "
+               "differ by nothing a plate would show.",
         used_for="Sequence analysis, Polyreactivity and Triage: the flag "
                  "column, and the count of flagged sequences.",
     ),
@@ -1077,7 +1080,123 @@ NOT_SCIENTIFIC: dict[str, str] = {
                                           "typed as a factor is probably an "
                                           "exponent. A warning about a typo, "
                                           "and never a refusal",
+
+    # Numeric default arguments, which `scan_module` started reporting when it
+    # was widened past module level. These are the ones that carry no claim.
+    # An identity default (a dilution of 1, a margin of 0) says "nothing
+    # applied"; a size, a cap or a figure dimension is about the picture or the
+    # container, not the protein.
+    "bench.concentration_from_a280(path_length_cm)": "1 cm, the cuvette a "
+        "reading is reported against; the value is an input on the screen",
+    "bench.concentration_from_a280(dilution_factor)": "1, meaning a neat "
+        "sample: the identity default of an input the user supplies",
+    "bench.phage_titre(dilution)": "1, meaning neat; an identity default",
+    "bench.phage_titre(glycerol_factor)": "1, meaning no correction applied",
+    "bench.culture_for_target(margin_pct)": "0, meaning no margin added",
+    "buffers.prepare(factor)": "1, meaning a 1X preparation",
+    "repertoire.plot_cdr_lengths(n_submitted)": "0, meaning nothing of the "
+        "user's is overlaid on the reference distribution",
+    "cloning.plot_map(max_features)": "how many features a plasmid map draws "
+        "before it is unreadable",
+    "cloning.plot_region(padding)": "how much flanking sequence the region "
+        "figure shows, in bases of picture",
+    "cloning.recommend_enzymes(pad)": "0, meaning no slack around the cloning "
+        "window unless the caller asks for some",
+    "cloning.enzyme_pairs(max_pairs)": "how many candidate pairs are returned",
+    "cloning.evaluate_pairs(max_pairs)": "how many candidate pairs are scored",
+    "cloning.simulate_pcr(max_product)": "ceiling on the product length a "
+        "simulated PCR will report, so a pathological pair cannot run away",
+    "codons.parse_dna_input(max_sequences)": "input cap, how many sequences "
+        "one submission may carry",
+    "codons.parse_dna_input(max_length)": "input cap, how long one coding "
+        "sequence may be, in bases",
+    "compute.png_msa(wrap_length)": "residues per row of the alignment figure",
+    "generator.to_fasta(width)": "characters per line of FASTA output",
+    "session.fasta(width)": "characters per line of FASTA output",
+    "sanger.quality_table(max_reads)": "how many reads the table shows at once",
+    "sanger.plot_quality(max_reads)": "how many reads the figure draws at once",
+    "shell.fig_to_png(dpi)": "resolution of the rendered figure, in dots "
+        "per inch",
+    "specificity.polyreactivity(batch_size)": "how many sequences are scored "
+        "per matrix multiplication; a memory choice with no effect on a score",
+    "structure.viewer_html(width)": "size of the embedded viewer, in pixels",
+    "structure.viewer_html(height)": "size of the embedded viewer, in pixels",
+    "vhh_core.plot_msa(wrap_length)": "residues per row of the figure",
+    "vhh_core.plot_logo(wrap_length)": "positions per row of the figure",
+    "vhh_core.plot_logo(figwidth)": "figure width in inches",
+    "vhh_core.table(font)": "point size of the table figure",
+    "vhh_core.df_table(font)": "point size of the table figure",
 }
+
+
+# Found by the widened scan, scientific, and not yet classified.
+#
+# These are default arguments that decide a result rather than a picture, and
+# nothing in the repository records why each value is the value. They are
+# listed here rather than registered, because a register entry has to state a
+# basis and a source, and writing one from a guess is the failure this whole
+# page exists to prevent: an invented justification is worse than an admitted
+# gap. They are listed here rather than left out, because the previous scan
+# could not see them at all and the page claimed to cover everything.
+#
+# Clearing an entry means reading the code, deciding what the value is, and
+# moving it to `CONSTANTS` with its basis, or to `NOT_SCIENTIFIC` with the
+# reason it carries no claim. The count is shown on the Provenance screen so
+# the gap is visible rather than filed away here.
+UNCLASSIFIED: dict[str, str] = {
+    "af3.interface_pae(close)": "5.0 angstrom, the distance under which a "
+        "token pair counts as close. A structural convention, but no source "
+        "is recorded for this value",
+    "bench.mass_check(tolerance_da)": "2.0 Da, the window inside which a "
+        "measured mass is called a match. Depends on the instrument, and "
+        "nothing records which one this was chosen for",
+    "cloning.simulate_pcr(min_anneal)": "15 bases of annealing before a primer "
+        "is considered to bind. A convention with no recorded basis",
+    "codons.suggest_gc_fix(max_homopolymer)": "6, the run length above which a "
+        "homopolymer is called a synthesis risk. Vendor guidance differs and "
+        "none is cited",
+    "generator.generate(occupancy_threshold)": "0.5, the occupancy a reference "
+        "position needs before the generator samples it",
+    "sanger.mott_trim(cutoff)": "0.05, the error probability Mott's algorithm "
+        "trims against. It is the common default of phred and Staden, which "
+        "is a reason to keep it and not a source for it",
+    "specificity.cdrs_to_kmer(k)": "3, the k of the authors' 3-mer model. "
+        "Fixed by the shipped weights rather than chosen here, which probably "
+        "makes it a register entry rather than this list",
+    "vhh_core.cluster_families(cutoff)": "80.0% CDR3 identity for two "
+        "sequences to share a clonal family. A convention, and a consequential "
+        "one, with no recorded basis",
+    "vhh_core.aggregation_regions(min_length)": "3 residues, the shortest run "
+        "reported as an aggregation-prone region",
+    "vhh_core.weakest_windows(n)": "3, how many weak windows are reported",
+    "vhh_core.weakest_windows(width)": "7 residues, the window the weakest "
+        "regions are scored over. Not the same as the profile window, and "
+        "nothing says why",
+    "vhh_core.chou_fasman_profile(window)": "5 residues of smoothing, the "
+        "classic Chou-Fasman window; the 1978 chapter is cited for the "
+        "parameters but not for this",
+    "vhh_core.chou_fasman_table(window)": "5 residues of smoothing, the "
+        "same window as the profile and with the same gap behind it",
+    "vhh_core.plot_chou_fasman(window)": "5 residues of smoothing, the "
+        "same window as the profile and with the same gap behind it",
+    "vhh_core.reverse_translate(max_homopolymer)": "6, as in the gene "
+        "diagnosis screen, and with no more of a source here",
+    "vhh_core.reverse_translate(gc_max)": "0.60, the upper GC the optimiser "
+        "balances towards. The synthesis band is cited at GC_HIGH for the "
+        "diagnosis screen; this default is not tied to it in the code",
+    "vhh_core.reverse_translate(gc_min)": "0.40, the lower GC the optimiser "
+        "balances towards. Same gap as gc_max",
+}
+
+
+def _numeric(node) -> bool:
+    """True when this expression contains a numeric literal anywhere inside."""
+    import ast
+
+    return any(child for child in ast.walk(node)
+               if isinstance(child, ast.Constant)
+               and isinstance(child.value, (int, float))
+               and not isinstance(child.value, bool))
 
 
 def scan_module(name: str) -> dict[str, int]:
@@ -1085,40 +1204,72 @@ def scan_module(name: str) -> dict[str, int]:
 
     Parsed from the source rather than read off the imported module, for two
     reasons: an attribute is not a line number, and the point of the scan is to
-    name the line somebody has to go and classify. Reads module-level
-    assignments to upper-case names, single and tuple targets alike, keeping
-    those whose value contains a numeric literal anywhere inside it, which is
-    what makes ``GC_LOW, GC_HIGH = 0.30, 0.70`` two findings and
-    ``REGIONS = ["FR1", ...]`` none.
+    name the line somebody has to go and classify.
+
+    Three kinds of finding, which is two more than this used to have:
+
+    * **Module-level assignments to upper-case names**, single and tuple
+      targets alike, keeping those whose value contains a numeric literal
+      anywhere inside it. That is what makes ``GC_LOW, GC_HIGH = 0.30, 0.70``
+      two findings and ``REGIONS = ["FR1", ...]`` none.
+    * **Upper-case assignments inside a function**, reported under the same
+      name. A constant does not stop being one for sitting in a body.
+    * **Numeric default arguments**, reported as ``func(arg)``. This is where
+      the widening earns its keep: a threshold written as ``def f(x,
+      cutoff=0.05)`` is a scientific constant with a name and a line number,
+      and the module-level-only scan could not see one.
+
+    What it still cannot see is a bare literal in the middle of an expression,
+    which has no name to report and would drown the result in array indices.
+    The register's own page says so rather than claiming a completeness this
+    cannot deliver: the honest claim is that every *named* number is known, not
+    every number.
     """
     import ast
     from pathlib import Path
 
     path = Path(__file__).parent / f"{name}.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     found: dict[str, int] = {}
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign):
-            targets = node.targets
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets = [node.target]
-        else:
-            continue
 
-        names = []
-        for target in targets:
-            if isinstance(target, ast.Name):
-                names.append(target.id)
-            elif isinstance(target, ast.Tuple):
-                names += [element.id for element in target.elts
-                          if isinstance(element, ast.Name)]
-        if not any(child for child in ast.walk(node.value)
-                   if isinstance(child, ast.Constant)
-                   and isinstance(child.value, (int, float))
-                   and not isinstance(child.value, bool)):
+    def assignments(nodes) -> None:
+        for node in nodes:
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                targets = [node.target]
+            else:
+                continue
+            names = []
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    names.append(target.id)
+                elif isinstance(target, ast.Tuple):
+                    names += [element.id for element in target.elts
+                              if isinstance(element, ast.Name)]
+            if not _numeric(node.value):
+                continue
+            for constant in names:
+                if constant.isupper() and not constant.startswith("_"):
+                    found[constant] = node.lineno
+
+    assignments(tree.body)
+
+    functions = [node for node in ast.walk(tree)
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    for function in functions:
+        assignments(ast.walk(function))
+        if function.name.startswith("_"):
             continue
-        for constant in names:
-            if constant.isupper() and not constant.startswith("_"):
-                found[constant] = node.lineno
+        args = function.args
+        positional = args.posonlyargs + args.args
+        named = positional[len(positional) - len(args.defaults):]
+        pairs = list(zip([a.arg for a in named], args.defaults))
+        pairs += [(a.arg, d) for a, d in zip(args.kwonlyargs, args.kw_defaults)
+                  if d is not None]
+        for argument, default in pairs:
+            if isinstance(default, ast.Constant) and _numeric(default):
+                found[f"{function.name}({argument})"] = function.lineno
     return found
 
 
@@ -1136,7 +1287,8 @@ def unclassified(modules) -> dict[str, int]:
     for name in modules:
         for constant, line in scan_module(name).items():
             key = f"{name}.{constant}"
-            if key not in registered and key not in NOT_SCIENTIFIC:
+            if (key not in registered and key not in NOT_SCIENTIFIC
+                    and key not in UNCLASSIFIED):
                 missing[key] = line
     return missing
 

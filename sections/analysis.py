@@ -65,7 +65,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
                    usage_prompt)
 
-__version__ = "2026.11.16d"
+__version__ = "2026.11.17a"
 
 
 @dataclass
@@ -330,7 +330,10 @@ def _triage(r: Run) -> None:
                     f"Within-set comparison, {len(table)} sequences"), **FIT)
                 st.caption(
                     "Colour is the rank within this submission, 100 being the "
-                    "best of these on that axis alone. **Colour means nothing "
+                    "best of these on that axis alone. The worst is not 0: "
+                    f"ranks divide by the number of sequences, so here the "
+                    f"bottom of a column is {100.0 / max(len(table), 1):.1f}. "
+                    "**Colour means nothing "
                     "across columns**, and nothing across submissions: add a "
                     "sequence and every rank moves. Grey is a value that does "
                     "not exist for that sequence, not a zero. A row marked ⚠ "
@@ -1223,10 +1226,10 @@ def _specificity_annotator_note(table, used: str) -> None:
 
     The numbers quoted are measured, in `tools/polyreactivity/build.py` and in
     the module docstring of `specificity.py`, against the IMGT annotation of
-    the 141 204 sequences the model's authors published. They are not an
-    estimate of how the anchors behave on an engineered framework, which is the
-    case where they are most likely to give up, and they say nothing about a
-    sequence they refused.
+    the 141 474 rows of the two pool files the model's authors published, every
+    one of them, with no filter applied. They are not an estimate of how the
+    anchors behave on an engineered framework, which is the case where they are
+    most likely to give up, and they say nothing about a sequence they refused.
     """
     n_ok = int(table["annotation_ok"].sum())
     if used == "ANARCI / IMGT":
@@ -1265,9 +1268,12 @@ def _polyreactivity(r: Run) -> None:
     st.markdown(
         "How likely these CDRs are to bind things they were never selected "
         "against. This is a **published predictor**: a logistic regression on "
-        "CDR 3-mer frequencies, fitted by its authors on 141 474 nanobody "
-        "sequences sorted by flow cytometry into polyreactive and clean pools, "
-        "with an AUC above 0.8 on held-out data.")
+        "CDR 3-mer frequencies, fitted by its authors on nanobody sequences "
+        "sorted by flow cytometry into polyreactive and clean pools. Their "
+        "paper reports 65 147 unique low-polyreactivity and 69 155 unique "
+        "high-polyreactivity sequences, carrying 51 308 and 59 623 distinct "
+        "CDR sets, and it is those CDR sets the model was fitted on. AUC 0.83 "
+        "on held-out data.")
     st.info(
         f"**Higher means more polyreactive.** The authors' own decision "
         f"function has the opposite sign, it is positive for *low* "

@@ -67,7 +67,7 @@ __all__ = ["Axis", "AXES", "BETTER_COLOUR", "DEFAULT_AXES", "DEFAULT_GATES",
            "comparison_frame", "plot_rank_heatmap", "plot_pareto",
            "MIN_FOR_RANKS", "__version__"]
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.17a"
 
 # Below this many sequences a rank says nothing a side-by-side reading of two
 # numbers does not say better: with two sequences every axis has a winner and a
@@ -195,9 +195,14 @@ def _usable(table: pd.DataFrame, columns) -> list[str]:
 def within_set_ranks(table: pd.DataFrame, columns=DEFAULT_AXES) -> pd.DataFrame:
     """Percentile rank of each sequence on each axis, within this set only.
 
-    100 is the best of the submitted sequences on that axis and 0 the worst,
-    with ties sharing the mean of their positions. Indexed by sequence name,
-    one column per axis.
+    100 is the best of the submitted sequences on that axis, with ties sharing
+    the mean of their positions. Indexed by sequence name, one column per axis.
+
+    The worst is not 0 and cannot be. `rank(pct=True)` divides positions by the
+    number of sequences, so the bottom cell is 100/n: 12.5 for eight sequences,
+    33.3 for three, and 50.0 when two are compared. An earlier version of this
+    docstring and of MANUAL.md said "0 the worst", which would have a reader
+    expect a floor that never appears on screen.
 
     **The ranks are relative to what you submitted and to nothing else.** Add a
     ninth sequence and all eight others move. A sequence ranked 100 is the best
