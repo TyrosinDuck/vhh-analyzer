@@ -102,6 +102,7 @@ a fresh export and rerunning that script.
 | `sections/bench.py` | the Batch & QC screen |
 | `sections/buffers.py` | the Buffers & media screen |
 | `sections/phage.py` | the Phage & panning screen |
+| `sections/plates.py` | the Plates & dilutions screen |
 | `sections/cloning.py` | the In-silico cloning screen |
 | `sections/genes.py` | the Gene diagnosis screen |
 | `sections/sequencing.py` | the Sanger screen |
@@ -113,6 +114,7 @@ a fresh export and rerunning that script.
 Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
 `structure.py`, `codons.py`, `bench.py`, `buffers.py`, `repertoire.py`,
 `sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `ranking.py`,
+`plates.py`,
 `specificity.py`, `tnp.py`, `sabdab.py`, `library.py`, `reference.py`,
 `af3.py`. Plus three files that describe the app rather than
 compute with it: `session.py`, which writes the inputs of a run to a file so
@@ -186,6 +188,7 @@ getting around and one section each after that.
 |  | **🧬 In-silico cloning** | Load a backbone and an insert, and get the restriction enzymes that open the vector in the right place without cutting the VHH, plus which of your primers actually bind. |
 | **Bench** | **⚗️ Batch & QC** | The arithmetic between a purified protein and the next experiment: concentration from a measured A280, whether the measured mass is the protein you think it is, how much labelling reagent to add, what each purification step recovered, and the batch sheet that leaves with the tube. |
 |  | **🧂 Buffers & media** | What to weigh for a buffer or a medium at any volume and concentration factor, with the hydrate of each salt you actually have: the mass follows from its formula. The recipes are the laboratory's own, kept in the repository. |
+|  | **🔲 Plates & dilutions** | What to pipette for a dilution series, with the carry-over that a series by transfer needs and that is invisible when it is forgotten, and a plate map that says which well holds what. Neither needs a sequence. |
 |  | **🦠 Phage & panning** | The phage stocks that go into each round of panning: the titre from an A260, by two routes shown side by side, and how much stock a solid-phase or liquid-phase round takes. No sequence needed. |
 
 <!-- /generated: sections -->

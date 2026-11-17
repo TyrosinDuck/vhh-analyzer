@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.17a"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -645,6 +645,12 @@ SECTIONS = {
                 "actually have: the mass follows from its formula. The "
                 "recipes are the laboratory's own, kept in the repository.",
                 "Bench"),
+    "plates": ("🔲", "Plates & dilutions",
+               "What to pipette for a dilution series, with the carry-over "
+               "that a series by transfer needs and that is invisible when "
+               "it is forgotten, and a plate map that says which well holds "
+               "what. Neither needs a sequence.",
+               "Bench"),
     "phage": ("🦠", "Phage & panning",
               "The phage stocks that go into each round of panning: the "
               "titre from an A260, by two routes shown side by side, and how "

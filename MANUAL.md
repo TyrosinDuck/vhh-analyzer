@@ -72,6 +72,7 @@ register, available from every screen.
 | | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
 | **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered, how much culture a target takes, the batch sheet, and a year of batch sheets side by side |
 | | 🧂 **Buffers & media** | what to weigh for a buffer or a medium, at any volume and concentration, with the hydrate you have |
+| | 🔲 **Plates & dilutions** | what to pipette for a dilution series, and which well holds what |
 | | 🦠 **Phage & panning** | the titre of a phage stock, and how much of it a round of panning takes |
 | *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
 | | 🔎 **Provenance** | every constant the app computes with, what it is worth, and where it came from |
@@ -2298,6 +2299,57 @@ alternative. Which lysines are actually *accessible* is a structural question
 this cannot answer: upload a model to §4.
 
 
+### 5.3b Couple two proteins
+
+The other half of **Conjugate**. That view adds a small reagent that arrives
+as a weighed vial at a known molarity; this one adds a second protein, which
+arrives as a solution in mg/mL, so the arithmetic runs through two molar
+masses instead of one. A SpyTag/SpyCatcher pair, a sortase ligation, an
+enzymatic conjugation.
+
+    nmol A = volume (uL) x concentration (mg/mL) x 1000 / molar mass (Da)
+    nmol B = nmol A x molar ratio
+    mass B (ug) = nmol B x molar mass B (Da) / 1000
+    volume B (uL) = mass B (ug) / concentration B (mg/mL)
+
+the last line because a mg/mL is a ug/uL, which is the identity worth keeping
+in your head when checking this at the bench.
+
+**Neither molar mass is prefilled.** A comes from the sequence picked at the
+top when there is one, and is theoretical: computed from the sequence, not
+measured. B is always typed, because B is usually not the protein the screen
+is pointed at; run it through the analysis section to get its mass from its
+sequence. The view refuses to compute until it has both, for the reason the
+rest of this screen refuses: an invented mass would set the volume of B to
+add, which is the one number this view exists to give.
+
+**The molar ratio decides which partner is limiting.** At 1:1 they are
+matched. Above 1 the excess is named in nanomoles, with the reminder that a
+covalent one-to-one couple cannot consume it: it stays in the tube unless it
+is removed afterwards. Below 1, B becomes the limiting partner.
+
+**The conjugate mass asks whether the bond is a condensation.** It is not
+assumed. A condensation releases one water, so the conjugate weighs the sum
+of the two partners minus one water; an isopeptide bond, which is what a
+SpyTag/SpyCatcher pair forms, is a condensation. Another chemistry may not
+be. The app does not tabulate which pair does which, because that is a fact
+about your reaction, and a delta taken from a table nobody checks is how a
+wrong mass becomes a wrong identity. The water itself is not typed either: it
+is derived from its formula with the atomic weights the Buffers section uses.
+Both input masses are theoretical, so the conjugate mass is too. It is what
+to compare a measured mass against, not a measurement.
+
+**No yield is predicted.** The ratio says what to add for a stoichiometry.
+What fraction actually ligates depends on your partners and your conditions.
+The conjugate concentration the view reports is the one that would hold if
+every molecule of the limiting partner reacted: a ceiling, labelled as one.
+
+Two practical warnings. A volume of B below what can be pipetted accurately
+becomes a dilution of B, exactly as in Conjugate, with the note that the
+molar ratio is unchanged and the error on it is not. And if adding B dilutes
+A more than two-fold, the view says so, because a reaction that needs A to
+stay concentrated will not get it.
+
 ### 5.4 Purification balance
 
 What came out of each step of a preparation, how much of the previous step
@@ -2781,6 +2833,105 @@ enriches exactly the same way. Sequencing the output is what distinguishes
 them, which is what the Sanger sequencing section is for.
 
 The table downloads as CSV.
+
+---
+
+## 7b. Plates & dilutions
+
+The fourth section of the **Bench** group, and the one that needs nothing
+from the others: a dilution is a volume and a factor, a plate map is a grid.
+Two views, and neither asks for a sequence.
+
+**Nothing here models an assay.** A layout says what goes where, not what the
+readings will mean. A series says what to pipette, not what the curve will
+look like. The only constant in the section is the 2 uL below which this app
+treats a volume as not worth pipetting, which it shares with the conjugation
+planner in Batch & QC.
+
+### 7b.1 Dilution series
+
+The calculation that is easy to get wrong without noticing, which is why it
+is worth writing down once.
+
+**Two protocols, and the app does not choose between them.** They are not two
+estimates of one number.
+
+- **By transfer**, each position made from the one before it. One pipette
+  setting does the whole series, however deep it goes, and the pipetting
+  error of every step travels into every step after it.
+- **Independently**, each position made from the stock. No error travels, at
+  the cost of more stock and of volumes that stop being pipettable as the
+  dilution deepens.
+
+**The carry-over is the point of the first one.** Pipetting a volume V_t into
+the next position, which holds V_d of diluent, dilutes by (V_t + V_d) / V_t.
+A position that must still hold its final volume *after* passing V_t on has
+therefore to be made up with the final volume **plus** the transfer, and the
+transfer that satisfies that is
+
+    V_t = V_final / (fold - 1)
+
+from which the diluent per position comes out as the final volume itself: the
+same volume of diluent everywhere, and the same transfer everywhere. Forget
+the carry-over and nothing complains; the last positions simply come out
+short, or the last dilution is not the one you meant.
+
+At 2-fold the transfer equals the final volume, which is the case worth
+keeping in your head: 100 uL of diluent in every position, 100 uL moved along
+each time. At 10-fold, 100 uL of diluent takes an 11.1 uL transfer.
+
+The last position keeps the transfer it never passes on. The screen says so
+rather than folding it into the figures: discard it, or accept that one
+position holds a little more than the others.
+
+**When a volume is not pipettable** the screen says which volume would fix
+it rather than only refusing. A transfer follows from the final volume and
+the fold, so the final volume is the knob: at 10-fold steps, a 2 uL minimum
+needs at least 18 uL per position. In the independent protocol the same
+warning arrives per position, with the suggestion to make an intermediate
+dilution first.
+
+Nothing is converted between units. The unit you type is carried into the
+table and the arithmetic is the same whatever it says.
+
+### 7b.2 Plate layout
+
+Which well holds what, for a plate you are about to set up. Give the samples,
+the dilution points, the replicates and the controls, pick 96 or 384, and the
+map comes out as a grid and as one row per well.
+
+**The placement is predictable rather than packed.** Wells fill in order, and
+each replicate of each sample starts at the top of a fresh column, so the
+printed map matches the way the series is pipetted: the series runs down the
+column, the replicates sit side by side, and the next sample starts in the
+next column. Dilution-major order would interleave the replicates with the
+dilutions and put neither on an axis of the plate. No attempt is made to pack
+the plate, because a layout whose positions move when an unrelated sample is
+added is one nobody can check against the bench.
+
+Controls go after the samples, with the same number of replicates.
+
+**Leave the outer wells empty** is an option, not a recommendation. Many
+protocols leave the outer ring out, or fill it with buffer, because it
+evaporates differently from the middle of the plate. The app neither
+quantifies that effect nor takes a view on whether it matters for your assay:
+it places wells where it is told it may, and the usable count drops from 96
+to 60 when the ring is excluded.
+
+A series longer than a column is refused rather than wrapped across two,
+because a wrapped series reads on the printed map as two different samples.
+Turn off one group per column if you would rather pack the plate.
+
+**What does not fit is counted, not dropped quietly.** Ask for more wells
+than the format holds and the screen says how many did not fit and over how
+many plates the run would have to be split.
+
+The map carries no volumes. What a well takes depends on the plate and the
+protocol rather than on the count of its wells, so no working volume is
+tabulated anywhere in this section.
+
+Two downloads: the grid, as a person reads it, and one row per well, which is
+the form a plate reader or a database ingests.
 
 ---
 

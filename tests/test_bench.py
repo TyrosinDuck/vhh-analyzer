@@ -1072,3 +1072,101 @@ def test_a_sequence_the_provider_cannot_characterise_is_rejected_not_silent():
                                       properties_for=angry, version="1.1.0")
     assert not out["rows"]
     assert "could not be characterised" in out["rejected"][0]["reason"]
+
+
+# --------------------------------------------------------------------------
+# Coupling two proteins
+# --------------------------------------------------------------------------
+# Checked by hand: 100 uL at 1 mg/mL of a 14000 Da protein is 0.1 mg, which is
+# 0.1e-3 / 14000 mol = 7.143 nmol. At 1:1 the partner is the same nmol, and
+# 7.143 nmol of a 28000 Da protein weighs 200 ug, which at 2 mg/mL is 100 uL
+# because a mg/mL is a ug/uL.
+
+def test_the_pair_arithmetic_matches_a_hand_calculation():
+    out = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0)
+
+    assert out["a_nmol"] == pytest.approx(7.143, abs=1e-3)
+    assert out["b_nmol"] == pytest.approx(7.143, abs=1e-3)
+    assert out["b_ug"] == pytest.approx(200.0, abs=0.1)
+    assert out["b_volume_ul"] == pytest.approx(100.0, abs=0.1)
+    assert out["final_volume_ul"] == pytest.approx(200.0)
+
+
+def test_the_conjugate_mass_loses_one_water_only_when_asked():
+    """A condensation releases one water; another chemistry does not.
+
+    Asked rather than tabulated, because which pair forms which bond is a
+    fact about the user's reaction. The water is derived from its formula
+    with the atomic weights in `buffers`, so the number is not typed here
+    either.
+    """
+    import buffers
+
+    plain = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0)
+    condensed = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0,
+                                        loses_water=True)
+
+    assert plain["conjugate_mw_da"] == pytest.approx(42000.0)
+    assert plain["water_lost_da"] == 0.0
+    assert condensed["conjugate_mw_da"] == pytest.approx(
+        42000.0 - buffers.molar_mass("H2O"))
+    assert condensed["water_lost_da"] == pytest.approx(18.015, abs=1e-3)
+
+
+def test_the_limiting_partner_caps_the_conjugate():
+    """A one-to-one couple cannot consume an excess, so the ceiling is the
+    smaller of the two, and the excess is named rather than ignored."""
+    out = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0,
+                                  molar_ratio=2.0)
+
+    assert out["limiting"] == "A"
+    assert out["b_nmol"] == pytest.approx(2 * out["a_nmol"])
+    assert out["conjugate_nmol_max"] == pytest.approx(out["a_nmol"])
+    assert any("in excess" in note for note in out["notes"])
+
+
+def test_less_than_one_equivalent_makes_b_the_limiting_partner():
+    out = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0,
+                                  molar_ratio=0.5)
+
+    assert out["limiting"] == "B"
+    assert out["conjugate_nmol_max"] == pytest.approx(out["b_nmol"])
+
+
+def test_the_conjugate_concentration_is_a_ceiling_not_a_prediction():
+    """Every molecule of the limiting partner reacting is the best case, and
+    the figure is only that: nothing here models a ligation yield."""
+    out = bench.protein_pair_plan(100.0, 1.0, 14000.0, 2.0, 28000.0)
+
+    # 7.143 nmol x 42000 Da = 300 ug, in 200 uL, is 1.5 mg/mL.
+    assert out["conjugate_mg_per_ml_max"] == pytest.approx(1.5, abs=1e-3)
+
+
+def test_an_unpipettable_partner_volume_becomes_a_dilution():
+    """The same answer the conjugation planner gives, for the same reason."""
+    out = bench.protein_pair_plan(20.0, 0.05, 14000.0, 10.0, 28000.0)
+
+    assert out["b_volume_ul"] < bench.PIPETTE_MINIMUM_UL
+    assert out["dilution"]["factor"] == 10
+    assert out["dilution"]["volume_ul"] == pytest.approx(2.0, abs=0.1)
+    assert out["dilution"]["diluted_mg_per_ml"] == pytest.approx(1.0)
+    assert any("cannot be pipetted" in note for note in out["notes"])
+
+
+def test_a_partner_that_dilutes_the_protein_says_so():
+    out = bench.protein_pair_plan(100.0, 1.0, 14000.0, 0.5, 28000.0)
+
+    assert out["dilution_of_a"] > 2.0
+    assert any("dilutes A" in note for note in out["notes"])
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"a_volume_ul": 0.0}, {"a_mg_per_ml": 0.0}, {"a_mw_da": 0.0},
+    {"b_mg_per_ml": 0.0}, {"b_mw_da": 0.0}, {"molar_ratio": 0.0},
+])
+def test_the_pair_plan_refuses_a_missing_number(kwargs):
+    args = {"a_volume_ul": 100.0, "a_mg_per_ml": 1.0, "a_mw_da": 14000.0,
+            "b_mg_per_ml": 2.0, "b_mw_da": 28000.0, "molar_ratio": 1.0}
+    args.update(kwargs)
+    with pytest.raises(ValueError):
+        bench.protein_pair_plan(**args)

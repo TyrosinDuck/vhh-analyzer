@@ -1246,6 +1246,11 @@ NOT_SCIENTIFIC: dict[str, str] = {
                       "so a volume unit cannot be silently treated as a mass",
     "constructs.FORMATS": "how many VHH domains monovalent, bivalent and "
                           "biparatopic carry, which is what the words mean",
+    "plates.PLATE_FORMATS": "the rows and columns of a 96 and a 384 well "
+                            "plate, which is what those names mean. No "
+                            "working volume is tabulated with them: what a "
+                            "well holds depends on the plate and the "
+                            "protocol, not on the count of its wells",
 
     # Widget defaults and bounds. A default is recorded with every run rather
     # than assumed, which is why it is not a hidden constant.
@@ -1263,6 +1268,23 @@ NOT_SCIENTIFIC: dict[str, str] = {
                                 "could show",
     "sabdab.DEFAULT_TOP": "how many nearest structures the table shows before "
                           "it is expanded",
+    "plates.plate_layout(plate)": "which plate format a layout is drawn for "
+                                  "when none is named; 96 because it is the "
+                                  "commoner one, and the screen always picks "
+                                  "it explicitly",
+    "plates.plate_layout(dilution_points)": "one point per sample unless a "
+                                            "series is asked for, which is "
+                                            "the layout with no dilution in "
+                                            "it at all",
+    "plates.plate_layout(replicates)": "one well per sample unless replicates "
+                                       "are asked for; a count of wells, not "
+                                       "a recommendation about how many "
+                                       "replicates an assay needs",
+    "bench.protein_pair_plan(molar_ratio)": "one to one, which is the "
+                                            "stoichiometry of a covalent "
+                                            "couple between two proteins and "
+                                            "not a suggestion about how much "
+                                            "excess to drive it with",
     "vhh_core.PLOT_STYLE": "figure resolution and spines",
 
     # Rules about text and positions rather than quantities.

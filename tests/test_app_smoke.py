@@ -520,6 +520,79 @@ def test_sequence_input_survives_leaving_the_section(app):
         "the sequence input was lost on leaving and re-entering the section"
 
 
+def test_the_dilution_series_computes_on_the_screen(app):
+    """The carry-over, driven through the screen rather than the function.
+
+    Checked by hand: at 2-fold the transfer is the final volume, V/(2-1), so
+    the screen's defaults (2-fold, 100 uL) must show 100 uL transferred and
+    100 uL of diluent in every position.
+    """
+    from sections import plates as plates_screen
+
+    _goto(app, "🔲 Plates & dilutions")
+    _no_failure(app, "plates section")
+
+    selector = [r for r in app.radio if r.label == "View"]
+    assert selector, "the plates view selector did not render"
+    assert list(selector[0].options) == list(plates_screen.VIEWS)
+
+    transfers = [m for m in app.metric if m.label == "Transfer each step"]
+    assert transfers, "the transfer metric did not render"
+    assert "100" in transfers[0].value, \
+        f"expected a 100 uL transfer at 2-fold, got {transfers[0].value}"
+
+    final = [m for m in app.metric if m.label == "Final dilution"]
+    assert final and "128" in final[0].value, \
+        "eight 2-fold steps end at 1:128"
+
+
+def test_the_plate_layout_draws_a_map(app):
+    """The second view, with the samples the screen starts with."""
+    from sections import plates as plates_screen
+
+    _goto(app, "🔲 Plates & dilutions")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        plates_screen.V_LAYOUT).run()
+    _no_failure(app, "plate layout")
+
+    used = [m for m in app.metric if m.label == "Wells used"]
+    assert used, "the well count did not render"
+    # Three samples at eight dilution points and two replicates is 48, plus
+    # the two controls the screen starts with, also in duplicate: 52.
+    assert used[0].value == "52", f"expected 52 wells used, got {used[0].value}"
+
+
+def test_coupling_two_proteins_refuses_before_both_masses(app):
+    """A prefilled mass would set the volume of B to add.
+
+    The same rule the other views of this screen follow, and the reason the
+    28000 Da that was briefly hard-coded here had to go.
+    """
+    from sections import bench as bench_screen
+
+    _goto(app, "⚗️ Batch & QC")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        bench_screen.V_PAIR).run()
+    _no_failure(app, "couple two proteins")
+
+    assert any("Nothing is assumed for you" in info.value for info in app.info), \
+        "the view computed without being given both molar masses"
+    assert not [m for m in app.metric if m.label == "Volume of B"], \
+        "a volume was offered before the masses were given"
+
+    app.session_state["pr_amw"] = 14000.0
+    app.session_state["pr_bmw"] = 28000.0
+    app.run()
+    _no_failure(app, "couple two proteins, with masses")
+
+    volume = [m for m in app.metric if m.label == "Volume of B"]
+    assert volume, "no volume of B after both masses were given"
+    # 100 uL at 1 mg/mL of 14000 Da is 7.143 nmol; the same nmol of a 28000 Da
+    # partner weighs 200 ug, which at 2 mg/mL is 100 uL.
+    assert "100" in volume[0].value, \
+        f"expected 100 uL of B, got {volume[0].value}"
+
+
 def test_bench_renders_every_view(app):
     """Every view of Batch & QC, with no sequence loaded.
 
@@ -530,7 +603,10 @@ def test_bench_renders_every_view(app):
     """
     from sections import bench as bench_screen
 
-    _click(app, "⚗️ Batch & QC")
+    # _goto rather than _click: the fixture is shared, so this test can
+    # inherit Batch & QC from the one before it, and the nav button for the
+    # section you are already on is disabled.
+    _goto(app, "⚗️ Batch & QC")
     _no_failure(app, "bench section")
 
     selector = [r for r in app.radio if r.label == "View"]

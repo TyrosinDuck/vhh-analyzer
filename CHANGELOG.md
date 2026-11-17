@@ -186,6 +186,67 @@ percentile by at most 0.49 point, below the decimal the app shows.
 
 ### Added
 
+- **A Plates & dilutions section**, in the Bench group, with two views and no
+  sequence asked for: like the phage titre, neither of them uses one.
+  **Dilution series** works out what to pipette, by either of the two
+  protocols that are actually used, and does not choose between them. Made by
+  transfer, one pipette setting does the whole series however deep it goes,
+  and the error of every step travels into the ones after it; made
+  independently from the stock, no error travels, at the cost of more stock
+  and of volumes that stop being pipettable. The carry-over is why the first
+  is worth writing down: a position that must still hold its final volume
+  after passing some on has to be made up with the final volume plus the
+  transfer, so the transfer is V_final / (fold - 1) and the diluent per
+  position is the final volume itself. Forget it and nothing complains, the
+  last positions simply come out short, or the last dilution is not the one
+  that was meant. When a volume is not pipettable the screen says which
+  volume would fix it rather than only refusing: at 10-fold steps a 2 uL
+  minimum needs 18 uL per position. The last position keeps the transfer it
+  never passes on, which is stated rather than folded into the figures.
+  **Plate layout** says which well holds what, on 96 or 384. The placement is
+  predictable rather than packed: each replicate of each sample starts at the
+  top of a fresh column, so the series runs down the column and the replicates
+  sit beside it, which is how the plate is pipetted. Dilution-major order
+  would interleave the two and put neither on an axis. Nothing is optimised,
+  because a layout whose positions move when an unrelated sample is added is
+  one nobody can check against the bench. A series longer than a column is
+  refused rather than wrapped across two, where it would read as two
+  different samples; a plate that overflows is counted, with the number of
+  plates the run would take. Leaving the outer ring empty is offered as an
+  option and nothing more: the app neither quantifies evaporation at the edges
+  nor takes a view on whether it matters for a given assay. The map carries no
+  volumes, since what a well holds depends on the plate and the protocol and
+  not on the count of its wells. It downloads as a grid and as one row per
+  well, which is the form a reader or a database ingests.
+  The arithmetic is in `plates.py`, importable from a notebook, and it takes
+  the pipettable minimum from `bench` rather than keeping a second one. The
+  home page diagram grew a box for it, which is why the canvas is 880 tall
+  and the DNA arrow runs back at y=800: the box went between the hub and the
+  buffers first, where it sat on top of a dashed label. Checked by rendering
+  the diagram and looking at it.
+- **Couple two proteins**, as a view of Batch & QC beside Conjugate. That one
+  adds a small reagent from a weighed vial at a known molarity; this one adds
+  a second protein from a solution in mg/mL, so the arithmetic runs through
+  two molar masses: a SpyTag/SpyCatcher pair, a sortase ligation, an
+  enzymatic conjugation. The molar ratio decides which partner is limiting,
+  the excess of the other is named in nanomoles with the reminder that a
+  one-to-one couple cannot consume it, and a volume of B too small to pipette
+  becomes a dilution of B, as in Conjugate.
+  Whether the bond is a condensation is **asked, not assumed**: a condensation
+  releases one water, so the conjugate weighs the sum minus one water, and an
+  isopeptide bond is one. The app does not tabulate which pair forms which
+  bond, because that is a fact about the user's reaction, and a delta from a
+  table nobody checks is how a wrong mass becomes a wrong identity. The water
+  is derived from its formula with the atomic weights in `buffers` rather than
+  typed. No yield is predicted: the conjugate concentration reported is what
+  would hold if every molecule of the limiting partner reacted, and is
+  labelled a ceiling.
+  Neither molar mass is prefilled. A comes from the sequence picked at the top
+  when there is one; B is always typed, and the view refuses until it has
+  both. The first build prefilled B with 28000 Da, which the regression test
+  guarding exactly that caught: an invented mass there would have set the
+  volume of B to add, which is the one number the view exists to give.
+
 - **A comparison view in the Triage family, which still refuses to score.**
   The triage table is the right shape for sorting and the wrong shape for
   "which of these eight differs from the others, and where". A second tab

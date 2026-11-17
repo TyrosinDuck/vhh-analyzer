@@ -33,7 +33,7 @@ __version__ = "2026.11.12c"
 # so the theme is handled inside it: `currentColor` follows the body colour,
 # and `shell.follow_app_theme` sets that colour from the app's theme (not the
 # operating system's, see there for why).
-FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
+FLOW_DIAGRAM = """<svg viewBox="0 0 900 880" xmlns="http://www.w3.org/2000/svg"
      style="width:100%;height:auto;max-width:900px" role="img"
      aria-label="How the nine sections feed each other. You supply the input
      yourself to Sanger sequencing (.ab1 files), Sequence analysis (sequences),
@@ -58,7 +58,7 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
      marker-end="url(#vhh-arrow)" stroke-linejoin="round">
     <path d="M 224 131 H 277 V 224 H 324"/>
     <path d="M 224 303 H 277 V 254 H 324"/>
-    <path d="M 124 340 V 680 H 878 V 297 H 866"/>
+    <path d="M 124 340 V 800 H 878 V 297 H 866"/>
   </g>
 
   <!-- Out of the analysis, as one trunk with four stubs rather than four
@@ -124,7 +124,7 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <text x="621" y="276">DNA</text>
     <text x="621" y="430">insert</text>
     <text x="621" y="584">properties</text>
-    <text x="470" y="696">DNA, straight to the diagnosis</text>
+    <text x="470" y="816">DNA, straight to the diagnosis</text>
   </g>
 
 <!--BOXES-->
@@ -149,6 +149,8 @@ FLOW_DIAGRAM = """<svg viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg"
     <text x="442" y="609" font-size="11" fill-opacity="0.68">titre, input per round</text>
 
     <text x="442" y="455" font-size="11" fill-opacity="0.68">what to weigh, form by form</text>
+
+    <text x="442" y="751" font-size="11" fill-opacity="0.68">carry-over, and which well</text>
   </g>
 <!--LEGEND-->
 </svg>"""
@@ -173,6 +175,13 @@ _BOXES = {
     "phage": (324, 558, 236, 70, 10),
     # Above it, same column, for the same reason: no arrow comes in.
     "buffers": (324, 404, 236, 70, 10),
+    # Bottom of the same column, under the phage titre. No arrow comes in
+    # here either: a dilution series and a plate map take nothing from the
+    # other sections. It went between the hub and the buffers first, where it
+    # sat on top of the dashed "you choose a recipe and a volume" label; the
+    # column grew downwards instead, which is why the canvas is 880 tall and
+    # the DNA arrow runs back at y=800.
+    "plates": (324, 700, 236, 70, 10),
 }
 _HUB = "analysis"
 
@@ -202,9 +211,9 @@ def flow_diagram() -> str:
     for i, name in enumerate(names):
         cx, colour = left + i * step, GROUPS[name][0]
         legend.append(
-            f'    <rect x="{cx - 45:.0f}" y="728" width="16" height="16" '
+            f'    <rect x="{cx - 45:.0f}" y="848" width="16" height="16" '
             f'rx="4" fill="{colour}" fill-opacity="0.35" stroke="{colour}"/>'
-            f'<text x="{cx - 22:.0f}" y="741" font-weight="600">{name}</text>')
+            f'<text x="{cx - 22:.0f}" y="861" font-weight="600">{name}</text>')
     legend.append("  </g>")
     # Box titles come from SECTIONS, so a renamed section is renamed here too.
     # Escaped, because a label may hold an "&" ("Batch & QC").

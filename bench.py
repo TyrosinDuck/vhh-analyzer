@@ -24,14 +24,15 @@ import pandas as pd
 
 __all__ = [
     "REAGENTS", "SOLVENTS", "concentration_from_a280", "dilution_plan",
-    "stock_preparation", "conjugation_plan", "mass_check", "MODIFICATIONS",
+    "stock_preparation", "conjugation_plan", "protein_pair_plan",
+    "mass_check", "MODIFICATIONS",
     "PIPETTE_MINIMUM_UL", "desalting_column", "PURIFICATION_STEPS",
     "purification_balance", "CULTURE_ROUTES", "culture_for_target",
     "BATCH_RECORD_SCHEMA", "batch_record", "batch_record_inputs",
     "compare_batch_records", "__version__",
 ]
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 
 # --------------------------------------------------------------------------
@@ -283,6 +284,118 @@ def conjugation_plan(protein_volume_ul: float, protein_mg_per_ml: float,
         "co_solvent_pct": round(co_solvent_pct, 1),
         "dilution": dilution,
         "desalting": desalting_column(final_ul),
+        "notes": notes,
+    }
+
+
+def protein_pair_plan(a_volume_ul: float, a_mg_per_ml: float, a_mw_da: float,
+                      b_mg_per_ml: float, b_mw_da: float,
+                      molar_ratio: float = 1.0,
+                      loses_water: bool = False) -> dict:
+    """How much of protein B to add to protein A, for a wanted molar ratio.
+
+    For a covalent couple between two proteins rather than between a protein
+    and a small reagent: a SpyTag/SpyCatcher pair, a sortase ligation, an
+    enzymatic conjugation. `conjugation_plan` above is the other case, where
+    the second partner comes as a weighed vial at a known molarity; here it
+    comes as a protein solution at a concentration in mg/mL, so the arithmetic
+    runs through two molar masses instead of one.
+
+        nmol A = volume (uL) x concentration (mg/mL) x 1000 / molar mass (Da)
+        nmol B = nmol A x molar ratio
+        mass B (ug) = nmol B x molar mass B (Da) / 1000
+        volume B (uL) = mass B (ug) / concentration B (mg/mL)
+
+    the last line because a mg/mL is a ug/uL, which is the identity that makes
+    this checkable in your head.
+
+    ``loses_water`` is asked rather than assumed. A condensation, which an
+    isopeptide bond is, releases one water, so the conjugate weighs the sum of
+    the two partners minus one water; a chemistry that forms no such bond
+    weighs the plain sum. The app does not tabulate which pair does which,
+    because that is a fact about your chemistry and getting it from a table
+    nobody checks is how a wrong mass becomes a wrong identity. The water is
+    the average molar mass derived from the atomic weights in `buffers`, not a
+    monoisotopic mass, because what it is subtracted from here is an average
+    molar mass computed from sequence.
+
+    **Nothing here predicts a yield.** The ratio says what to add for a
+    stoichiometry; what fraction actually ligates depends on the partners and
+    the conditions. The conjugate concentration returned is therefore the one
+    that would hold if every molecule of the limiting partner reacted, which
+    is an upper bound and is labelled as such.
+    """
+    for name, value in (("volume of A", a_volume_ul),
+                        ("concentration of A", a_mg_per_ml),
+                        ("molar mass of A", a_mw_da),
+                        ("concentration of B", b_mg_per_ml),
+                        ("molar mass of B", b_mw_da),
+                        ("molar ratio", molar_ratio)):
+        if value <= 0:
+            raise ValueError(f"the {name} must be positive")
+
+    a_nmol = a_volume_ul * a_mg_per_ml * 1000.0 / a_mw_da
+    b_nmol = a_nmol * molar_ratio
+    b_ug = b_nmol * b_mw_da / 1000.0
+    b_volume_ul = round(b_ug / b_mg_per_ml, 3)
+    final_ul = a_volume_ul + b_volume_ul
+
+    # One water per bond, derived from a formula rather than typed.
+    water = 0.0
+    if loses_water:
+        from buffers import molar_mass
+        water = molar_mass("H2O")
+    conjugate_mw = a_mw_da + b_mw_da - water
+
+    # The limiting partner caps how much conjugate can exist at all.
+    limiting = "A" if molar_ratio >= 1.0 else "B"
+    conjugate_nmol = min(a_nmol, b_nmol)
+    conjugate_mg_per_ml = conjugate_nmol * conjugate_mw / 1000.0 / final_ul
+
+    notes: list[str] = []
+    dilution = None
+    if b_volume_ul < PIPETTE_MINIMUM_UL:
+        factor = 10
+        while b_volume_ul * factor < PIPETTE_MINIMUM_UL:
+            factor *= 10
+        dilution = {
+            "factor": factor,
+            "diluted_mg_per_ml": b_mg_per_ml / factor,
+            "volume_ul": round(b_volume_ul * factor, 2),
+        }
+        notes.append(
+            f"{b_volume_ul:.2f} uL cannot be pipetted accurately. Dilute B "
+            f"1:{factor} and add {b_volume_ul * factor:.1f} uL of that "
+            f"instead; the molar ratio is unchanged, the error on it is not.")
+
+    if molar_ratio != 1.0:
+        excess_nmol = abs(b_nmol - a_nmol)
+        notes.append(
+            f"At {molar_ratio:g}:1 the limiting partner is {limiting}, and "
+            f"{excess_nmol:.3f} nmol of the other is in excess. A covalent "
+            f"one-to-one couple cannot consume it, so it stays in the tube "
+            f"unless it is removed afterwards.")
+
+    dilution_of_a = final_ul / a_volume_ul
+    if dilution_of_a > 2.0:
+        notes.append(
+            f"Adding B dilutes A {dilution_of_a:.1f}-fold. Concentrate B "
+            f"first if the reaction needs A to stay where it is.")
+
+    return {
+        "a_nmol": round(a_nmol, 3),
+        "a_ug": round(a_volume_ul * a_mg_per_ml, 2),
+        "b_nmol": round(b_nmol, 3),
+        "b_ug": round(b_ug, 2),
+        "b_volume_ul": b_volume_ul,
+        "final_volume_ul": round(final_ul, 2),
+        "limiting": limiting,
+        "conjugate_mw_da": round(conjugate_mw, 3),
+        "water_lost_da": round(water, 4),
+        "conjugate_nmol_max": round(conjugate_nmol, 3),
+        "conjugate_mg_per_ml_max": round(conjugate_mg_per_ml, 4),
+        "dilution_of_a": round(dilution_of_a, 2),
+        "dilution": dilution,
         "notes": notes,
     }
 

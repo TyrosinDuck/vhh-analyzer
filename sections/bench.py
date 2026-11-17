@@ -27,7 +27,7 @@ from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.17a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -36,6 +36,7 @@ __version__ = "2026.11.16a"
 V_QUANTIFY = "🧮 Quantify"
 V_MASS = "⚖️ Mass check"
 V_CONJUGATE = "🏷️ Conjugate"
+V_PAIR = "🔗 Couple two proteins"
 V_BALANCE = "🧫 Purification"
 V_PLAN = "📐 How much culture"
 V_BATCH = "📄 Batch sheet"
@@ -79,6 +80,7 @@ def _views() -> dict:
         V_QUANTIFY: (_quantify, True),
         V_MASS: (_mass, True),
         V_CONJUGATE: (_conjugate, True),
+        V_PAIR: (_pair, True),
         V_BALANCE: (_balance, True),
         V_PLAN: (_plan, False),
         V_BATCH: (_batch, True),
@@ -588,6 +590,131 @@ def _conjugate(t: Tube) -> None:
             st.dataframe(sites, hide_index=True, **FIT)
             data_download("Labelling sites", sites, "labelling_sites.csv",
                           key="dl_conjugate_sites")
+
+
+# --------------------------------------------------------------------------
+def _pair(t: Tube) -> None:
+    props = t.props
+
+    st.subheader("Couple two proteins")
+    st.markdown(
+        "For a covalent couple between two proteins rather than between a "
+        "protein and a small reagent: a SpyTag/SpyCatcher pair, a sortase "
+        "ligation, an enzymatic conjugation. **Conjugate** is the other case, "
+        "where the partner comes as a weighed vial at a known molarity; here "
+        "it comes as a protein solution in mg/mL, so the arithmetic runs "
+        "through two molar masses.")
+    st.info(
+        "**No yield is predicted.** The ratio says what to add for a "
+        "stoichiometry. What fraction actually ligates depends on your "
+        "partners and conditions, so the conjugate concentration below is "
+        "what would hold if every molecule of the limiting partner reacted: "
+        "an upper bound.", icon="🔗")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Protein A**, the one in the tube")
+        a_vol = st.number_input("Volume of A (uL)", 0.1, 1e6, 100.0, 10.0,
+                                key="pr_avol")
+        a_conc = st.number_input("Concentration of A (mg/mL)", 0.0001, 1000.0,
+                                 1.0, 0.1, format="%.4f", key="pr_aconc")
+        a_mw = st.number_input(
+            "Molar mass of A (Da)", 0.0, 1e7,
+            float(props["mw_da"]) if props else None, 1.0, key="pr_amw",
+            placeholder="from a sequence, or type it",
+            help="From the sequence picked at the top when there is one, "
+                 "which is theoretical: computed from the sequence, not "
+                 "measured.")
+    with right:
+        st.markdown("**Protein B**, the partner you add")
+        b_conc = st.number_input("Concentration of B (mg/mL)", 0.0001, 1000.0,
+                                 2.0, 0.1, format="%.4f", key="pr_bconc")
+        # No fallback here either, and B never comes from the sequence picker:
+        # it is the partner, not the protein the screen is pointed at. An
+        # invented molar mass would set the volume to add, which is the one
+        # number this view exists to give.
+        b_mw = st.number_input(
+            "Molar mass of B (Da)", 0.0, 1e7, None, 1.0, key="pr_bmw",
+            placeholder="from a sequence, or type it",
+            help="Typed, because B is usually not the sequence this screen "
+                 "is pointed at. Run it through the analysis section to get "
+                 "its mass from its sequence.")
+        ratio = st.number_input(
+            "Molar ratio B:A", 0.01, 100.0, 1.0, 0.1, key="pr_ratio",
+            help="1:1 for a stoichiometric couple. Above 1 drives the "
+                 "reaction with an excess of B that a one-to-one couple "
+                 "cannot consume.")
+
+    # Asked rather than assumed: a condensation releases one water, and which
+    # chemistry a given pair uses is a fact about the user's reaction. The
+    # water itself is derived from a formula in `buffers`, not typed here.
+    loses_water = st.checkbox(
+        "The bond is a condensation, so it releases one water", value=False,
+        key="pr_water",
+        help="True of an isopeptide bond, which is what a SpyTag/SpyCatcher "
+             "pair forms. The app does not tabulate which pair does which: "
+             "that is your chemistry, and a delta taken from a table nobody "
+             "checks is how a wrong mass becomes a wrong identity.")
+
+    if not a_mw or not b_mw:
+        st.info(
+            "Give both molar masses, by loading a sequence above for A and "
+            "typing B. Nothing is assumed for you: a prefilled mass would set "
+            "the volume to add and make this read like a result.")
+        return
+
+    try:
+        out = bn.protein_pair_plan(a_vol, a_conc, a_mw, b_conc, b_mw,
+                                   molar_ratio=ratio,
+                                   loses_water=loses_water)
+    except ValueError as exc:
+        st.error(f"That couple cannot be planned: {exc}")
+        return
+
+    cards = st.columns(4)
+    with cards[0]:
+        st.metric("A in the tube", f"{out['a_nmol']:.3f} nmol")
+    with cards[1]:
+        st.metric("B to add", f"{out['b_nmol']:.3f} nmol")
+    with cards[2]:
+        st.metric("Volume of B", f"{out['b_volume_ul']:.2f} uL")
+    with cards[3]:
+        st.metric("Final volume", f"{out['final_volume_ul']:.1f} uL")
+
+    st.caption(
+        f"{out['b_ug']:.1f} ug of B into {out['a_ug']:.1f} ug of A. The "
+        f"limiting partner is **{out['limiting']}**, so at most "
+        f"{out['conjugate_nmol_max']:.3f} nmol of conjugate can exist, which "
+        f"in {out['final_volume_ul']:.1f} uL is "
+        f"{out['conjugate_mg_per_ml_max']:.3f} mg/mL. That is a ceiling, not "
+        f"a prediction.")
+
+    mass = st.columns(2)
+    with mass[0]:
+        st.metric("Conjugate molar mass", f"{out['conjugate_mw_da']:.1f} Da")
+    with mass[1]:
+        st.metric("A diluted by", f"{out['dilution_of_a']:.2f}x")
+    if out["water_lost_da"]:
+        st.caption(
+            f"The sum of the two masses minus one water "
+            f"({out['water_lost_da']:.3f} Da, derived from its formula with "
+            f"the atomic weights in the buffers module). Both inputs are "
+            f"theoretical masses, so this is one too: it is what to compare a "
+            f"measured mass against, not a measurement.")
+    else:
+        st.caption(
+            "The plain sum of the two masses, since no condensation was "
+            "declared. Both inputs are theoretical, so this is too.")
+
+    if out["dilution"]:
+        d = out["dilution"]
+        st.warning(
+            f"Dilute B 1:{d['factor']} to {d['diluted_mg_per_ml']:.4f} mg/mL "
+            f"and add {d['volume_ul']:.1f} uL of that instead.")
+    for note in out["notes"]:
+        st.info(note)
+
+    usage_prompt("Batch & QC, couple two proteins")
 
 
 # --------------------------------------------------------------------------

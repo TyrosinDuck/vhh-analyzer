@@ -853,9 +853,14 @@ def test_the_bench_screen_prefills_no_extinction_coefficient_or_mass():
     source = (ROOT / "sections" / "bench.py").read_text(encoding="utf-8")
     assert "28000" not in source
     assert "14000.0" not in source
-    # Each of the three views that needs them has to stop, not assume.
-    assert source.count("from a sequence, or type it") == 5
-    assert source.lower().count("nothing is assumed for you") == 3
+    # Each of the views that needs them has to stop, not assume. The counts
+    # rose with "Couple two proteins", which asks for two molar masses and
+    # neither of them from a default: A comes from the sequence picked above
+    # when there is one, B is always typed, and the view refuses until it has
+    # both. An invented mass there would have set the volume of B to add,
+    # which is the one number that view exists to give.
+    assert source.count("from a sequence, or type it") == 7
+    assert source.lower().count("nothing is assumed for you") == 4
 
 
 def test_the_concentration_is_labelled_derived_not_measured():
