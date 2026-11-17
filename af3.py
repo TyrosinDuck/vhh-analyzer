@@ -64,7 +64,11 @@ __all__ = [
     "IPTM_HIGH", "IPTM_LOW", "MAX_MEMBER_BYTES", "__version__",
 ]
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.17a"
+
+# Distance under which a pair of tokens counts as being in contact, for the
+# fraction-under-close figure beside the interface PAE. On the register.
+CLOSE_CONTACT_ANGSTROM = 5.0
 
 IPTM_HIGH = 0.8
 IPTM_LOW = 0.6
@@ -311,7 +315,7 @@ def pair_pae_min(summary: dict, order: list, chain_a: str, chain_b: str):
 
 
 def interface_pae(full: dict, chain_a: str, chain_b: str,
-                  close: float = 5.0) -> dict | None:
+                  close: float = CLOSE_CONTACT_ANGSTROM) -> dict | None:
     """Summary of the PAE block between two chains.
 
     ``mean`` is over every token pair, both directions, and is dominated by the

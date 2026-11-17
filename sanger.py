@@ -39,11 +39,16 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.16c"
+__version__ = "2026.11.17a"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
 # --------------------------------------------------------------------------- #
+
+# Error probability Mott's modified trimming algorithm scores each base
+# against. Not a choice made here: it is the value Biopython's own ABI
+# reader hard-codes, and the register says so.
+MOTT_CUTOFF = 0.05
 
 PELB_AA = "MKYLLPTAAAGLLLLAAQPAMA"      # pelB leader (pMES3 / pMECS)
 PELB_CORE = "AAQPAMA"                   # short anchor, survives truncated reads
@@ -129,7 +134,7 @@ DEFAULTS = {
 # Reading and trimming
 # --------------------------------------------------------------------------- #
 
-def mott_trim(quals, cutoff: float = 0.05) -> tuple[int, int]:
+def mott_trim(quals, cutoff: float = MOTT_CUTOFF) -> tuple[int, int]:
     """Mott's modified trimming algorithm, the one used by phred and Staden.
 
     Each base scores ``cutoff - P(error)``; the highest-scoring contiguous run

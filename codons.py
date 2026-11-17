@@ -43,7 +43,7 @@ __all__ = [
     "diagnose", "plot_diagnosis", "__version__",
 ]
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.17a"
 
 # Codons whose scarcity in E. coli is well established, these are the ones the
 # Rosetta and BL21-CodonPlus strains supplement with extra tRNA genes. The gene
@@ -467,7 +467,7 @@ def _gc(seq: str) -> float:
 def suggest_gc_fix(dna: str, regions: pd.DataFrame | None = None,
                    avoid_sites: dict | None = None,
                    gc_window: int = GC_WINDOW,
-                   max_homopolymer: int = 6,
+                   max_homopolymer: int = vc.MAX_HOMOPOLYMER,
                    allow_rare: bool = False,
                    strategy: str = "minimal",
                    min_usage: float = MIN_USAGE) -> dict:

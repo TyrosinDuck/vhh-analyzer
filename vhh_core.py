@@ -60,7 +60,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.16b"
+__version__ = "2026.11.17a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -1163,6 +1163,44 @@ def plot_secondary_structure(df: pd.DataFrame):
 TITRATION_GRID = (2.0, 12.0, 0.1)      # (first pH, last pH, step), as plotted
 
 
+# --------------------------------------------------------------------------- #
+# Working conventions, promoted from default arguments
+# --------------------------------------------------------------------------- #
+# These were written as literals in the signatures below, where the provenance
+# register could not see them and where nothing said what they were worth. They
+# are module constants now so that `provenance.resolve` can read the value the
+# app actually uses, and so that a reader meets the justification before the
+# function that applies it. Each is on the register; the register is where the
+# basis and the source are kept, and these comments say only what the number is.
+
+# Percent CDR3 identity at which two sequences are called one clonal family.
+FAMILY_IDENTITY_CUTOFF = 80.0
+
+# Shortest run of residues reported as an aggregation-prone region.
+APR_MIN_LENGTH = 3
+
+# Residues the weakest-window scan scores over. Not the profile window: the
+# profile is smoothed with the user's own setting, and this is the width of the
+# region reported back, which is why the two are separate numbers.
+WEAKEST_WINDOW_WIDTH = 7
+
+# Residues of smoothing on the Chou-Fasman profile, used by the profile, the
+# table and the figure, which is why it is one constant and not three.
+CHOU_FASMAN_WINDOW = 5
+
+# Longest run of one base a designed gene may carry before the optimiser treats
+# it as a synthesis risk. `codons.suggest_gc_fix` scores the same risk on an
+# existing gene and reads this value rather than repeating it: one rule, one
+# place. It lives here because `codons` imports this module and not the reverse.
+MAX_HOMOPOLYMER = 6
+
+# The GC band the reverse-translation optimiser balances a whole gene towards.
+# Deliberately not `codons.GC_LOW, GC_HIGH`, which is the wider band gene
+# diagnosis flags a local stretch against: that one asks "is this stretch
+# extreme", this one asks "where should the whole gene sit".
+OPTIMISER_GC_BAND = (0.40, 0.60)
+
+
 def titration_curves(seqs: dict[str, str]) -> pd.DataFrame:
     """Net charge against pH for each sequence: the data of the charge figure.
 
@@ -1571,7 +1609,7 @@ def pairwise_scores(a: str, b: str) -> tuple[float, float]:
 
 
 def cluster_families(seqs: dict[str, str], annotations: dict,
-                     cutoff: float = 80.0, linkage_method: str = "complete",
+                     cutoff: float = FAMILY_IDENTITY_CUTOFF, linkage_method: str = "complete",
                      require_same_length: bool = False,
                      region: str = "CDR3") -> dict:
     """Group sequences into clonal families on their CDR3.
@@ -1894,7 +1932,7 @@ def aggregation_profile(seq: str, ph: float | None = None,
 
 def aggregation_regions(profile: pd.DataFrame, annotation: dict | None = None,
                         threshold: float = APR_THRESHOLD,
-                        min_length: int = 3) -> pd.DataFrame:
+                        min_length: int = APR_MIN_LENGTH) -> pd.DataFrame:
     """Contiguous stretches whose smoothed score stays below ``threshold``."""
     rows, run = [], []
     for _, r in profile.iterrows():
@@ -1939,7 +1977,8 @@ def aggregation_summary(profile: pd.DataFrame, regions: pd.DataFrame) -> dict:
 
 
 def weakest_windows(profile: pd.DataFrame, annotation: dict | None = None,
-                    n: int = 3, width: int = 7) -> pd.DataFrame:
+                    n: int = 3,
+                    width: int = WEAKEST_WINDOW_WIDTH) -> pd.DataFrame:
     """The ``n`` lowest-scoring windows, whether or not they cross the threshold.
 
     A well-behaved VHH often has no region below the threshold at all, which
@@ -2762,7 +2801,7 @@ CHOU_FASMAN = {
 }
 
 
-def chou_fasman_profile(seq: str, window: int = 5) -> dict:
+def chou_fasman_profile(seq: str, window: int = CHOU_FASMAN_WINDOW) -> dict:
     """Per-residue helix and sheet propensities, plus a predicted state track.
 
     The state at each position is helix (H) when the smoothed helix propensity
@@ -2783,7 +2822,8 @@ def chou_fasman_profile(seq: str, window: int = 5) -> dict:
             "fractions": {s: round(counts[s] / len(seq), 3) for s in "HEC"}}
 
 
-def chou_fasman_table(seq: str, window: int = 5) -> pd.DataFrame:
+def chou_fasman_table(seq: str,
+                      window: int = CHOU_FASMAN_WINDOW) -> pd.DataFrame:
     """The Chou-Fasman figure as a table: propensities and state per residue.
 
     A reshaping of `chou_fasman_profile`, which is where the heuristic lives,
@@ -2808,7 +2848,8 @@ STATE_COLORS = {"H": "#c44e52", "E": "#4c72b0", "C": "#d9d9d9"}
 STATE_NAMES = {"H": "Helix", "E": "Sheet", "C": "Coil"}
 
 
-def plot_chou_fasman(seq: str, name: str = "", window: int = 5,
+def plot_chou_fasman(seq: str, name: str = "",
+                     window: int = CHOU_FASMAN_WINDOW,
                      annotation: dict | None = None):
     """Chou–Fasman propensity curves with a predicted-state track underneath."""
     prof = chou_fasman_profile(seq, window)
@@ -2934,9 +2975,11 @@ def _gc(seq: str) -> float:
 
 
 def reverse_translate(protein: str, avoid_sites: dict[str, str] | None = None,
-                      max_homopolymer: int = 6, add_stop: bool = True,
-                      stop_codon: str = "TAA", gc_max: float = 0.60,
-                      gc_min: float = 0.40) -> dict:
+                      max_homopolymer: int = MAX_HOMOPOLYMER,
+                      add_stop: bool = True,
+                      stop_codon: str = "TAA",
+                      gc_min: float = OPTIMISER_GC_BAND[0],
+                      gc_max: float = OPTIMISER_GC_BAND[1]) -> dict:
     """Back-translate a protein into E. coli codon-optimised DNA.
 
     Each residue first takes the most frequent E. coli codon; the sequence is

@@ -78,7 +78,7 @@ import pandas as pd
 
 import sabdab
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 __all__ = ["AA", "CdrSet", "FLAG_PERCENTILE", "N_FEATURES", "cdrs_from_annotation",
            "cdrs_regex", "cdrs_to_kmer", "model_cdrs", "observed_cdr_bounds",
@@ -91,6 +91,11 @@ __all__ = ["AA", "CdrSet", "FLAG_PERCENTILE", "N_FEATURES", "cdrs_from_annotatio
 DATA = Path(__file__).parent / "data" / "specificity"
 
 AA = "ACDEFGHIKLMNPQRSTVWY"
+
+# Length of the k-mers the shipped model counts. Not a choice made here: the
+# weights are the authors' 3-mer model, and `N_FEATURES` below is
+# 20 + 400 + 8000 because of it. Changing it would not match any model.
+KMER_K = 3
 
 # The percentile against the authors' clean pool at or above which this app
 # calls a sequence polyreactive. This app's own convention, not a measurement,
@@ -108,7 +113,7 @@ FLAG_PERCENTILE = 90.0
 # Featurisation
 # --------------------------------------------------------------------------- #
 
-def _kmer_index(k: int = 3) -> dict[str, int]:
+def _kmer_index(k: int = KMER_K) -> dict[str, int]:
     """The index space of the original implementation: 1-mers, then 2-mers, then 3-mers.
 
     The order matters and must not be touched: the shipped coefficients are
@@ -126,7 +131,7 @@ _KMER_TO_IDX = _kmer_index(3)
 N_FEATURES = len(_KMER_TO_IDX)
 
 
-def cdrs_to_kmer(seqs: Sequence[str], k: int = 3) -> np.ndarray:
+def cdrs_to_kmer(seqs: Sequence[str], k: int = KMER_K) -> np.ndarray:
     """L1-normalised k-mer frequency matrix, in the layout of Harvey et al.
 
     One row per sequence, `N_FEATURES` columns for k = 3. A sequence shorter

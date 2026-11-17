@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "UNCLASSIFIED", "entries", "resolve", "value_text",
@@ -940,6 +940,200 @@ _REGISTRY = (
         used_for="Buffers and media: every molar mass, which is computed from "
                  "the formula of the form you weigh rather than looked up.",
     ),
+
+    # --- working conventions, promoted out of default arguments ------------
+    # These were literals in a function signature until November 2026, where
+    # the completeness scan could not see them and nothing said what they were
+    # worth. Each is now a module constant, which is what lets `resolve` read
+    # the value the app really uses. The sources below were given by the
+    # author in November 2026, and they say which of three things each number
+    # is: a practice of this laboratory, a convention of the field that the
+    # laboratory teaches, or a default inherited from somebody else's code.
+    # None of the three is a measurement, and the basis says so.
+    Constant(
+        key="family_identity_cutoff",
+        label="CDR3 identity at which two sequences are one clonal family",
+        where=("vhh_core", "FAMILY_IDENTITY_CUTOFF"),
+        unit="per cent identity",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. No published "
+               "source: it is the laboratory's practice. It is also the most "
+               "consequential number in this group, because moving it merges "
+               "or splits families and nothing in the data says where it "
+               "should sit. The screen exposes it as a slider for that reason.",
+        used_for="Sequence analysis, Comparison: the clonal family grouping "
+                 "and the dendrogram drawn from it.",
+    ),
+    Constant(
+        key="apr_min_length",
+        label="Shortest run reported as an aggregation-prone region",
+        where=("vhh_core", "APR_MIN_LENGTH"),
+        unit="residues",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. A shorter "
+               "run is not reported as a region, which is a choice about what "
+               "is worth a row in a table and not a statement about what "
+               "aggregates.",
+        used_for="Sequence analysis, Developability: the aggregation-prone "
+                 "regions table.",
+    ),
+    Constant(
+        key="weakest_window_width",
+        label="Width of the weakest-window scan",
+        where=("vhh_core", "WEAKEST_WINDOW_WIDTH"),
+        unit="residues",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. Deliberately "
+               "not the profile window, which the user sets: the profile is "
+               "smoothed with their setting and this is the width of the "
+               "region reported back from it.",
+        used_for="Sequence analysis, Developability: the weakest windows "
+                 "table, which is drawn whether or not anything crosses the "
+                 "aggregation threshold.",
+    ),
+    Constant(
+        key="chou_fasman_window",
+        label="Smoothing window of the Chou-Fasman profile",
+        where=("vhh_core", "CHOU_FASMAN_WINDOW"),
+        unit="residues",
+        basis="convention",
+        source="A convention in common use with this method, taught at the "
+               "Center for Protein Engineering and used here for that reason, "
+               "recorded by J. Vaneyck in November 2026. The 1978 chapter is "
+               "cited for the propensity values themselves and says nothing "
+               "that fixes this window at five rather than four or six.",
+        used_for="Sequence analysis, Identity: the secondary-structure "
+                 "profile, its table and its figure, which share this value "
+                 "rather than carrying three copies of it.",
+    ),
+    Constant(
+        key="max_homopolymer",
+        label="Longest single-base run a designed gene may carry",
+        where=("vhh_core", "MAX_HOMOPOLYMER"),
+        unit="bases",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. Synthesis "
+               "vendors differ on where a homopolymer becomes a problem and "
+               "none is cited here, which is why the value is a convention "
+               "and not a vendor figure. `codons.suggest_gc_fix` reads this "
+               "constant rather than repeating it, so the rule applied to a "
+               "designed gene and the rule scored on an existing one cannot "
+               "drift apart.",
+        used_for="Sequence analysis, Outputs: the codon-optimised DNA. Gene "
+                 "diagnosis: the synonymous swaps offered for a GC-rich "
+                 "stretch, which must not create a longer run than this.",
+    ),
+    Constant(
+        key="optimiser_gc_band",
+        label="GC band the reverse-translation optimiser balances towards",
+        where=("vhh_core", "OPTIMISER_GC_BAND"),
+        unit="fraction GC, (low, high)",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. The code's "
+               "own comment gives the reasoning, that synthesis vendors flag "
+               "sequences above roughly 60% GC; no vendor is cited for that "
+               "figure, so it is a convention rather than a vendor limit. "
+               "Deliberately narrower than `codons.GC_LOW, GC_HIGH`, which is "
+               "the band a local stretch is called extreme against: that one "
+               "asks whether a stretch is extreme, this one asks where a "
+               "whole gene should sit.",
+        used_for="Sequence analysis, Outputs: the GC balancing pass of the "
+                 "codon optimiser, and the count of codons swapped for it.",
+    ),
+    Constant(
+        key="close_contact",
+        label="Distance under which two tokens count as in contact",
+        where=("af3", "CLOSE_CONTACT_ANGSTROM"),
+        unit="angstrom",
+        basis="convention",
+        source="A convention in common use in structural biology, taught at "
+               "the Center for Protein Engineering and used here for that "
+               "reason, recorded by J. Vaneyck in November 2026. Contact "
+               "cutoffs of 4, 4.5 and 5 angstrom are all in circulation and "
+               "no primary source is cited for this one.",
+        used_for="Structure, AlphaFold3 confidence: the fraction of "
+                 "interface token pairs reported as close, beside the "
+                 "interface PAE.",
+    ),
+    Constant(
+        key="mass_match_tolerance",
+        label="Window inside which a measured mass matches the sequence",
+        where=("bench", "MASS_MATCH_TOLERANCE_DA"),
+        unit="dalton",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. What an "
+               "intact LC-MS run can resolve depends on the instrument, and "
+               "nothing here records which instrument this was chosen for, so "
+               "it is editable on the screen and should be set to what your "
+               "own run supports.",
+        used_for="Batch and QC, Mass check: whether a measured mass is "
+                 "reported as matching, and which modifications are offered "
+                 "as explanations for a difference.",
+    ),
+    Constant(
+        key="min_anneal",
+        label="Bases of a primer that must anneal before it is said to bind",
+        where=("cloning", "MIN_ANNEAL_BASES"),
+        unit="bases",
+        basis="convention",
+        source="A convention in common use in molecular cloning, taught at "
+               "the Center for Protein Engineering and used here for that "
+               "reason, recorded by J. Vaneyck in November 2026. It is a "
+               "length, not a melting temperature, and no primary source is "
+               "cited for the figure.",
+        used_for="In-silico cloning: which of your primers are reported as "
+                 "binding the donor, and the amplicon the pair defines.",
+    ),
+    Constant(
+        key="occupancy_threshold",
+        label="Occupancy a reference position needs before it is sampled",
+        where=("generator", "OCCUPANCY_THRESHOLD"),
+        unit="fraction of the reference sequences",
+        basis="convention",
+        source="Working convention of the Center for Protein Engineering, "
+               "ULiege, recorded by J. Vaneyck in November 2026. A position "
+               "filled in fewer than this fraction of the reference sequences "
+               "is treated as an insertion the scaffold does not have, rather "
+               "than as a position to draw a residue for.",
+        used_for="Sequence analysis: the synthetic VHH generator, which "
+                 "positions of the reference matrix it samples at all.",
+    ),
+    Constant(
+        key="mott_cutoff",
+        label="Error probability Mott's trimming algorithm scores against",
+        where=("sanger", "MOTT_CUTOFF"),
+        unit="probability of error per base",
+        basis="convention",
+        source="Not chosen here and not this laboratory's: it is the value "
+               "Biopython's own ABI reader hard-codes, commented there as the "
+               "default cutoff for calculating a base score and citing the "
+               "phred and phrap documentation. Read out of Biopython's "
+               "`SeqIO.AbiIO._abi_trim` in November 2026. Kept rather than "
+               "chosen, so that a read trimmed here and a read trimmed by the "
+               "common tools are trimmed the same way.",
+        used_for="Sanger sequencing: where each read is trimmed, which "
+                 "decides what sequence is extracted from it.",
+    ),
+    Constant(
+        key="kmer_k",
+        label="Length of the k-mers the polyreactivity model counts",
+        where=("specificity", "KMER_K"),
+        unit="residues",
+        basis="published",
+        source="Fixed by the shipped model rather than chosen here: the "
+               "weights are the 3-mer logistic regression of Harvey et al., "
+               "Nat Commun 13, 7554 (2022), and the 8420-column index space "
+               "is 20 + 400 + 8000 because of it. Changing it would not match "
+               "any fitted model.",
+        used_for="Sequence analysis, Polyreactivity: the featurisation of "
+                 "every scored CDR set.",
+    ),
 )
 
 
@@ -1125,6 +1319,9 @@ NOT_SCIENTIFIC: dict[str, str] = {
     "vhh_core.plot_logo(wrap_length)": "positions per row of the figure",
     "vhh_core.plot_logo(figwidth)": "figure width in inches",
     "vhh_core.table(font)": "point size of the table figure",
+    "vhh_core.weakest_windows(n)": "how many weak windows the table lists. A "
+        "row count like any other: it decides how much of a ranking you see "
+        "and never what the ranking is",
     "vhh_core.df_table(font)": "point size of the table figure",
 }
 
@@ -1144,48 +1341,6 @@ NOT_SCIENTIFIC: dict[str, str] = {
 # reason it carries no claim. The count is shown on the Provenance screen so
 # the gap is visible rather than filed away here.
 UNCLASSIFIED: dict[str, str] = {
-    "af3.interface_pae(close)": "5.0 angstrom, the distance under which a "
-        "token pair counts as close. A structural convention, but no source "
-        "is recorded for this value",
-    "bench.mass_check(tolerance_da)": "2.0 Da, the window inside which a "
-        "measured mass is called a match. Depends on the instrument, and "
-        "nothing records which one this was chosen for",
-    "cloning.simulate_pcr(min_anneal)": "15 bases of annealing before a primer "
-        "is considered to bind. A convention with no recorded basis",
-    "codons.suggest_gc_fix(max_homopolymer)": "6, the run length above which a "
-        "homopolymer is called a synthesis risk. Vendor guidance differs and "
-        "none is cited",
-    "generator.generate(occupancy_threshold)": "0.5, the occupancy a reference "
-        "position needs before the generator samples it",
-    "sanger.mott_trim(cutoff)": "0.05, the error probability Mott's algorithm "
-        "trims against. It is the common default of phred and Staden, which "
-        "is a reason to keep it and not a source for it",
-    "specificity.cdrs_to_kmer(k)": "3, the k of the authors' 3-mer model. "
-        "Fixed by the shipped weights rather than chosen here, which probably "
-        "makes it a register entry rather than this list",
-    "vhh_core.cluster_families(cutoff)": "80.0% CDR3 identity for two "
-        "sequences to share a clonal family. A convention, and a consequential "
-        "one, with no recorded basis",
-    "vhh_core.aggregation_regions(min_length)": "3 residues, the shortest run "
-        "reported as an aggregation-prone region",
-    "vhh_core.weakest_windows(n)": "3, how many weak windows are reported",
-    "vhh_core.weakest_windows(width)": "7 residues, the window the weakest "
-        "regions are scored over. Not the same as the profile window, and "
-        "nothing says why",
-    "vhh_core.chou_fasman_profile(window)": "5 residues of smoothing, the "
-        "classic Chou-Fasman window; the 1978 chapter is cited for the "
-        "parameters but not for this",
-    "vhh_core.chou_fasman_table(window)": "5 residues of smoothing, the "
-        "same window as the profile and with the same gap behind it",
-    "vhh_core.plot_chou_fasman(window)": "5 residues of smoothing, the "
-        "same window as the profile and with the same gap behind it",
-    "vhh_core.reverse_translate(max_homopolymer)": "6, as in the gene "
-        "diagnosis screen, and with no more of a source here",
-    "vhh_core.reverse_translate(gc_max)": "0.60, the upper GC the optimiser "
-        "balances towards. The synthesis band is cited at GC_HIGH for the "
-        "diagnosis screen; this default is not tied to it in the code",
-    "vhh_core.reverse_translate(gc_min)": "0.40, the lower GC the optimiser "
-        "balances towards. Same gap as gc_max",
 }
 
 

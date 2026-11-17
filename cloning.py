@@ -42,7 +42,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.16b"
+__version__ = "2026.11.17a"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -613,6 +613,9 @@ TAG_PATTERNS = [
 # The layout assumed when a caller does not pass one. A notebook calling
 # `plan_cloning` on a bundled vector gets the same check the app does; the app
 # always passes the layout it derived from the vector in hand.
+# Bases of a primer that must anneal before it is treated as binding.
+MIN_ANNEAL_BASES = 15
+
 DEFAULT_LAYOUT = "pMES3"
 
 # Longest annotation still treated as a tag. The tags these vectors carry are
@@ -834,7 +837,8 @@ def enzyme_pairs(candidates: pd.DataFrame, max_pairs: int = 12) -> pd.DataFrame:
 # PCR, digestion and assembly
 # --------------------------------------------------------------------------- #
 
-def _anneal(template: str, primer: str, min_anneal: int = 15) -> list[dict]:
+def _anneal(template: str, primer: str,
+            min_anneal: int = MIN_ANNEAL_BASES) -> list[dict]:
     """Find where a primer's 3' end anneals, allowing a 5' tail.
 
     Only the 3' portion of a primer has to match: the 5' end may carry a tail
@@ -855,7 +859,8 @@ def _anneal(template: str, primer: str, min_anneal: int = 15) -> list[dict]:
 
 
 def simulate_pcr(record: SeqRecord, forward: str, reverse: str,
-                 circular: bool = True, min_anneal: int = 15,
+                 circular: bool = True,
+                 min_anneal: int = MIN_ANNEAL_BASES,
                  max_product: int = 20000) -> dict:
     """Amplify a template with two primers and return the product.
 

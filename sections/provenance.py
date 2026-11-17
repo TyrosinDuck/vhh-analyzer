@@ -20,7 +20,7 @@ import streamlit as st
 import provenance as pv
 from shell import FIT, REPO_URL, Settings, usage_prompt
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 VIEWS = ["📋 By constant", "⚖️ By standing"]
 
@@ -55,13 +55,12 @@ def render(settings: Settings) -> None:
     if pv.UNCLASSIFIED:
         st.warning(
             f"**{len(pv.UNCLASSIFIED)} more are known and not yet classified.** "
-            f"They are default arguments that decide a result rather than a "
-            f"picture, and nothing in the repository records why each value is "
-            f"the value. They are listed in `provenance.py` with what is "
-            f"missing, rather than given a register entry whose basis and "
-            f"source would have to be guessed. An admitted gap is worth more "
-            f"than an invented justification, which is the whole point of this "
-            f"page.", icon="🚧")
+            f"They decide a result rather than a picture, and nothing in the "
+            f"repository records why each value is the value. They are listed "
+            f"in `provenance.py` with what is missing, rather than given a "
+            f"register entry whose basis and source would have to be guessed. "
+            f"An admitted gap is worth more than an invented justification, "
+            f"which is the whole point of this page.", icon="🚧")
     st.caption(
         "What the scan sees is every **named** number: a module-level "
         "constant, an upper-case name assigned inside a function, and a "
@@ -69,7 +68,10 @@ def render(settings: Settings) -> None:
         "the middle of an expression, which has no name to report. Until "
         "November 2026 it read module level only, which is how a set of CDR "
         "length limits inside a function came to contradict the data file it "
-        "claimed to be measured from without this page noticing.")
+        "claimed to be measured from without this page noticing. The twelve "
+        "working conventions that search then turned up were moved out of "
+        "their function signatures and onto this register, which is why the "
+        "value you read here is the value the code runs on.")
 
     view = st.radio("View", VIEWS, horizontal=True, key="pv_view",
                     label_visibility="collapsed")

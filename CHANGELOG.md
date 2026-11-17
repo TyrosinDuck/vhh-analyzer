@@ -131,23 +131,48 @@ percentile by at most 0.49 point, below the decimal the app shows.
   arguments, which is where a threshold most often hides: `def mott_trim(quals,
   cutoff=0.05)` is a scientific constant with a name and a line number.
 
-  That widening found 46 named numbers nobody had classified. Twenty-nine are
+  That widening found 46 named numbers nobody had classified. Thirty are
   declared in `NOT_SCIENTIFIC`: identity defaults meaning "nothing applied",
-  input caps, figure sizes and batch sizes. The other seventeen decide a result
-  and nothing in the repository records why each value is the value, so they go
-  in a new third list, `UNCLASSIFIED`, which says per entry what is missing.
-  They are not given register entries, because a register entry has to state a
-  basis and a source and writing one from a guess is the failure this page
-  exists to prevent. The screen shows the count as an open gap rather than
-  filing it away, and the completeness test now refuses anything that is on
-  none of the three lists, with a message saying not to invent a source to
-  close it.
+  input caps, figure sizes, batch sizes and row counts. The other sixteen
+  decide a result, and they are now on the register, which took a change of
+  shape to do: a register entry names a value by its import path, so a default
+  argument could not be registered at all. Each was promoted to a module
+  constant with the signature reading it, which is what lets `resolve` show
+  the value the code actually runs on, and which puts the justification above
+  the function that applies it instead of nowhere.
 
-  Clearing an entry means reading the code and moving it to the register with
-  its basis or to `NOT_SCIENTIFIC` with the reason it carries no claim. The
-  seventeen are listed in `provenance.py`; `vhh_core.cluster_families(cutoff)`
-  at 80% CDR3 identity and `sanger.mott_trim(cutoff)` at 0.05 are the two with
-  the most reach.
+  A new third list, `UNCLASSIFIED`, exists for the case where a number decides
+  a result and nobody can say where the value came from. It is empty today and
+  the mechanism stays, because the honest answer to that question is sometimes
+  "we do not know" and the page should be able to say so rather than quietly
+  inventing a source. The completeness test refuses anything on none of the
+  three lists, with a message saying not to invent a source to close it.
+
+  What the sixteen turned out to be, from the author in November 2026: ten are
+  working conventions of the Center for Protein Engineering, three are
+  conventions of the field that the laboratory teaches (the 5 angstrom contact
+  cutoff, the 15-base annealing length and the five-residue Chou-Fasman
+  window), one is fixed by a published model (the 3-mer length of the
+  polyreactivity weights), and one is not this laboratory's at all:
+  `sanger.mott_trim` trims at 0.05 because that is the value Biopython's own
+  ABI reader hard-codes, citing the phred and phrap documentation, which was
+  read out of `SeqIO.AbiIO._abi_trim` to confirm it. It is kept rather than
+  chosen, so a read trimmed here and a read trimmed by the common tools are
+  trimmed the same way. None of the sixteen is a measurement and none claims
+  to be.
+
+  One of them was a duplicate. The longest tolerated single-base run was the
+  literal 6 in two signatures, `codons.suggest_gc_fix` scoring the risk on an
+  existing gene and `vhh_core.reverse_translate` avoiding it in a designed
+  one. One rule, so one constant now, `vhh_core.MAX_HOMOPOLYMER`, read by
+  both.
+
+  One was nearly made into a duplicate by mistake, which is worth recording
+  because the mistake was tempting. `vhh_core.reverse_translate` balances a
+  gene towards 40 to 60% GC and `codons.GC_LOW, GC_HIGH` flags a local stretch
+  outside 30 to 70%. They look like the same band written twice and they are
+  not: one asks where a whole gene should sit, the other asks whether a
+  stretch is extreme. They stay separate, with the register saying why.
 
   What the scan still cannot see is a bare literal in the middle of an
   expression, which has no name to report and would drown the result in array

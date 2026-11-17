@@ -41,7 +41,7 @@ __all__ = [
     "generate", "generate_many", "matrix_report", "__version__",
 ]
 
-__version__ = "2026.11.16a"
+__version__ = "2026.11.17a"
 
 AA = list("ACDEFGHIKLMNPQRSTVWY")
 
@@ -143,6 +143,11 @@ def _region_of(label: str) -> str:
     return "?"
 
 
+# Fraction of the reference sequences that must carry a residue at a position
+# before the generator will sample that position at all.
+OCCUPANCY_THRESHOLD = 0.5
+
+
 def sample_cdr_length(region: str, meta: dict, rng: np.random.Generator) -> int:
     """Draw a CDR length from the reference set's empirical distribution."""
     counts = (meta.get("cdr_length_counts") or {}).get(region)
@@ -157,7 +162,7 @@ def generate(matrix: pd.DataFrame, meta: dict | None = None,
              rng: np.random.Generator | None = None,
              framework_mode: str = "sample", cdr_alphabet: str = "no_cys",
              cdr_lengths: dict | None = None, enforce_hallmarks: bool = True,
-             occupancy_threshold: float = 0.5,
+             occupancy_threshold: float = OCCUPANCY_THRESHOLD,
              framework_cys: bool = False) -> dict:
     """Build one synthetic VHH.
 

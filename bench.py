@@ -31,7 +31,7 @@ __all__ = [
     "compare_batch_records", "__version__",
 ]
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.17a"
 
 
 # --------------------------------------------------------------------------
@@ -46,6 +46,10 @@ __version__ = "2026.11.12d"
 # catalogue number is not a molar mass, vendors renumber products, and a dye's
 # extinction coefficient and 280 nm correction factor are printed on the vial's
 # certificate because they vary between lots.
+
+# Window, in daltons, inside which a measured intact mass is reported as
+# matching the mass computed from the sequence.
+MASS_MATCH_TOLERANCE_DA = 2.0
 
 REAGENTS: dict[str, dict] = {
     "NHS-PEG4-Biotin (Thermo 21329 / 21330 / A39259)": {
@@ -368,7 +372,7 @@ def _applies(requirement: str | None, seq: str) -> bool:
 
 def mass_check(seq: str, measured_da: float | None = None,
                expected_da: float | None = None,
-               tolerance_da: float = 2.0) -> dict:
+               tolerance_da: float = MASS_MATCH_TOLERANCE_DA) -> dict:
     """Compare a measured mass with the sequence, and explain the difference.
 
     ``expected_da`` defaults to the average mass of the sequence as written. A

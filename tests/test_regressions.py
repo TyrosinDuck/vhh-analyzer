@@ -1170,25 +1170,133 @@ def test_the_provenance_scan_sees_past_module_level():
     """A constant inside a function was invisible to the completeness test.
 
     Which is where the CDR length limits were sitting while they contradicted
-    their own stated source. The scan now reports numeric default arguments
-    and upper-case names assigned in a body, and anything it finds has to be
-    registered, declared harmless, or admitted as not yet classified.
+    their own stated source. The scan reports numeric default arguments and
+    upper-case names assigned in a body as well as module-level assignments,
+    and anything it finds has to be registered, declared harmless, or admitted
+    as not yet classified.
+
+    The widening did its work twice over: it found seventeen scientific
+    defaults, and the fix for them was to promote each to a module constant,
+    which is why the scan now finds most of them at module level again. The
+    assertions below are therefore about the mechanism, with a default
+    argument that is still a default argument to prove it still looks there.
     """
     found = pv.scan_module("vhh_core")
-    assert "cluster_families(cutoff)" in found
-    assert "chou_fasman_profile(window)" in found
-    # Still a module-level scan as well.
-    assert "CHOU_FASMAN" in found
+    # A numeric default argument is still reported, by name.
+    assert "weakest_windows(n)" in found
+    # The promoted constants are seen at module level.
+    for constant in ("CHOU_FASMAN", "CHOU_FASMAN_WINDOW", "MAX_HOMOPOLYMER",
+                     "FAMILY_IDENTITY_CUTOFF", "OPTIMISER_GC_BAND"):
+        assert constant in found, constant
+    # A default that now refers to a constant is not a literal any more, so it
+    # is not reported twice under two names.
+    assert "chou_fasman_profile(window)" not in found
+    assert "cluster_families(cutoff)" not in found
     # Private helpers are not public surface.
     assert not [key for key in found if key.startswith("_")]
     assert not pv.unclassified(_required_modules_for_test())
-    # The admission is an admission, not a dumping ground: every entry says
-    # what is missing rather than asserting a source.
-    for key, reason in pv.UNCLASSIFIED.items():
-        assert len(reason.strip()) > 20, key
 
 
 def _required_modules_for_test():
     import app
     return [name for name in app.REQUIRED_MODULES
             if not name.startswith("sections.")]
+
+
+def test_every_working_convention_is_on_the_register_with_its_standing():
+    """Seventeen scientific defaults were literals in a function signature.
+
+    The register names a value by its import path, so a default argument could
+    not be registered at all: the fix was to promote each to a module constant
+    and point the signature at it. This checks the value the app uses is the
+    value the register resolves, for each of them, and that none claims to be
+    a measurement.
+    """
+    promoted = {
+        "family_identity_cutoff": 80.0,
+        "apr_min_length": 3,
+        "weakest_window_width": 7,
+        "chou_fasman_window": 5,
+        "max_homopolymer": 6,
+        "optimiser_gc_band": (0.40, 0.60),
+        "close_contact": 5.0,
+        "mass_match_tolerance": 2.0,
+        "min_anneal": 15,
+        "occupancy_threshold": 0.5,
+        "mott_cutoff": 0.05,
+        "kmer_k": 3,
+    }
+    by_key = {entry.key: entry for entry in pv.entries()}
+    for key, expected in promoted.items():
+        entry = by_key[key]
+        assert pv.resolve(entry) == expected, key
+        assert entry.basis in ("convention", "published"), (key, entry.basis)
+        assert entry.source.strip(), key
+    # Nothing here was promoted to a measurement on the way.
+    assert not [k for k in promoted
+                if by_key[k].basis in ("measured", "observed here")]
+
+
+def test_the_signatures_read_the_constants_rather_than_repeating_them():
+    """A promoted constant is only worth it if the function actually uses it.
+
+    Writing the constant and leaving the literal in the signature would give
+    the register a number the app does not use, which is the one thing the
+    page promises cannot happen.
+    """
+    import inspect
+    import af3
+    import bench
+    import cloning
+    import generator
+    import sanger
+    import specificity as spec
+
+    assert (inspect.signature(vc.cluster_families).parameters["cutoff"].default
+            is vc.FAMILY_IDENTITY_CUTOFF)
+    assert (inspect.signature(vc.chou_fasman_profile).parameters["window"]
+            .default is vc.CHOU_FASMAN_WINDOW)
+    assert (inspect.signature(vc.reverse_translate)
+            .parameters["max_homopolymer"].default is vc.MAX_HOMOPOLYMER)
+    assert (inspect.signature(af3.interface_pae).parameters["close"].default
+            is af3.CLOSE_CONTACT_ANGSTROM)
+    assert (inspect.signature(bench.mass_check).parameters["tolerance_da"]
+            .default is bench.MASS_MATCH_TOLERANCE_DA)
+    assert (inspect.signature(cloning.simulate_pcr).parameters["min_anneal"]
+            .default is cloning.MIN_ANNEAL_BASES)
+    assert (inspect.signature(generator.generate)
+            .parameters["occupancy_threshold"].default
+            is generator.OCCUPANCY_THRESHOLD)
+    assert (inspect.signature(sanger.mott_trim).parameters["cutoff"].default
+            is sanger.MOTT_CUTOFF)
+    assert (inspect.signature(spec.cdrs_to_kmer).parameters["k"].default
+            is spec.KMER_K)
+
+
+def test_the_homopolymer_rule_is_written_once():
+    """Two modules enforced the same run length with two copies of 6.
+
+    `codons.suggest_gc_fix` scores the risk on an existing gene and
+    `vhh_core.reverse_translate` avoids it in a designed one. One rule, so one
+    constant, and the designed and the diagnosed gene cannot drift apart.
+    """
+    import inspect
+    assert (inspect.signature(cdn.suggest_gc_fix)
+            .parameters["max_homopolymer"].default is vc.MAX_HOMOPOLYMER)
+    source = (ROOT / "codons.py").read_text(encoding="utf-8")
+    assert "max_homopolymer: int = 6" not in source
+
+
+def test_the_two_gc_bands_are_not_confused_for_each_other():
+    """They look alike and answer different questions.
+
+    `codons.GC_LOW, GC_HIGH` is the band a local stretch is called extreme
+    against. `vhh_core.OPTIMISER_GC_BAND` is where the optimiser puts a whole
+    gene. An earlier plan to collapse them into one was wrong, and the
+    register says why for anybody tempted again.
+    """
+    assert (cdn.GC_LOW, cdn.GC_HIGH) == (0.30, 0.70)
+    assert vc.OPTIMISER_GC_BAND == (0.40, 0.60)
+    assert vc.OPTIMISER_GC_BAND != (cdn.GC_LOW, cdn.GC_HIGH)
+    entry = next(e for e in pv.entries() if e.key == "optimiser_gc_band")
+    assert "whole gene should sit" in entry.source

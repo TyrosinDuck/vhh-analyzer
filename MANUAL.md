@@ -3566,6 +3566,38 @@ always call a threshold a guard rail, and nothing but reading the code catches
 it. What it makes impossible is adding a number silently, which is what
 happened to the dozen above.
 
+**It reads past module level, which it did not at first.** The scan looked at
+module-level assignments only, so a number written as a default argument was
+invisible to it, and a set of CDR length limits sitting inside a function
+contradicted the data file it claimed to be measured from without this page
+noticing. It now reports upper-case names assigned inside a function and
+numeric default arguments as well, which is where a threshold most often
+hides: `def mott_trim(quals, cutoff=0.05)` is a scientific constant with a
+name and a line number.
+
+That widening found forty-six named numbers nobody had classified. Thirty hold
+no scientific claim and are declared. The other sixteen decide a result, and
+registering them meant changing their shape: a register entry names a value by
+its import path, so a default argument cannot be registered at all. Each was
+promoted to a module constant with its signature reading it, which is what
+lets the page show the value the code runs on, and which puts the reasoning
+above the function instead of nowhere. Ten are working conventions of this
+laboratory, three are conventions of the field it teaches, one is fixed by a
+published model, and one, the Sanger trimming cutoff, is Biopython's own
+default and not this laboratory's at all.
+
+A third list exists for the case the other two cannot hold: a number that
+decides a result where nobody can say where the value came from. It is empty
+today. The mechanism stays, because "we do not know" is sometimes the true
+answer and a page about provenance should be able to say it rather than
+inventing a source to look complete. When it holds anything, the screen shows
+the count as an open gap.
+
+What the scan still cannot see is a bare literal in the middle of an
+expression, which has no name to report and would drown the result in array
+indices. The honest claim is that every *named* number is accounted for, not
+every number, and the page says so.
+
 **The values on that page are read from the modules that own them while the
 page is drawn.** No constant is typed into the register, and the test suite
 parses the file and fails if a number appears in it. So the page cannot show a
