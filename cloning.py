@@ -37,12 +37,13 @@ from Bio.SeqRecord import SeqRecord
 __all__ = [
     "PROTEIN_MOTIFS", "load_plasmid", "detect_motifs", "feature_table",
     "restriction_profile", "unique_cutters", "plot_map", "sequence_stats",
-    "derive_layout",
+    "derive_layout", "DNMP_FORMULAS", "base_pair_mass", "duplex_mass",
+    "dna_pmol", "ligation_plan",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -1365,3 +1366,129 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
         out["messages"].append(
             "no enzyme pair gives a construct that preserves the donor's VHH")
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Ligation arithmetic
+# --------------------------------------------------------------------------- #
+# How much insert to put with how much vector. The section above checks that
+# the construct would encode what you intend; this is the number you need in
+# the tube, and it is the one most often done by eye.
+#
+# The molar mass of a base pair is derived here rather than typed. The figure
+# quoted everywhere, 617.96 g/mol, circulates without a primary source; the
+# same number falls out of the chemistry, which anyone can check:
+#
+#   nucleoside  = base + deoxyribose - H2O
+#   nucleotide  = nucleoside + HPO3
+#   base pair in a duplex = the two nucleotides, minus one water per strand
+#
+# worked with the same CIAAW atomic weights the buffers section uses. An A-T
+# pair comes out at 617.4 and a G-C pair at 618.4, a spread of 0.16%, which
+# is why the mean is used and the GC content is not asked for: it cannot
+# change the answer by as much as the pipetting does.
+DNMP_FORMULAS = {
+    "dAMP": "C10H14N5O6P",
+    "dTMP": "C10H15N2O8P",
+    "dGMP": "C10H14N5O7P",
+    "dCMP": "C9H14N3O7P",
+}
+
+
+def base_pair_mass() -> float:
+    """Mean molar mass of one base pair in a duplex, g/mol. Derived."""
+    from buffers import molar_mass
+
+    water = molar_mass("H2O")
+    at = (molar_mass(DNMP_FORMULAS["dAMP"])
+          + molar_mass(DNMP_FORMULAS["dTMP"]) - 2 * water)
+    gc = (molar_mass(DNMP_FORMULAS["dGMP"])
+          + molar_mass(DNMP_FORMULAS["dCMP"]) - 2 * water)
+    return (at + gc) / 2.0
+
+
+def duplex_mass(base_pairs: int) -> float:
+    """Molar mass of a linear double-stranded fragment, g/mol.
+
+    The base pairs plus one water per strand for the ends, which is the
+    difference between a chain of residues and a molecule.
+    """
+    from buffers import molar_mass
+
+    if base_pairs <= 0:
+        raise ValueError("a fragment has at least one base pair")
+    return base_pairs * base_pair_mass() + 2 * molar_mass("H2O")
+
+
+def dna_pmol(nanograms: float, base_pairs: int) -> float:
+    """Picomoles of a fragment, from a mass and a length.
+
+    ng / (g/mol) gives nanomoles per 1e9, so the factor is 1000 to picomoles.
+    """
+    if nanograms < 0:
+        raise ValueError("a mass cannot be negative")
+    return nanograms * 1000.0 / duplex_mass(base_pairs)
+
+
+def ligation_plan(vector_ng: float, vector_bp: int, insert_bp: int,
+                  insert_ng_per_ul: float, molar_ratio: float = 3.0,
+                  pipette_minimum_ul: float | None = None) -> dict:
+    """How much insert to add to a given amount of vector, at a molar ratio.
+
+    The ratio is a count of molecules, not of nanograms, which is the whole
+    point: a 500 bp insert and a 5000 bp vector at "3:1" are 3 molecules of
+    insert per molecule of vector, and that is a tenth of the vector's mass,
+    not three times it. Doing the ratio in nanograms is the commonest way to
+    be out by the length ratio.
+
+    **Nothing here predicts whether the ligation works.** The ratio is a
+    starting point that protocols give and that people titrate; efficiency
+    depends on the ends, the enzyme, the insert and the incubation, none of
+    which this knows.
+    """
+    # The one definition of what a hand can pipette lives in `bench`, with the
+    # conjugation planner that first needed it. A second one here, at a
+    # different value, is exactly the kind of quiet disagreement this project
+    # has been bitten by twice.
+    if pipette_minimum_ul is None:
+        from bench import PIPETTE_MINIMUM_UL
+        pipette_minimum_ul = PIPETTE_MINIMUM_UL
+
+    for name, value in (("vector mass", vector_ng),
+                        ("insert concentration", insert_ng_per_ul),
+                        ("molar ratio", molar_ratio)):
+        if value <= 0:
+            raise ValueError(f"the {name} must be positive")
+
+    vector_pmol = dna_pmol(vector_ng, vector_bp)
+    insert_pmol = vector_pmol * molar_ratio
+    insert_ng = insert_pmol * duplex_mass(insert_bp) / 1000.0
+    insert_ul = insert_ng / insert_ng_per_ul
+
+    notes: list[str] = []
+    if insert_ul < pipette_minimum_ul:
+        notes.append(
+            f"{insert_ul:.2f} uL is below the {pipette_minimum_ul:.0f} uL "
+            f"this app treats as pipettable. "
+            f"Dilute the insert, or scale the reaction up: the ratio is a "
+            f"ratio, so doubling both sides leaves it unchanged.")
+    # The mass ratio is what people reach for, and it is only the molar ratio
+    # when the two lengths happen to be equal.
+    mass_ratio = insert_ng / vector_ng
+    if abs(insert_bp - vector_bp) > 0:
+        notes.append(
+            f"That is {mass_ratio:.2f} ng of insert per ng of vector. The "
+            f"ratio asked for is {molar_ratio:g} molecules per molecule; the "
+            f"two differ by the length ratio, {insert_bp / vector_bp:.3f}.")
+
+    return {
+        "vector_pmol": round(vector_pmol, 4),
+        "vector_mass_da": round(duplex_mass(vector_bp), 1),
+        "insert_pmol": round(insert_pmol, 4),
+        "insert_mass_da": round(duplex_mass(insert_bp), 1),
+        "insert_ng": round(insert_ng, 2),
+        "insert_ul": round(insert_ul, 3),
+        "mass_ratio": round(mass_ratio, 3),
+        "base_pair_mass": round(base_pair_mass(), 3),
+        "notes": notes,
+    }

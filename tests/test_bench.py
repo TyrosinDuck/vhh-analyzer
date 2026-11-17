@@ -1170,3 +1170,196 @@ def test_the_pair_plan_refuses_a_missing_number(kwargs):
     args.update(kwargs)
     with pytest.raises(ValueError):
         bench.protein_pair_plan(**args)
+
+
+# --------------------------------------------------------------------------
+# Converters
+# --------------------------------------------------------------------------
+# Checked by hand. 10000 rpm is 1047.2 rad/s; squared and times 0.1 m is
+# 109662 m/s2, which over the standard 9.80665 is 11182 g. The widely quoted
+# shortcut 1.118e-6 x r(mm) x rpm^2 gives the same, which is the point: it is
+# the same expression with the factors collapsed.
+
+def test_the_centrifuge_conversion_matches_the_definition():
+    out = bench.centrifuge(100.0, rpm=10000)
+
+    assert out["rcf"] == pytest.approx(11182, abs=1)
+    assert out["omega_rad_s"] == pytest.approx(1047.2, abs=0.1)
+    # The collapsed shortcut, for comparison only.
+    assert out["rcf"] == pytest.approx(1.118e-6 * 100 * 10000 ** 2, rel=1e-3)
+
+
+def test_the_centrifuge_conversion_round_trips():
+    there = bench.centrifuge(87.0, rpm=14000)
+    back = bench.centrifuge(87.0, rcf=there["rcf"])
+
+    assert back["rpm"] == pytest.approx(14000, abs=1)
+
+
+def test_the_rotor_radius_is_never_assumed():
+    """A speed converted with the wrong radius is wrong in proportion to it,
+    and there is no such thing as a default rotor."""
+    with pytest.raises(ValueError, match="radius"):
+        bench.centrifuge(0.0, rpm=10000)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {},                                   # neither
+    {"rpm": 100, "rcf": 100},             # both
+])
+def test_the_centrifuge_wants_exactly_one_of_the_two(kwargs):
+    with pytest.raises(ValueError, match="exactly one"):
+        bench.centrifuge(80.0, **kwargs)
+
+
+def test_a_concentration_crosses_families_through_the_molar_mass():
+    """1 mg/mL of a 14000 Da protein is 1/14000 mol/L, which is 71.4 uM."""
+    out = bench.convert_concentration(1.0, "mg/mL", "uM", 14000.0)
+
+    assert out["value"] == pytest.approx(71.43, abs=0.01)
+    assert out["through_molar_mass"] is True
+    assert out["mol_per_l"] == pytest.approx(7.143e-5, rel=1e-3)
+
+
+def test_a_concentration_within_one_family_needs_no_molar_mass():
+    """It is a decimal shift, and nothing about the protein enters into it."""
+    out = bench.convert_concentration(1.0, "mg/mL", "ug/mL")
+
+    assert out["value"] == pytest.approx(1000.0)
+    assert out["through_molar_mass"] is False
+    assert out["mol_per_l"] is None
+
+
+def test_crossing_without_a_molar_mass_is_refused_not_guessed():
+    with pytest.raises(ValueError, match="molar mass"):
+        bench.convert_concentration(1.0, "mg/mL", "nM")
+
+
+def test_nanomolar_to_nanograms_per_millilitre():
+    """100 nM of a 14000 Da protein is 1.4 ug/mL, so 1400 ng/mL."""
+    out = bench.convert_concentration(100.0, "nM", "ng/mL", 14000.0)
+    assert out["value"] == pytest.approx(1400.0, rel=1e-6)
+
+
+def test_an_unknown_unit_is_refused():
+    with pytest.raises(ValueError, match="not one this app knows"):
+        bench.convert_concentration(1.0, "mg/mL", "furlongs", 14000.0)
+
+
+# --------------------------------------------------------------------------
+# Tube labels
+# --------------------------------------------------------------------------
+
+def _sheet_for_labels():
+    props = {"mw_da": 14012.3, "ext_coeff_cystines": 24075,
+             "ext_coeff_reduced": 23950, "pI": 7.2, "length": 117,
+             "n_Cys": 2, "n_primary_amines": 5, "A280_0.1pct": 1.72}
+    return bench.batch_sheet(
+        "NbX", "QVQLQESGGG" * 11, props,
+        measured={"a280": 0.842, "dilution": 10.0, "volume_ul": 600.0},
+        fields={"lot": "JV-2026-07", "buffer": "PBS pH 7.4",
+                "storage": "-80 C", "date": "2026-11-17"})
+
+
+def test_a_label_carries_what_identifies_the_tube_and_no_more():
+    lines = bench.label_lines(_sheet_for_labels())
+
+    assert lines[0] == "JV-2026-07", "the lot is what the box is read by"
+    assert "NbX" in lines
+    assert any("mg/mL*" in line for line in lines), \
+        "a derived concentration must be marked as derived on the label too"
+    assert not any("eps" in line or "pI" in line for line in lines), \
+        "the sequence block belongs on the batch sheet, not on a tube"
+
+
+def test_a_label_with_nothing_on_it_is_refused():
+    with pytest.raises(ValueError, match="identifies nothing"):
+        bench.build_label_sheet("/tmp/none.pdf", [], copies=4)
+
+
+def test_the_label_sheet_repeats_one_label(tmp_path):
+    from pypdf import PdfReader
+
+    path = bench.build_label_sheet(
+        tmp_path / "labels.pdf", ["JV-2026-07", "NbX"], copies=10)
+    text = PdfReader(str(path)).pages[0].extract_text()
+
+    assert text.count("JV-2026-07") == 10
+
+
+def test_more_labels_than_fit_on_a_page_spill_onto_the_next(tmp_path):
+    from pypdf import PdfReader
+
+    path = bench.build_label_sheet(
+        tmp_path / "many.pdf", ["lot"], copies=30, columns=3, rows=8)
+
+    assert len(PdfReader(str(path)).pages) == 2    # 24 per page, then 6
+
+
+# --------------------------------------------------------------------------
+# Campaign report
+# --------------------------------------------------------------------------
+
+ROUNDS = [
+    {"round": "R1", "plus_colonies": 120, "plus_dilution": 1000,
+     "minus_colonies": 95, "minus_dilution": 1000},
+    {"round": "R2", "plus_colonies": 240, "plus_dilution": 1000,
+     "minus_colonies": 60, "minus_dilution": 1000},
+    {"round": "R3", "plus_colonies": 310, "plus_dilution": 10000,
+     "minus_colonies": 40, "minus_dilution": 1000},
+]
+
+
+def test_the_campaign_divides_outputs_and_not_raw_counts():
+    """R3 counted the + plate ten times more dilute than the - plate.
+
+    310 x 10000 over 40 x 1000 is 77.5. Dividing the counts alone would have
+    said 7.75, which is the error the dilution columns exist to prevent.
+    """
+    sheet = bench.campaign_sheet(ROUNDS)
+    enrichments = [row["enrichment"] for row in sheet["rounds"]]
+
+    assert enrichments[0] == pytest.approx(120 / 95)
+    assert enrichments[2] == pytest.approx(77.5)
+
+
+def test_an_uncounted_round_stays_on_the_sheet_and_out_of_the_ratios():
+    """A round that happened is part of the record; an uncounted plate is
+    not a plate with no colony."""
+    rounds = ROUNDS + [{"round": "R4"}]
+    sheet = bench.campaign_sheet(rounds)
+
+    assert len(sheet["rounds"]) == 4
+    assert sheet["rounds"][-1]["enrichment"] is None
+    assert "not counted" in sheet["rounds"][-1]["note"]
+
+
+def test_the_comparison_refuses_to_call_a_rising_ratio_a_selection():
+    """The one sentence this report exists to carry."""
+    sheet = bench.campaign_sheet(ROUNDS)
+    prose = " ".join(sheet["derivation_notes"])
+
+    assert "not a selection having worked" in prose
+    assert "grows faster" in prose and "sequencing" in prose.lower()
+
+
+def test_each_ratio_carries_its_counting_floor():
+    sheet = bench.campaign_sheet(ROUNDS)
+
+    # sqrt(1/120 + 1/95) = 0.138
+    assert sheet["rounds"][0]["relative_uncertainty"] == pytest.approx(
+        (1 / 120 + 1 / 95) ** 0.5, rel=1e-6)
+    assert any("floor" in note for note in sheet["derivation_notes"])
+
+
+def test_the_campaign_report_builds_with_its_three_blocks(tmp_path):
+    from pypdf import PdfReader
+
+    sheet = bench.campaign_sheet(
+        ROUNDS, fields={"campaign": "JOE3 anti-LasB", "antigen": "LasB"})
+    path = bench.build_campaign_pdf(tmp_path / "c.pdf", sheet, version="x")
+    text = PdfReader(str(path)).pages[0].extract_text()
+
+    for probe in ("JOE3", "Written down", "Counted", "Derived from the counts",
+                  "not evidence that it worked"):
+        assert probe.lower() in text.lower(), f"{probe} missing from the report"

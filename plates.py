@@ -38,10 +38,11 @@ from bench import PIPETTE_MINIMUM_UL
 
 __all__ = [
     "PLATE_FORMATS", "ROW_LETTERS", "SERIES", "INDEPENDENT", "DILUTION_MODES",
-    "serial_dilution", "plate_layout", "well_name", "__version__",
+    "serial_dilution", "plate_layout", "build_plate_pdf",
+    "well_name", "__version__",
 ]
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 
 # Rows and columns per format, and nothing else: a plate is a grid, and the
@@ -191,7 +192,8 @@ def serial_dilution(start: float, fold: float, points: int,
     }
 
 
-def _blocks(samples, controls, dilution_points: int, replicates: int):
+def _blocks(samples, controls, dilution_points: int, replicates: int,
+            dilution_labels=None):
     """The wells to place, grouped so that one group is one column of a plate.
 
     A group is one replicate of one sample across its dilutions, which is the
@@ -206,7 +208,12 @@ def _blocks(samples, controls, dilution_points: int, replicates: int):
             for point in range(1, dilution_points + 1):
                 label = str(name)
                 if dilution_points > 1:
-                    label += f" D{point}"
+                    # A label from a series carries the concentration, which
+                    # is what the person reading the printed map wants; D1
+                    # to Dn is the fallback and says only the order.
+                    tag = (dilution_labels[point - 1]
+                           if dilution_labels else f"D{point}")
+                    label += f" {tag}"
                 if replicates > 1:
                     label += f" R{replicate}"
                 wells.append({"content": label, "sample": str(name),
@@ -229,7 +236,8 @@ def _blocks(samples, controls, dilution_points: int, replicates: int):
 def plate_layout(samples, dilution_points: int = 1, replicates: int = 1,
                  controls=(), plate: int = 96, skip_edges: bool = False,
                  by_column: bool = True,
-                 group_per_line: bool = True) -> dict:
+                 group_per_line: bool = True,
+                 dilution_labels=None) -> dict:
     """A plate map: which well holds what, and how much of the plate is left.
 
     The placement is deliberately predictable rather than optimal. Wells are
@@ -238,6 +246,12 @@ def plate_layout(samples, dilution_points: int = 1, replicates: int = 1,
     is what makes the printed map match the way the series is pipetted. No
     attempt is made to pack the plate: a layout whose positions move when an
     unrelated sample is added is a layout nobody can check against the bench.
+
+    ``dilution_labels`` replaces D1 to Dn on the map, one per point. It is
+    what lets a series computed in the other view label the wells with their
+    concentrations instead of their order. Nothing is carried automatically:
+    the caller passes the labels, and a count that does not match the points
+    is refused rather than silently truncated.
 
     ``skip_edges`` leaves the outer ring of wells out of the usable positions.
     Many protocols do that, or fill the ring with buffer, because the outer
@@ -274,7 +288,17 @@ def plate_layout(samples, dilution_points: int = 1, replicates: int = 1,
     else:
         lines = [[(r, c) for c in cols_available] for r in rows_available]
 
-    groups = _blocks(samples, controls, dilution_points, replicates)
+    if dilution_labels is not None:
+        dilution_labels = [str(label) for label in dilution_labels]
+        if len(dilution_labels) != dilution_points:
+            raise ValueError(
+                f"{len(dilution_labels)} dilution labels were given for "
+                f"{dilution_points} points; a label per point or none at all, "
+                f"because a map whose labels have slipped by one is worse "
+                f"than one that only numbers them")
+
+    groups = _blocks(samples, controls, dilution_points, replicates,
+                     dilution_labels)
     warnings: list[str] = []
     placed: list[dict] = []
     line_index, offset = 0, 0
@@ -335,3 +359,89 @@ def plate_layout(samples, dilution_points: int = 1, replicates: int = 1,
         "requested": requested,
         "warnings": warnings,
     }
+
+
+def build_plate_pdf(path, layout: dict, title: str = "Plate layout",
+                    subtitle: str = "", version: str = "", author: str = "",
+                    app_name: str = "VHH tool box", doi: str = "") -> "Path":
+    """Render a plate map to a one-page PDF, landscape.
+
+    The CSV is for a machine and the grid on screen is for reading now; this
+    is the sheet that goes to the bench next to the plate. It is laid out the
+    way the plate is held: rows lettered down the left, columns numbered
+    across the top, one cell per well.
+
+    Deliberately plain, and deliberately carrying no volumes. What a well
+    takes depends on the plate and the protocol, so a sheet that printed a
+    volume would be printing an assumption.
+    """
+    from pathlib import Path as _Path
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
+                                    Table, TableStyle)
+
+    path = _Path(path)
+    grid = layout["grid"]
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=14,
+                        spaceAfter=2)
+    small = ParagraphStyle("small", parent=styles["BodyText"], fontSize=7.2,
+                           textColor=colors.grey, leading=9.5)
+
+    doc = SimpleDocTemplate(
+        str(path), pagesize=landscape(A4), leftMargin=10 * mm,
+        rightMargin=10 * mm, topMargin=10 * mm, bottomMargin=10 * mm,
+        title=title, author=author or app_name)
+
+    header = [""] + list(grid.columns)
+    body = [header]
+    for row_name, row in grid.iterrows():
+        body.append([row_name] + [str(cell) for cell in row])
+
+    # One column for the row letters, the rest shared equally across the page.
+    usable_width = landscape(A4)[0] - 20 * mm
+    first = 8 * mm
+    each = (usable_width - first) / len(grid.columns)
+    # Wrapped rather than shrunk past readability: a 384 map has 24 columns,
+    # and a font small enough to fit a long label on one line would not be
+    # readable on the bench.
+    font = 6.0 if len(grid.columns) > 12 else 7.0
+
+    table = Table(body, colWidths=[first] + [each] * len(grid.columns),
+                  repeatRows=1)
+    table.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), font),
+        ("LEADING", (0, 0), (-1, -1), font + 1.5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#bbbbbb")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f5")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef1f5")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+
+    story = [Paragraph(title, h1)]
+    line = subtitle or ""
+    counts = (f"{layout['used']} wells used of {layout['usable']} usable, "
+              f"{layout['free']} free")
+    line = f"{line} · {counts}" if line else counts
+    if version:
+        line += f" · {app_name} {version}"
+    story += [Paragraph(line, small), Spacer(1, 5), table, Spacer(1, 6)]
+
+    footer = ("A layout, not a result: it says what goes where. It carries no "
+              "volumes, because what a well holds depends on the plate and "
+              "the protocol rather than on the count of its wells.")
+    if doi:
+        footer += f" Tool: https://doi.org/{doi}"
+    story.append(Paragraph(footer, small))
+
+    doc.build(story)
+    return path

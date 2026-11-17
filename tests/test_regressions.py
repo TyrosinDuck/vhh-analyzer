@@ -858,9 +858,12 @@ def test_the_bench_screen_prefills_no_extinction_coefficient_or_mass():
     # neither of them from a default: A comes from the sequence picked above
     # when there is one, B is always typed, and the view refuses until it has
     # both. An invented mass there would have set the volume of B to add,
-    # which is the one number that view exists to give.
-    assert source.count("from a sequence, or type it") == 7
-    assert source.lower().count("nothing is assumed for you") == 4
+    # which is the one number that view exists to give. "Convert" raised them
+    # again: it reads a molar mass only when the conversion crosses between a
+    # mass and a molarity, and refuses rather than assuming one, because
+    # without a mass the two are not related at all.
+    assert source.count("from a sequence, or type it") == 8
+    assert source.lower().count("nothing is assumed for you") == 5
 
 
 def test_the_concentration_is_labelled_derived_not_measured():
@@ -1305,3 +1308,32 @@ def test_the_two_gc_bands_are_not_confused_for_each_other():
     assert vc.OPTIMISER_GC_BAND != (cdn.GC_LOW, cdn.GC_HIGH)
     entry = next(e for e in pv.entries() if e.key == "optimiser_gc_band")
     assert "whole gene should sit" in entry.source
+
+
+def test_only_one_definition_of_a_pipettable_volume():
+    """`cloning.ligation_plan` briefly carried its own, at 1 uL.
+
+    `bench.PIPETTE_MINIMUM_UL` is 2. Two definitions of what a hand can
+    pipette, in two modules, disagreeing by a factor of two, is the quiet
+    kind of duplication this project has been bitten by twice before: a
+    second list of modules beside REQUIRED_MODULES, and a Dockerfile naming
+    the files to copy.
+    """
+    import bench
+    import cloning
+    import plates
+
+    sources = {
+        "cloning.py": (ROOT / "cloning.py").read_text(encoding="utf-8"),
+        "plates.py": (ROOT / "plates.py").read_text(encoding="utf-8"),
+    }
+    for name, text in sources.items():
+        assert "PIPETTE_MINIMUM_UL" in text, \
+            f"{name} should take the minimum from bench rather than inventing one"
+
+    # And they agree at run time, which is what the user sees.
+    assert plates.PIPETTE_MINIMUM_UL == bench.PIPETTE_MINIMUM_UL
+    plan = cloning.ligation_plan(50, 5000, 500, 20.0, 3.0)
+    assert any(f"{bench.PIPETTE_MINIMUM_UL:.0f}" in note
+               for note in plan["notes"]), \
+        "the ligation warning quotes a minimum that is not bench's"

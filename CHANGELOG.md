@@ -186,6 +186,79 @@ percentile by at most 0.49 point, below the decimal the app shows.
 
 ### Added
 
+- **A campaign report**, as a third view of Phage & panning. What the batch
+  sheet is to a purified tube, this is to a selection: one page with what was
+  written down, what was counted and what was computed from the counts kept
+  apart, and it is the sheet that goes to whoever asked for the selection.
+  Each round takes the same four numbers as the enrichment view, so the
+  dilutions are asked for separately and the ratio is of outputs rather than
+  of raw counts; a round left uncounted stays on the sheet and out of the
+  ratios, because a round that happened is part of the record and an
+  uncounted plate is not a plate with no colony. Every ratio carries the
+  Poisson floor of its two counts. The comparison between the last round and
+  the first carries the sentence the report exists for: a rising enrichment
+  is a rising ratio, a clone that binds the plastic or simply grows faster
+  enriches the same way, and only sequencing the output tells them apart. The
+  PDF states what it is not, at the bottom: no binding data, no sequences, no
+  decision about which clones to take forward.
+- **Ligation arithmetic**, as step 4 of In-silico cloning. How much insert to
+  add to a given amount of vector, counted in molecules rather than in
+  nanograms: a 500 bp insert and a 5000 bp vector at 3:1 are three tenths of
+  the vector's mass, not three times it, and doing the ratio in nanograms is
+  the commonest way to be out by the length ratio with nothing downstream
+  complaining. The screen shows the picomoles and the mass ratio they come
+  to, side by side.
+  The molar mass of a base pair is derived rather than typed. The figure
+  quoted everywhere, 617.96 g/mol, circulates without a primary source; the
+  same number falls out of base plus deoxyribose minus water, plus HPO3, two
+  nucleotides minus one water per strand, worked with the CIAAW atomic
+  weights the buffers section already uses. That gives 617.9, and the A-T and
+  G-C pairs differ by 0.16%, which is why the GC content is not asked for: it
+  cannot move the answer as much as the pipetting does.
+- **Convert**, a view of Batch & QC holding the two conversions done
+  constantly from a half remembered formula. A concentration between mass and
+  molarity, which within one family is a decimal shift and across them needs
+  a molar mass, refused rather than assumed when there is none; and a
+  centrifuge between rpm and relative centrifugal field, computed from
+  omega squared times the radius over the standard acceleration of free fall
+  rather than from the collapsed 1.118e-6 shortcut, so no fitted constant
+  appears. The rotor radius has no default, because there is no such thing as
+  a default rotor and a speed converted with the wrong one is wrong in
+  proportion to it. The standard gravity is now on the provenance register
+  with the CGPM declaration that fixes it.
+- **Tube labels from a batch sheet.** A page of identical labels for the tubes
+  a batch is aliquoted into, carrying the lot, the protein, the concentration
+  when there is one, the buffer, the storage and the date, and nothing else:
+  a label is not a record, and what it cannot carry is on the sheet the tube
+  travels with. A derived concentration is marked with an asterisk and
+  explained in a footnote. The grid matches no commercial sheet and says so
+  rather than naming a product it might be half a millimetre out on, so each
+  label prints its own cut outline; the size and the counts are settable.
+- **The plate layout prints.** A one-page landscape sheet laid out the way the
+  plate is held, rows lettered down the left and columns numbered across the
+  top, beside the two CSVs that were already there. It carries no volumes,
+  for the reason the section has carried from the start. Checked by rendering
+  it and looking at it, at both plate formats.
+- **A dilution series can label a plate.** When the series has exactly as many
+  positions as the layout has dilution points, the layout view offers to
+  write each concentration into its wells instead of D1 to Dn. Offered rather
+  than done, and only when the counts match, because a map whose labels have
+  slipped by one is worse than one that only numbers them. It is the one
+  place in the app where a computed figure is carried without being retyped,
+  and it is allowed because what is carried is a label on a map and not a
+  number going onto a record.
+
+### Fixed
+
+- `cloning.ligation_plan` was written with its own pipettable minimum, at
+  1 uL, while `bench.PIPETTE_MINIMUM_UL` is 2. Two definitions of what a hand
+  can pipette, in two modules, disagreeing by a factor of two: the same quiet
+  duplication that produced a second list of modules beside `REQUIRED_MODULES`
+  and a Dockerfile naming the files to copy. It takes bench's value now, and
+  a test fails if either `cloning` or `plates` stops doing so. The warning
+  also quotes the figure rather than saying "what can be pipetted accurately",
+  which was true and unhelpful.
+
 - **A Plates & dilutions section**, in the Bench group, with two views and no
   sequence asked for: like the phage titre, neither of them uses one.
   **Dilution series** works out what to pipette, by either of the two

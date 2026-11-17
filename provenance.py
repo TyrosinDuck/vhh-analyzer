@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.17c"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "UNCLASSIFIED", "entries", "resolve", "value_text",
@@ -176,6 +176,26 @@ _REGISTRY = (
                "all agree against the one table it came from.",
         used_for="Sequence analysis: the secondary-structure propensity "
                  "profile, and the beta term of the aggregation score.",
+    ),
+    Constant(
+        key="standard_gravity",
+        label="Standard acceleration of free fall",
+        where=("bench", "STANDARD_GRAVITY_M_S2"),
+        unit="m/s2",
+        basis="published",
+        source="Declaration 2 of the 3rd General Conference on Weights and "
+               "Measures (1901), which fixed the conventional value of g_n at "
+               "9.80665 m/s2; carried since by ISO 80000. "
+               "https://www.bipm.org/committees/cg/cgpm/3-1901/resolution-2",
+        used_for="Reference: converting between a centrifuge speed in rpm "
+                 "and a relative centrifugal field.",
+        note="A defined value, not a measurement of local gravity. That is "
+             "what makes a relative centrifugal field comparable between "
+             "laboratories: it is a ratio to this number, not to the gravity "
+             "in the building. The widely quoted shortcut "
+             "RCF = 1.118e-6 x r(mm) x rpm^2 is the same expression with the "
+             "factors collapsed; the app computes it out instead, so no "
+             "fitted constant appears.",
     ),
     Constant(
         key="kyte_doolittle",
@@ -1246,6 +1266,22 @@ NOT_SCIENTIFIC: dict[str, str] = {
                       "so a volume unit cannot be silently treated as a mass",
     "constructs.FORMATS": "how many VHH domains monovalent, bivalent and "
                           "biparatopic carry, which is what the words mean",
+    "bench.LABEL_SHEET": "the default grid of a sheet of tube labels, in "
+                         "millimetres and counts. It matches no commercial "
+                         "sheet and says so; every label prints its own cut "
+                         "outline, and all four values are settable",
+    "bench.build_label_sheet(copies)": "how many labels a sheet carries "
+                                       "unless another number is asked for",
+    "cloning.ligation_plan(molar_ratio)": "three molecules of insert per "
+                                          "molecule of vector, the starting "
+                                          "point protocols give. Not a "
+                                          "recommendation: efficiency depends "
+                                          "on the ends, the enzyme and the "
+                                          "incubation, and it is titrated",
+    "bench.MASS_UNITS": "mass concentrations to grams per litre; exact by "
+                        "definition, and a mg/mL is a g/L",
+    "bench.MOLAR_UNITS": "molar concentrations to moles per litre; exact by "
+                         "definition",
     "plates.PLATE_FORMATS": "the rows and columns of a 96 and a 384 well "
                             "plate, which is what those names mean. No "
                             "working volume is tabulated with them: what a "

@@ -27,7 +27,7 @@ from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -37,6 +37,7 @@ V_QUANTIFY = "🧮 Quantify"
 V_MASS = "⚖️ Mass check"
 V_CONJUGATE = "🏷️ Conjugate"
 V_PAIR = "🔗 Couple two proteins"
+V_CONVERT = "🔄 Convert"
 V_BALANCE = "🧫 Purification"
 V_PLAN = "📐 How much culture"
 V_BATCH = "📄 Batch sheet"
@@ -81,6 +82,7 @@ def _views() -> dict:
         V_MASS: (_mass, True),
         V_CONJUGATE: (_conjugate, True),
         V_PAIR: (_pair, True),
+        V_CONVERT: (_convert, True),
         V_BALANCE: (_balance, True),
         V_PLAN: (_plan, False),
         V_BATCH: (_batch, True),
@@ -590,6 +592,135 @@ def _conjugate(t: Tube) -> None:
             st.dataframe(sites, hide_index=True, **FIT)
             data_download("Labelling sites", sites, "labelling_sites.csv",
                           key="dl_conjugate_sites")
+
+
+# --------------------------------------------------------------------------
+def _convert(t: Tube) -> None:
+    props = t.props
+
+    st.subheader("Convert")
+    st.markdown(
+        "The two conversions that get done constantly and from a half "
+        "remembered formula. Neither has a fitted constant in it.")
+
+    st.markdown("**A concentration, between mass and molarity**")
+    st.caption(
+        "Within one family it is a decimal shift and no molar mass is read "
+        "at all. Crossing between them needs one, because a molar mass is "
+        "the only thing that relates a mass to a count of molecules.")
+
+    units = list(bn.MASS_UNITS) + list(bn.MOLAR_UNITS)
+    row = st.columns([2, 2, 1, 2])
+    with row[0]:
+        value = st.number_input("Value", 0.0, 1e12, 1.0, 0.1, format="%.6f",
+                                key="cv_value")
+    with row[1]:
+        unit_in = st.selectbox("From", units, index=units.index("mg/mL"),
+                               key="cv_in")
+    with row[2]:
+        st.write("")
+        st.markdown("→")
+    with row[3]:
+        unit_out = st.selectbox("To", units, index=units.index("uM"),
+                                key="cv_out")
+
+    crosses = ((unit_in in bn.MASS_UNITS) != (unit_out in bn.MASS_UNITS))
+    mw = None
+    if crosses:
+        mw = st.number_input(
+            "Molar mass (Da)", 0.0, 1e7,
+            float(props["mw_da"]) if props else None, 1.0, key="cv_mw",
+            placeholder="from a sequence, or type it")
+        if not mw:
+            st.info(
+                "Give a molar mass, by loading a sequence above or by typing "
+                "it. Nothing is assumed for you: without one, a mass and a "
+                "molarity are not related at all.")
+        else:
+            try:
+                out = bn.convert_concentration(value, unit_in, unit_out, mw)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.success(f"**{out['value']:.6g} {out['unit']}**")
+                st.caption(
+                    f"Through a molar mass of {mw:.1f} Da. When that mass "
+                    f"came from a sequence it is theoretical, computed rather "
+                    f"than measured, and this figure inherits that: it is as "
+                    f"good as the mass behind it.")
+    else:
+        try:
+            out = bn.convert_concentration(value, unit_in, unit_out)
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.success(f"**{out['value']:.6g} {out['unit']}**")
+            st.caption(
+                "Same family, so this is a decimal shift and nothing about "
+                "the protein enters into it.")
+
+    st.divider()
+    st.markdown("**A centrifuge, between rpm and relative centrifugal field**")
+    st.caption(
+        "RCF = omega squared times the radius, over the standard "
+        "acceleration of free fall, with omega = 2 pi x rpm / 60. That is the "
+        "definition of the quantity rather than a formula to look up, which "
+        "is why no fitted constant appears: the widely quoted "
+        "1.118e-6 x r(mm) x rpm squared is this same expression with the "
+        "factors collapsed.")
+
+    spin = st.columns(3)
+    with spin[0]:
+        radius = st.number_input(
+            "Rotor radius (mm)", 0.0, 1000.0, None, 1.0, key="cv_radius",
+            placeholder="from your rotor's manual",
+            help="The distance from the axis to the point of the tube you "
+                 "care about, usually the bottom. It differs between rotors "
+                 "and between positions in the same rotor, so the app never "
+                 "assumes one.")
+    with spin[1]:
+        direction = st.radio("Direction", ["rpm → g", "g → rpm"],
+                             horizontal=True, key="cv_dir",
+                             label_visibility="collapsed")
+    with spin[2]:
+        if direction == "rpm → g":
+            speed = st.number_input("Speed (rpm)", 0.0, 1e6, None, 100.0,
+                                    key="cv_rpm", placeholder="what you set")
+            field = None
+        else:
+            field = st.number_input("Field (x g)", 0.0, 1e7, None, 100.0,
+                                    key="cv_rcf",
+                                    placeholder="what the protocol asks for")
+            speed = None
+
+    if not radius or (speed is None and field is None):
+        st.info(
+            "Give the rotor radius and one of the two. There is no such thing "
+            "as a default rotor, and a speed converted with the wrong radius "
+            "is wrong in proportion to it.")
+        return
+
+    try:
+        spun = bn.centrifuge(radius, rpm=speed, rcf=field)
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+
+    cards = st.columns(3)
+    with cards[0]:
+        st.metric("Speed", f"{spun['rpm']:,.0f} rpm".replace(",", " "))
+    with cards[1]:
+        st.metric("Field", f"{spun['rcf']:,.0f} x g".replace(",", " "))
+    with cards[2]:
+        st.metric("Angular velocity", f"{spun['omega_rad_s']:.0f} rad/s")
+    st.caption(
+        f"At a radius of {spun['radius_mm']:.0f} mm. The field is a ratio to "
+        f"the standard acceleration of free fall, a value fixed by convention "
+        f"rather than measured where you are, which is what makes it "
+        f"comparable between laboratories. The Provenance screen carries the "
+        f"declaration it comes from.")
+
+    usage_prompt("Batch & QC, convert")
 
 
 # --------------------------------------------------------------------------
@@ -1272,6 +1403,56 @@ def _batch(t: Tube) -> None:
         "saved record** above takes back. Keep them together: nothing is "
         "stored here, so the pair of files is the whole record. It is not an "
         "audit trail, and nothing in it can tell whether it has been edited.")
+
+    with st.expander("🏷️ Tube labels for this batch"):
+        st.caption(
+            "The few lines that fit on a tube, taken from the sheet above: "
+            "the lot, the protein, the concentration when there is one, the "
+            "buffer, the storage and the date. A label is not a record. What "
+            "it cannot carry, including how that concentration was arrived "
+            "at, is on the sheet the tube travels with.")
+        lines = bn.label_lines(sheet)
+        if not lines:
+            st.info(
+                "Give the batch a lot number above, at least. A label with "
+                "nothing on it identifies nothing.")
+        else:
+            st.code("\n".join(lines), language=None)
+            how = st.columns(3)
+            with how[0]:
+                copies = st.number_input("Labels", 1, 200, 24, 1,
+                                         key="b_lab_n")
+            with how[1]:
+                cols = st.number_input(
+                    "Columns", 1, 8, bn.LABEL_SHEET["columns"], 1,
+                    key="b_lab_c")
+            with how[2]:
+                rws = st.number_input("Rows", 1, 20, bn.LABEL_SHEET["rows"],
+                                      1, key="b_lab_r")
+            st.caption(
+                f"The grid is {bn.LABEL_SHEET['width_mm']:g} by "
+                f"{bn.LABEL_SHEET['height_mm']:g} mm by default and both "
+                f"counts are yours to set. It matches no commercial sheet in "
+                f"particular, and says so rather than naming a product it "
+                f"might be half a millimetre out on: each label prints its "
+                f"own cut outline.")
+            with tempfile.TemporaryDirectory() as folder:
+                sheet_path = Path(folder) / "labels.pdf"
+                try:
+                    bn.build_label_sheet(
+                        sheet_path, lines, copies=int(copies),
+                        columns=int(cols), rows=int(rws),
+                        footnote=("* derived from an A280, see the batch "
+                                  "sheet" if sheet.get(
+                                      "concentration_mg_per_ml") else ""))
+                except Exception as exc:
+                    st.error(f"The labels could not be built: {exc}")
+                else:
+                    st.download_button(
+                        "🏷️ Download the labels (PDF)",
+                        sheet_path.read_bytes(),
+                        file_name=f"labels_{stamp}.pdf",
+                        mime="application/pdf", key="b_labels", **FIT)
     usage_prompt("Batch & QC, batch sheet")
 
 

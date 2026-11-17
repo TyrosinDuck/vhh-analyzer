@@ -20,6 +20,8 @@ behave: those depend on your protein and your hands.
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
 __all__ = [
@@ -27,12 +29,16 @@ __all__ = [
     "stock_preparation", "conjugation_plan", "protein_pair_plan",
     "mass_check", "MODIFICATIONS",
     "PIPETTE_MINIMUM_UL", "desalting_column", "PURIFICATION_STEPS",
+    "STANDARD_GRAVITY_M_S2", "MASS_UNITS", "MOLAR_UNITS",
+    "centrifuge", "convert_concentration",
     "purification_balance", "CULTURE_ROUTES", "culture_for_target",
     "BATCH_RECORD_SCHEMA", "batch_record", "batch_record_inputs",
-    "compare_batch_records", "__version__",
+    "compare_batch_records", "LABEL_SHEET", "label_lines",
+    "build_label_sheet", "CAMPAIGN_FIELDS", "campaign_sheet",
+    "build_campaign_pdf", "__version__",
 ]
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.17c"
 
 
 # --------------------------------------------------------------------------
@@ -748,6 +754,148 @@ def panning_enrichment(plus_colonies: float, plus_dilution: float,
     return {"plus_output": plus, "minus_output": minus,
             "per_ml": plated_ul is not None, "enrichment": enrichment,
             "relative_uncertainty": uncertainty, "note": note}
+
+
+# --------------------------------------------------------------------------
+# Converters
+# --------------------------------------------------------------------------
+# Two conversions done constantly at the bench and constantly from a half
+# remembered formula. Neither needs a sequence and neither has an empirical
+# constant in it: the centrifuge one is derived from the definition of the
+# quantity, and the concentration one is a molar mass and a decimal shift.
+
+# The conventional value of the standard acceleration of free fall, fixed by
+# Declaration 2 of the 3rd CGPM (1901) and carried by ISO 80000. It is a
+# defined value rather than a measurement of local gravity, which is the
+# point: a relative centrifugal field is a ratio to *this* number, not to the
+# gravity in your building, so two laboratories converting the same rotor at
+# the same speed get the same answer.
+STANDARD_GRAVITY_M_S2 = 9.80665
+
+# Mass concentrations, as their factor to grams per litre. A mg/mL is a g/L,
+# which is the identity that makes the whole table checkable.
+MASS_UNITS = {
+    "g/L": 1.0,
+    "mg/mL": 1.0,
+    "mg/L": 1e-3,
+    "ug/mL": 1e-3,
+    "ug/L": 1e-6,
+    "ng/mL": 1e-6,
+    "ng/uL": 1e-3,
+}
+
+# Molar concentrations, as their factor to moles per litre.
+MOLAR_UNITS = {
+    "M": 1.0,
+    "mM": 1e-3,
+    "uM": 1e-6,
+    "nM": 1e-9,
+    "pM": 1e-12,
+}
+
+
+def centrifuge(radius_mm: float, rpm: float | None = None,
+               rcf: float | None = None) -> dict:
+    """Between revolutions per minute and relative centrifugal field.
+
+    Give one and the radius, and get the other. The relation is the
+    definition of the quantity rather than a formula to look up:
+
+        omega = 2 pi x rpm / 60          radians per second
+        RCF   = omega^2 x r / g          r in metres, g the standard gravity
+
+    which is why no fitted constant appears here. The widely quoted
+    ``RCF = 1.118e-6 x r(mm) x rpm^2`` is this same expression with the
+    factors collapsed; computing it out keeps the units visible and removes a
+    constant nobody can check.
+
+    ``radius_mm`` comes first and has no default, because there is no such
+    thing as a default rotor. It is the distance from the
+    axis to the point of the tube you care about, usually the bottom, and it
+    differs between rotors and between positions in the same rotor: the
+    pelleting radius of a swing-out rotor is not that of a fixed-angle one.
+    A speed converted with the wrong radius is wrong in proportion to it.
+    """
+    if radius_mm <= 0:
+        raise ValueError("the rotor radius must be positive, in millimetres")
+    if (rpm is None) == (rcf is None):
+        raise ValueError("give exactly one of rpm and rcf, and the radius")
+
+    radius_m = float(radius_mm) / 1000.0
+    if rpm is not None:
+        if rpm < 0:
+            raise ValueError("a speed cannot be negative")
+        omega = 2.0 * math.pi * float(rpm) / 60.0
+        out_rcf = omega * omega * radius_m / STANDARD_GRAVITY_M_S2
+        out_rpm = float(rpm)
+    else:
+        if rcf < 0:
+            raise ValueError("a relative centrifugal field cannot be negative")
+        omega = math.sqrt(float(rcf) * STANDARD_GRAVITY_M_S2 / radius_m)
+        out_rpm = omega * 60.0 / (2.0 * math.pi)
+        out_rcf = float(rcf)
+
+    return {
+        "rpm": round(out_rpm, 1),
+        "rcf": round(out_rcf, 1),
+        "radius_mm": float(radius_mm),
+        "omega_rad_s": round(2.0 * math.pi * out_rpm / 60.0, 2),
+    }
+
+
+def convert_concentration(value: float, unit_in: str, unit_out: str,
+                          mw_da: float | None = None) -> dict:
+    """Between any two concentration units, through a molar mass when needed.
+
+    Within one family it is a decimal shift and the molar mass is not read at
+    all. Crossing between them needs it, because that is the only thing that
+    relates a mass to a count of molecules:
+
+        mol/L = (g/L) / molar mass
+
+    The molar mass this app offers comes from a sequence, so it is
+    theoretical, and a concentration converted through it inherits that: the
+    screen says so rather than letting a nanomolar look measured.
+    """
+    if value < 0:
+        raise ValueError("a concentration cannot be negative")
+    for name, unit in (("input", unit_in), ("output", unit_out)):
+        if unit not in MASS_UNITS and unit not in MOLAR_UNITS:
+            raise ValueError(f"the {name} unit {unit!r} is not one this "
+                             f"app knows")
+
+    in_mass = unit_in in MASS_UNITS
+    out_mass = unit_out in MASS_UNITS
+    crosses = in_mass != out_mass
+
+    if crosses and not mw_da:
+        raise ValueError(
+            "a molar mass is needed to go between a mass and a molar "
+            "concentration; within one family it is only a decimal shift")
+    if crosses and mw_da <= 0:
+        raise ValueError("the molar mass must be positive")
+
+    # To the base unit of whichever family the input is in.
+    base = value * (MASS_UNITS if in_mass else MOLAR_UNITS)[unit_in]
+    if crosses:
+        base = base / mw_da if in_mass else base * mw_da
+    out = base / (MASS_UNITS if out_mass else MOLAR_UNITS)[unit_out]
+
+    # The other family's figure is only reportable when a molar mass relates
+    # the two. Without one it is None rather than zero, which would read as a
+    # concentration of nothing.
+    if out_mass:
+        g_per_l, mol_per_l = base, (base / mw_da if mw_da else None)
+    else:
+        g_per_l, mol_per_l = (base * mw_da if mw_da else None), base
+
+    return {
+        "value": out,
+        "unit": unit_out,
+        "g_per_l": g_per_l,
+        "mol_per_l": mol_per_l,
+        "through_molar_mass": crosses,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -1636,6 +1784,307 @@ def build_batch_pdf(path, sheet: dict, version: str = "", author: str = "",
     footer = ("This is a laboratory batch record, not a certificate of "
               "analysis: it carries no specifications, no acceptance criteria "
               "and no release decision.")
+    if doi:
+        footer += f" Tool: https://doi.org/{doi}"
+    story += [Spacer(1, 8), Paragraph(footer, small)]
+
+    doc.build(story)
+    return path
+
+
+# The label grid, in millimetres. Not a commercial sheet's layout: no Avery
+# or other reference is claimed, because a template that says it matches a
+# product and is half a millimetre out is worse than one that admits it is
+# generic. Both are settable from the screen, and the sheet prints a cut
+# outline rather than assuming pre-cut stock.
+LABEL_SHEET = {"columns": 3, "rows": 8, "width_mm": 63.5, "height_mm": 33.9}
+
+
+def label_lines(sheet: dict, include_concentration: bool = True) -> list[str]:
+    """The few lines that fit on a tube, taken from a batch sheet.
+
+    A label is not a record. What goes on it is what identifies the tube in a
+    freezer box a year later and nothing more: the lot, the protein, the
+    date, the storage, and the concentration when there is one. Everything
+    else, including how that concentration was arrived at, is on the batch
+    sheet the tube travels with, which is where it can carry the caveats a
+    label has no room for.
+    """
+    fields = {key: value for _label, value, key in sheet.get("fields", [])}
+    lines = []
+    if fields.get("lot"):
+        lines.append(str(fields["lot"]))
+    if sheet.get("name"):
+        lines.append(str(sheet["name"]))
+    if include_concentration and sheet.get("concentration_mg_per_ml"):
+        # Marked as derived on the label too, in one character, because the
+        # whole point of the batch sheet is that this number is not measured.
+        lines.append(f"{sheet['concentration_mg_per_ml']:.3g} mg/mL*")
+    for key in ("buffer", "storage", "date"):
+        if fields.get(key):
+            lines.append(str(fields[key]))
+    return lines
+
+
+def build_label_sheet(path, lines, copies: int = 24,
+                      columns: int | None = None, rows: int | None = None,
+                      width_mm: float | None = None,
+                      height_mm: float | None = None,
+                      footnote: str = "") -> "Path":
+    """A page of identical tube labels, with a cut outline on each.
+
+    ``lines`` is what `label_lines` returns, or any short list of strings.
+    Nothing is wrapped: a line too long for the label is a line to shorten,
+    and silently shrinking the text is how a label becomes unreadable on a
+    tube at arm's length in a cold room.
+    """
+    from pathlib import Path as _Path
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas as _canvas
+
+    path = _Path(path)
+    columns = int(columns or LABEL_SHEET["columns"])
+    rows = int(rows or LABEL_SHEET["rows"])
+    width = float(width_mm or LABEL_SHEET["width_mm"]) * mm
+    height = float(height_mm or LABEL_SHEET["height_mm"]) * mm
+    if columns < 1 or rows < 1:
+        raise ValueError("a sheet needs at least one row and one column")
+    if copies < 1:
+        raise ValueError("print at least one label")
+    lines = [str(line) for line in lines if str(line).strip()]
+    if not lines:
+        raise ValueError(
+            "a label with nothing on it identifies nothing; give the batch "
+            "sheet a lot number at least")
+
+    page_width, page_height = A4
+    per_page = columns * rows
+    left = (page_width - columns * width) / 2
+    top = page_height - (page_height - rows * height) / 2
+
+    pdf = _canvas.Canvas(str(path), pagesize=A4)
+    for index in range(int(copies)):
+        slot = index % per_page
+        if slot == 0 and index:
+            pdf.showPage()
+        column, row = slot % columns, slot // columns
+        x = left + column * width
+        y = top - (row + 1) * height
+
+        pdf.setStrokeColor(colors.HexColor("#cccccc"))
+        pdf.setLineWidth(0.3)
+        pdf.rect(x, y, width, height)
+
+        # The first line is the one read first, so it is the largest.
+        text_y = y + height - 6 * mm
+        pdf.setFillColor(colors.black)
+        for position, line in enumerate(lines):
+            size = 10 if position == 0 else 7.5
+            pdf.setFont("Helvetica-Bold" if position == 0 else "Helvetica",
+                        size)
+            pdf.drawString(x + 4 * mm, text_y, line)
+            text_y -= (size + 2.2)
+            if text_y < y + 3 * mm:
+                break
+        if footnote:
+            pdf.setFont("Helvetica", 5.5)
+            pdf.setFillColor(colors.grey)
+            pdf.drawString(x + 4 * mm, y + 2.5 * mm, footnote)
+
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
+# --------------------------------------------------------------------------
+# Campaign report
+# --------------------------------------------------------------------------
+# The page that leaves with a selection, as the batch sheet is the page that
+# leaves with a tube. Same three blocks, kept apart for the same reason: what
+# was written down, what was counted, and what was computed from the two.
+# A campaign is where the temptation to report a single number is strongest,
+# which is why the one thing this will not do is call a rising ratio a
+# successful selection.
+
+CAMPAIGN_FIELDS = [
+    ("campaign", "Campaign", "", "Whatever your notebook calls it."),
+    ("antigen", "Antigen", "", "What was panned against, and its form."),
+    ("library", "Library", "", "Which library went into round 1."),
+    ("performed_by", "Performed by", "", ""),
+    ("started", "Started", "", "Defaults to today."),
+    ("format", "Format", "", "Solid phase, liquid phase, cells, and so on."),
+    ("elution", "Elution", "", "Trypsin, triethylamine, competitive, ..."),
+    ("notes", "Notes", "", "Anything the next person needs to know."),
+]
+
+
+def campaign_sheet(rounds, fields: dict | None = None,
+                   plated_ul: float | None = None) -> dict:
+    """Assemble a panning campaign as plain data, round by round.
+
+    Each entry of ``rounds`` carries a ``round`` label and the four numbers
+    `panning_enrichment` needs: the colonies counted on the + and - plates
+    and the dilution factor each was counted at. ``input_titre`` is optional
+    and is a reading, not a derived figure.
+
+    A round with no counts is kept, because a round that happened is part of
+    the record, and left out of the derived block rather than counted as an
+    enrichment of zero.
+
+    The last round is compared with the first, and the comparison carries the
+    sentence that matters: a rising ratio is not a selection that worked. A
+    clone that binds the plastic, or simply grows faster, enriches the same
+    way, and only sequencing the output tells them apart.
+    """
+    from datetime import date as _date
+
+    fields = dict(fields or {})
+    fields.setdefault("started", _date.today().isoformat())
+
+    read, derived, notes = [], [], []
+    rows = []
+    for entry in rounds or []:
+        label = str(entry.get("round") or "").strip()
+        plus, minus = entry.get("plus_colonies"), entry.get("minus_colonies")
+        row = {"round": label or "unnamed", "input_titre": entry.get("input_titre"),
+               "plus_colonies": plus, "minus_colonies": minus,
+               "enrichment": None, "relative_uncertainty": None, "note": ""}
+        if plus is None or minus is None:
+            row["note"] = "not counted; left out of the comparison"
+        else:
+            out = panning_enrichment(
+                float(plus), float(entry.get("plus_dilution") or 1),
+                float(minus), float(entry.get("minus_dilution") or 1),
+                plated_ul=plated_ul)
+            row.update(enrichment=out["enrichment"],
+                       relative_uncertainty=out["relative_uncertainty"],
+                       plus_output=out["plus_output"],
+                       minus_output=out["minus_output"],
+                       note=out["note"])
+        rows.append(row)
+
+    for row in rows:
+        if row["input_titre"]:
+            read.append((f"{row['round']}, input titre",
+                         f"{row['input_titre']:.3g} particles/mL"))
+        if row["plus_colonies"] is not None:
+            read.append((f"{row['round']}, colonies + / -",
+                         f"{row['plus_colonies']:g} / {row['minus_colonies']:g}"))
+
+    counted = [row for row in rows if row["enrichment"]]
+    for row in counted:
+        text = f"{row['enrichment']:.3g}"
+        if row["relative_uncertainty"]:
+            text += f" (counting floor {row['relative_uncertainty'] * 100:.0f}%)"
+        derived.append((f"{row['round']}, enrichment", text))
+
+    if len(counted) >= 2:
+        first, last = counted[0], counted[-1]
+        change = last["enrichment"] / first["enrichment"]
+        derived.append((f"{last['round']} against {first['round']}",
+                        f"{change:.3g}x"))
+        notes.append(
+            f"The enrichment went from {first['enrichment']:.3g} at "
+            f"{first['round']} to {last['enrichment']:.3g} at "
+            f"{last['round']}, a factor of {change:.3g}. That is not a "
+            f"selection having worked. A clone that binds the plastic of the "
+            f"well, or simply grows faster than the rest of the library, "
+            f"enriches exactly the same way; sequencing the output is what "
+            f"tells them apart.")
+    if any(row["relative_uncertainty"] for row in counted):
+        notes.append(
+            "The percentage beside each ratio is the Poisson floor of its two "
+            "counts, sqrt(1/N+ + 1/N-). It is a floor, not the total error: "
+            "plating, washing and elution are not in it.")
+
+    return {
+        "fields": [(label, fields.get(key, ""), key)
+                   for key, label, _default, _help in CAMPAIGN_FIELDS],
+        "rounds": rows,
+        "measured": read,
+        "derived": derived,
+        "derivation_notes": notes,
+        "per_ml": plated_ul is not None,
+    }
+
+
+def build_campaign_pdf(path, sheet: dict, version: str = "", author: str = "",
+                       app_name: str = "VHH tool box", doi: str = "") -> "Path":
+    """Render a campaign sheet to a one-page PDF, laid out like the batch sheet."""
+    from datetime import datetime
+    from pathlib import Path as _Path
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
+                                    Table, TableStyle)
+
+    path = _Path(path)
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontSize=9,
+                          leading=12)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=15,
+                        spaceAfter=2)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11,
+                        spaceBefore=11, spaceAfter=3)
+    small = ParagraphStyle("small", parent=body, fontSize=7.2,
+                           textColor=colors.grey, leading=9.5)
+
+    campaign = next((value for label, value, key in sheet["fields"]
+                     if key == "campaign" and value), "Panning campaign")
+    doc = SimpleDocTemplate(
+        str(path), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=15 * mm, bottomMargin=15 * mm,
+        title=f"Campaign report, {campaign}", author=author or app_name)
+
+    def block(rows):
+        table = Table([[label, value] for label, value in rows],
+                      colWidths=[62 * mm, 112 * mm], hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("LEADING", (0, 0), (-1, -1), 11),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cccccc")),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef1f5")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return table
+
+    story = [Paragraph(f"Panning campaign: {campaign}", h1)]
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    line = f"Generated {stamp}"
+    if version:
+        line += f" by {app_name} {version}"
+    story += [Paragraph(line, small), Spacer(1, 6)]
+
+    story.append(Paragraph("Written down", h2))
+    story.append(block([(label, value or "-")
+                        for label, value, _key in sheet["fields"]]))
+
+    if sheet["measured"]:
+        story.append(Paragraph("Counted", h2))
+        story.append(block(sheet["measured"]))
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(
+            "Counts and readings only. Nothing in this block is a ratio.",
+            small))
+
+    if sheet["derived"]:
+        story.append(Paragraph("Derived from the counts", h2))
+        story.append(block(sheet["derived"]))
+        story.append(Spacer(1, 3))
+        for note in sheet.get("derivation_notes") or []:
+            story.append(Paragraph(note, small))
+
+    footer = ("A record of a selection, not evidence that it worked: this "
+              "sheet carries no binding data, no sequences and no decision "
+              "about which clones to take forward.")
     if doi:
         footer += f" Tool: https://doi.org/{doi}"
     story += [Spacer(1, 8), Paragraph(footer, small)]

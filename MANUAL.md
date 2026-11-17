@@ -70,10 +70,10 @@ register, available from every screen.
 | **DNA**, reads, coding sequences and plasmids | 🧪 **Sanger sequencing** | pulling VHH sequences out of `.ab1` files |
 | | 🔧 **Gene diagnosis** | checking coding sequences that already exist, and lowering GC where it runs high |
 | | 🧬 **In-silico cloning** | moving a VHH from one vector into another |
-| **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, what each purification step recovered, how much culture a target takes, the batch sheet, and a year of batch sheets side by side |
+| **Bench**, the tube and the readings taken on it | ⚗️ **Batch & QC** | concentration from an A280, mass identity, how much labelling reagent to add, coupling two proteins, unit conversions, what each purification step recovered, how much culture a target takes, the batch sheet, and a year of batch sheets side by side |
 | | 🧂 **Buffers & media** | what to weigh for a buffer or a medium, at any volume and concentration, with the hydrate you have |
-| | 🔲 **Plates & dilutions** | what to pipette for a dilution series, and which well holds what |
-| | 🦠 **Phage & panning** | the titre of a phage stock, and how much of it a round of panning takes |
+| | 🔲 **Plates & dilutions** | what to pipette for a dilution series, and which well holds what, as a sheet for the bench |
+| | 🦠 **Phage & panning** | the titre of a phage stock, how much of it a round of panning takes, and the report that leaves with a selection |
 | *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
 | | 🔎 **Provenance** | every constant the app computes with, what it is worth, and where it came from |
 
@@ -2350,6 +2350,42 @@ molar ratio is unchanged and the error on it is not. And if adding B dilutes
 A more than two-fold, the view says so, because a reaction that needs A to
 stay concentrated will not get it.
 
+### 5.3c Convert
+
+Two conversions done constantly and constantly from a half remembered
+formula. Neither has a fitted constant in it.
+
+**A concentration, between mass and molarity.** Within one family it is a
+decimal shift and no molar mass is read at all: a mg/mL is a g/L, and the
+rest follows. Crossing between the families needs one, because a molar mass
+is the only thing that relates a mass to a count of molecules. When that mass
+came from a sequence it is theoretical, and the converted figure inherits
+that: it is as good as the mass behind it, and the screen says so rather than
+letting a nanomolar look measured. Without a molar mass the view refuses
+instead of assuming one.
+
+**A centrifuge, between rpm and relative centrifugal field.** The relation is
+the definition of the quantity:
+
+    omega = 2 pi x rpm / 60
+    RCF   = omega squared x radius / g
+
+with the radius in metres and g the standard acceleration of free fall. The
+widely quoted shortcut, RCF = 1.118e-6 x r(mm) x rpm squared, is this same
+expression with the factors collapsed; the app computes it out, so no fitted
+constant appears anywhere.
+
+The rotor radius is asked for and never assumed, because there is no such
+thing as a default rotor: it is the distance from the axis to the point of
+the tube you care about, usually the bottom, and it differs between rotors
+and between positions in the same rotor. A speed converted with the wrong
+radius is wrong in proportion to it.
+
+The g here is a value fixed by convention rather than measured where you are,
+which is exactly what makes a relative centrifugal field comparable between
+laboratories: it is a ratio to that number, not to the gravity in your
+building. The Provenance screen carries the declaration it comes from.
+
 ### 5.4 Purification balance
 
 What came out of each step of a preparation, how much of the previous step
@@ -2505,6 +2541,17 @@ version could compute them differently. If the record was made for a different
 sequence from the one selected at the top, it says that too, and loudly: the
 text and the readings would be the record's while everything in the fourth
 block would be the current sequence's.
+
+**Tube labels.** Under the sheet, a page of identical labels for the tubes
+this batch is aliquoted into: the lot, the protein, the concentration when
+there is one, the buffer, the storage and the date. A label is not a record.
+What it cannot carry, including how that concentration was arrived at, is on
+the sheet the tube travels with, which is why a derived concentration is
+marked with an asterisk on the label and explained in a footnote. The grid is
+63.5 by 33.9 mm, three across and eight down by default, and all of it is
+yours to change; it matches no commercial sheet in particular and says so
+rather than naming a product it might be half a millimetre out on, so each
+label prints its own cut outline.
 
 A record this app cannot read is refused rather than partly read. A file whose
 format number is not the one this version knows, or whose readings are not
@@ -2836,6 +2883,34 @@ The table downloads as CSV.
 
 ---
 
+### 7.3 Campaign report
+
+What the batch sheet is to a purified tube, this is to a selection: one page
+for a campaign, and the sheet that goes to whoever asked for it.
+
+The same three blocks, kept apart for the same reason. **Written down** is
+the free text: the campaign, the antigen, the library, the format, the
+elution. **Counted** is what was counted: the input titre of each round when
+you have it, and the colonies on the + and - plates. **Derived from the
+counts** is where the enrichments live, each with the Poisson floor of its
+two counts, and the comparison between the last round and the first.
+
+Each round takes the same four numbers as §7.2, so the dilutions are asked
+for separately and the ratio is of outputs rather than of raw counts. A round
+left uncounted stays on the sheet and out of the ratios: a round that
+happened is part of the record, and an uncounted plate is not a plate with no
+colony.
+
+**The comparison carries the sentence this report exists for.** A rising
+enrichment is a rising ratio. A clone that binds the plastic of the well, or
+that simply grows faster than the rest of the library, enriches exactly the
+same way, and only sequencing the output tells them apart. The PDF says so in
+the derived block and again at the bottom, where it states what it is not: it
+carries no binding data, no sequences and no decision about which clones to
+take forward.
+
+---
+
 ## 7b. Plates & dilutions
 
 The fourth section of the **Bench** group, and the one that needs nothing
@@ -2930,8 +3005,19 @@ The map carries no volumes. What a well takes depends on the plate and the
 protocol rather than on the count of its wells, so no working volume is
 tabulated anywhere in this section.
 
-Two downloads: the grid, as a person reads it, and one row per well, which is
-the form a plate reader or a database ingests.
+**Labelling the wells with a series.** When the dilution series in §7b.1 has
+exactly as many positions as the layout has dilution points, the screen
+offers to write each concentration into its wells instead of D1 to Dn. It is
+offered rather than done, and only when the counts match: a map whose labels
+have slipped by one is worse than one that only numbers them. This is the one
+place in the app where a computed figure is carried without being retyped,
+and it is allowed because what is carried is a label on a map, not a number
+going onto a record.
+
+Three downloads. The **PDF** is the sheet that goes to the bench beside the
+plate, laid out the way the plate is held, with the rows lettered down the
+left and the columns numbered across the top. It carries no volumes, for the
+reason above. The two CSVs are for a machine: the grid, and one row per well.
 
 ---
 
@@ -3575,6 +3661,40 @@ part of the screen cannot be reached until a donor has been pasted.
 
 ---
 
+
+### 11.6 Ligation
+
+How much insert to add to a given amount of vector, **counted in molecules
+rather than in nanograms**. A 500 bp insert and a 5000 bp vector at 3:1 are
+three molecules of insert per molecule of vector, which is three tenths of
+the vector's mass and not three times it. Doing the ratio in nanograms is the
+commonest way to be out by the length ratio, and nothing downstream complains
+when it happens, so the screen spells both out: the picomoles it used and the
+mass ratio they come to.
+
+The vector length is filled in from the vector loaded in step 1. For a cut
+backbone, type the length of the fragment you gel-purified rather than that
+of the whole plasmid; neither length is assumed, because a length decides the
+molar mass and the molar mass decides the whole answer.
+
+**The molar masses are derived, not looked up.** The figure quoted
+everywhere, 617.96 g/mol per base pair, circulates without a primary source.
+The same number falls out of the chemistry: a nucleoside is a base plus
+deoxyribose minus a water, a nucleotide is that plus HPO3, and a base pair in
+a duplex is the two nucleotides minus one water per strand, worked with the
+same CIAAW atomic weights the Buffers section weighs salts with. That gives
+617.9. An A-T pair comes out at 617.4 and a G-C pair at 618.4, a spread of
+0.16%, which is why the GC content is not asked for: it cannot move the
+answer by as much as the pipetting does. The ends add one water per strand.
+
+A volume of insert below what can be pipetted accurately is flagged with the
+remark that scaling the whole reaction up leaves the ratio unchanged.
+
+**Nothing here says whether the ligation will work.** The ratio is a starting
+point that protocols give and that people titrate; efficiency depends on the
+ends, the enzyme, the insert and the incubation, none of which this knows.
+
+---
 
 ## 12. Reference tables
 

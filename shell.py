@@ -653,9 +653,9 @@ SECTIONS = {
                "Bench"),
     "phage": ("🦠", "Phage & panning",
               "The phage stocks that go into each round of panning: the "
-              "titre from an A260, by two routes shown side by side, and how "
-              "much stock a solid-phase or liquid-phase round takes. No "
-              "sequence needed.",
+              "titre from an A260, by two routes shown side by side, how "
+              "much stock a round takes, the enrichment that comes back out, "
+              "and the one-page report that leaves with a selection.",
               "Bench"),
 }
 

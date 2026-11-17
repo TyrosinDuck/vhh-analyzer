@@ -224,3 +224,47 @@ def test_a_layout_refuses_what_it_cannot_draw(kwargs, fragment):
     args.update(kwargs)
     with pytest.raises(ValueError, match=fragment):
         pt.plate_layout(**args)
+
+
+# --------------------------------------------------------------------------
+# Labelling a layout with a series, and the printed sheet
+# --------------------------------------------------------------------------
+
+def test_a_series_can_label_the_wells_with_its_concentrations():
+    """What the series view hands over: labels, not measurements."""
+    out = pt.plate_layout(["NbA"], dilution_points=3,
+                          dilution_labels=["10 mg/mL", "5 mg/mL", "2.5 mg/mL"])
+
+    assert [w["content"] for w in out["wells"]] == [
+        "NbA 10 mg/mL", "NbA 5 mg/mL", "NbA 2.5 mg/mL"]
+
+
+def test_labels_that_do_not_match_the_points_are_refused():
+    """A map whose labels have slipped by one is worse than one that only
+    numbers them."""
+    with pytest.raises(ValueError, match="dilution labels"):
+        pt.plate_layout(["NbA"], dilution_points=3,
+                        dilution_labels=["a", "b"])
+
+
+def test_the_printed_sheet_carries_the_wells_and_no_volumes(tmp_path):
+    from pypdf import PdfReader
+
+    layout = pt.plate_layout(["NbA", "NbB"], dilution_points=4, replicates=2,
+                             controls=["blank"])
+    path = pt.build_plate_pdf(tmp_path / "p.pdf", layout,
+                              title="Screening plate", version="x")
+    text = PdfReader(str(path)).pages[0].extract_text()
+
+    assert "Screening plate" in text
+    assert "NbA D1 R1" in text and "blank" in text
+    assert "wells used" in text
+    assert "carries no volumes" in text
+
+
+def test_a_384_sheet_builds_too(tmp_path):
+    layout = pt.plate_layout(["X"], dilution_points=12, replicates=4,
+                             plate=384)
+    path = pt.build_plate_pdf(tmp_path / "p384.pdf", layout)
+
+    assert path.exists() and path.stat().st_size > 1000

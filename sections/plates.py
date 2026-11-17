@@ -9,13 +9,17 @@ answer. The arithmetic lives in `plates.py`, importable from a notebook.
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 import plates as pt
-from shell import FIT, SECTIONS, Settings, usage_prompt
+from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
+                   usage_prompt)
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.17b"
 
 V_SERIES = "💧 Dilution series"
 V_LAYOUT = "🔲 Plate layout"
@@ -152,6 +156,17 @@ def _series() -> None:
     st.download_button(
         "⬇️ Download the series (CSV)", shown.to_csv(index=False),
         file_name="dilution_series.csv", mime="text/csv", key="pt_csv", **FIT)
+
+    # Kept so the layout view can offer these as well labels. Labels, not
+    # measurements: the batch sheet's rule about retyping is about numbers
+    # that go on a record, and this is what is written on a plate map.
+    st.session_state["pt_series_labels"] = [
+        f"{row['concentration']:.4g} {row['unit']}".strip()
+        for row in out["rows"]]
+    st.caption(
+        f"The **{V_LAYOUT}** view can label a column of wells with these "
+        f"{len(out['rows'])} concentrations instead of numbering them D1 to "
+        f"D{len(out['rows'])}.")
     usage_prompt("Plates, dilution series")
 
 
@@ -201,12 +216,34 @@ def _layout() -> None:
     control_names = [line.strip() for line in controls.splitlines()
                      if line.strip()]
 
+    # The series from the other view, offered only when it has exactly as
+    # many points as this layout, because a label per point or none at all is
+    # the only pair that cannot slip by one.
+    series = st.session_state.get("pt_series_labels") or []
+    labels = None
+    if series:
+        if len(series) == int(dil):
+            if st.checkbox(
+                    f"Label the dilutions with the series from "
+                    f"**{V_SERIES}** ({series[0]} to {series[-1]})",
+                    value=False, key="pl_uselabels",
+                    help="Writes the concentration in each well instead of "
+                         "D1 to Dn. A label on a map, not a number carried "
+                         "onto a record."):
+                labels = series
+        else:
+            st.caption(
+                f"The series in **{V_SERIES}** has {len(series)} positions "
+                f"and this layout has {int(dil)} dilution points. Match them "
+                f"to label the wells with their concentrations.")
+
     try:
         out = pt.plate_layout(samples, dilution_points=int(dil),
                               replicates=int(reps), controls=control_names,
                               plate=int(plate), skip_edges=skip_edges,
                               by_column=by_column,
-                              group_per_line=group_per_line)
+                              group_per_line=group_per_line,
+                              dilution_labels=labels)
     except ValueError as exc:
         st.error(f"That layout cannot be drawn: {exc}")
         return
@@ -237,15 +274,37 @@ def _layout() -> None:
             "The form a plate reader or a database ingests, rather than the "
             "grid a person reads.")
 
-    both = st.columns(2)
-    with both[0]:
+    title = st.text_input(
+        "Title for the printed sheet", value="Plate layout", key="pl_title",
+        help="What the sheet beside the plate is called.")
+
+    three = st.columns(3)
+    with three[0]:
+        with tempfile.TemporaryDirectory() as folder:
+            pdf = Path(folder) / "plate.pdf"
+            try:
+                pt.build_plate_pdf(
+                    pdf, out, title=title or "Plate layout",
+                    subtitle=f"{plate}-well", version=VERSION, author=AUTHOR,
+                    doi=DOI)
+            except Exception as exc:
+                st.error(f"The sheet could not be built: {exc}")
+            else:
+                st.download_button(
+                    "📄 Download the sheet (PDF)", pdf.read_bytes(),
+                    file_name=f"plate_{plate}.pdf", mime="application/pdf",
+                    key="pl_pdf", **FIT)
+    with three[1]:
         st.download_button(
-            "⬇️ Download the map (CSV)", out["grid"].to_csv(),
+            "⬇️ The map (CSV)", out["grid"].to_csv(),
             file_name=f"plate_{plate}_map.csv", mime="text/csv",
             key="pl_grid_csv", **FIT)
-    with both[1]:
+    with three[2]:
         st.download_button(
-            "⬇️ Download one row per well (CSV)", long.to_csv(index=False),
+            "⬇️ One row per well (CSV)", long.to_csv(index=False),
             file_name=f"plate_{plate}_wells.csv", mime="text/csv",
             key="pl_long_csv", **FIT)
+    st.caption(
+        "The PDF is the sheet that goes to the bench next to the plate, laid "
+        "out the way the plate is held. The two CSVs are for a machine.")
     usage_prompt("Plates, layout")

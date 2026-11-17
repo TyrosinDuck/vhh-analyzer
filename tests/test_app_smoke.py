@@ -593,6 +593,46 @@ def test_coupling_two_proteins_refuses_before_both_masses(app):
         f"expected 100 uL of B, got {volume[0].value}"
 
 
+def test_the_converters_compute_on_the_screen(app):
+    """Both halves of Convert, with numbers checked by hand.
+
+    1 mg/mL of a 14000 Da protein is 71.4 uM, and 10000 rpm at a 100 mm
+    radius is 11182 g.
+    """
+    from sections import bench as bench_screen
+
+    _goto(app, "⚗️ Batch & QC")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        bench_screen.V_CONVERT).run()
+    _no_failure(app, "convert")
+
+    app.session_state["cv_mw"] = 14000.0
+    app.session_state["cv_radius"] = 100.0
+    app.session_state["cv_rpm"] = 10000.0
+    app.run()
+    _no_failure(app, "convert, filled in")
+
+    assert any("71.4" in s.value for s in app.success), \
+        f"expected 71.4 uM, got {[s.value for s in app.success]}"
+    field = [m for m in app.metric if m.label == "Field"]
+    assert field and "11 182" in field[0].value.replace("\u202f", " "), \
+        f"expected 11182 x g, got {field[0].value if field else 'nothing'}"
+
+
+def test_the_campaign_report_renders(app):
+    """The third view of Phage & panning, on its own defaults."""
+    from sections import phage as phage_screen
+
+    _goto(app, "🦠 Phage & panning")
+    [r for r in app.radio if r.label == "View"][0].set_value(
+        phage_screen.V_REPORT).run()
+    _no_failure(app, "campaign report")
+
+    assert any("Not evidence that the selection worked" in i.value
+               for i in app.info), \
+        "the report drew without the sentence it exists to carry"
+
+
 def test_bench_renders_every_view(app):
     """Every view of Batch & QC, with no sequence loaded.
 

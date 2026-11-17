@@ -9,17 +9,22 @@ sources, live in `bench.py`, unchanged by the move. The widget keys keep their
 
 from __future__ import annotations
 
+import tempfile
+from datetime import date
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 import bench as bn
-from shell import FIT, SECTIONS, Settings
+from shell import AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings
 
-__version__ = "2026.11.12d"
+__version__ = "2026.11.17a"
 
 V_TITRE = "🧪 Titre"
 V_ENRICHMENT = "📈 Enrichment"
-VIEWS = [V_TITRE, V_ENRICHMENT]
+V_REPORT = "📄 Campaign report"
+VIEWS = [V_TITRE, V_ENRICHMENT, V_REPORT]
 
 # The columns of the rounds table, named once: the screen writes them into the
 # editor and reads the edited table back by them, and a literal in both places
@@ -58,6 +63,8 @@ def render(settings: Settings) -> None:
     st.divider()
     if view == V_ENRICHMENT:
         _enrichment()
+    elif view == V_REPORT:
+        _report()
     else:
         _titre()
     st.divider()
@@ -366,3 +373,126 @@ def _enrichment() -> None:
         "figure shown. What the number cannot say is *why* the output grew: "
         "a background binder of the plastic, and a clone that simply grows "
         "faster, both enrich. Sequencing the output is what settles it.")
+
+
+def _report() -> None:
+    """The page that leaves with a selection, as the batch sheet leaves with
+    a tube."""
+    st.subheader("Campaign report")
+    st.markdown(
+        "What the batch sheet is to a purified tube, this is to a selection: "
+        "one page for a campaign, with what was written down, what was "
+        "counted and what was computed from the counts kept apart. It is the "
+        "sheet that goes to whoever asked for the selection.")
+    st.info(
+        "**Not evidence that the selection worked.** It carries no binding "
+        "data, no sequences and no decision about which clones to take "
+        "forward. A rising enrichment is a rising ratio and nothing more.",
+        icon="📄")
+
+    written = {}
+    pairs = st.columns(2)
+    for position, (key, label, default, hint) in enumerate(bn.CAMPAIGN_FIELDS):
+        if key == "notes":
+            continue
+        with pairs[position % 2]:
+            value = (date.today().isoformat() if key == "started" else default)
+            written[key] = st.text_input(label, value=value, key=f"cr_{key}",
+                                         help=hint or None)
+    written["notes"] = st.text_area("Notes", key="cr_notes", height=70)
+
+    st.markdown("**The rounds**")
+    st.caption(
+        "The same four numbers per round as the Enrichment view, plus the "
+        "titre that went in when you have it. A round left uncounted stays "
+        "on the sheet and out of the ratios: a round that happened is part of "
+        "the record, and an uncounted plate is not a plate with no colony.")
+
+    as_power = st.radio(
+        "The dilution column holds", DILUTION_MODES, horizontal=True,
+        key="cr_dilution_mode") == D_POWER
+
+    empty = pd.Series([float("nan")] * 3, dtype="float64")
+    blank = pd.DataFrame({
+        C_ROUND: [f"R{i}" for i in (1, 2, 3)],
+        "Input titre (/mL)": empty,
+        C_PLUS: empty, C_PLUS_DIL: empty,
+        C_MINUS: empty, C_MINUS_DIL: empty,
+    })
+    counts = st.column_config.NumberColumn(min_value=0, step=1, format="%d")
+    dilutions = st.column_config.NumberColumn(
+        min_value=0.0, step=1.0, format="%.0f",
+        help=("n of the 10^-n the plate was counted at" if as_power
+              else "how many times the eluate was diluted"))
+    edited = st.data_editor(
+        blank, key="cr_rounds", num_rows="dynamic", hide_index=True, **FIT,
+        column_config={
+            C_ROUND: st.column_config.TextColumn(width="small"),
+            "Input titre (/mL)": st.column_config.NumberColumn(
+                min_value=0.0, format="%.3g",
+                help="A reading, from the Titre view or your own. Optional."),
+            C_PLUS: counts, C_PLUS_DIL: dilutions,
+            C_MINUS: counts, C_MINUS_DIL: dilutions,
+        })
+
+    rounds = []
+    for _index, row in edited.iterrows():
+        counted = [row[C_PLUS], row[C_PLUS_DIL], row[C_MINUS], row[C_MINUS_DIL]]
+        entry = {"round": row[C_ROUND],
+                 "input_titre": (None if pd.isna(row["Input titre (/mL)"])
+                                 else float(row["Input titre (/mL)"]))}
+        if not any(pd.isna(value) for value in counted):
+            entry.update(
+                plus_colonies=float(row[C_PLUS]),
+                plus_dilution=bn.dilution_factor(float(row[C_PLUS_DIL]),
+                                                 as_power),
+                minus_colonies=float(row[C_MINUS]),
+                minus_dilution=bn.dilution_factor(float(row[C_MINUS_DIL]),
+                                                  as_power))
+        if entry["round"] or entry["input_titre"] or "plus_colonies" in entry:
+            rounds.append(entry)
+
+    if not rounds:
+        st.info("Give at least one round a label or a count.")
+        return
+
+    try:
+        sheet = bn.campaign_sheet(rounds, fields=written)
+    except ValueError as exc:
+        st.error(f"That campaign could not be assembled: {exc}")
+        return
+
+    blocks = st.columns(2)
+    with blocks[0]:
+        st.markdown("**Counted**")
+        st.caption("Counts and readings. No ratio here.")
+        if sheet["measured"]:
+            st.dataframe(pd.DataFrame(sheet["measured"], columns=["", "value"]),
+                         hide_index=True, **FIT)
+        else:
+            st.caption("Nothing counted yet.")
+    with blocks[1]:
+        st.markdown("**Derived from the counts**")
+        st.caption("Ratios, and what they rest on.")
+        if sheet["derived"]:
+            st.dataframe(pd.DataFrame(sheet["derived"], columns=["", "value"]),
+                         hide_index=True, **FIT)
+        else:
+            st.caption("Nothing to derive yet.")
+
+    for note in sheet["derivation_notes"]:
+        st.caption(note)
+
+    with tempfile.TemporaryDirectory() as folder:
+        pdf = Path(folder) / "campaign.pdf"
+        try:
+            bn.build_campaign_pdf(pdf, sheet, version=VERSION, author=AUTHOR,
+                                  doi=DOI)
+        except Exception as exc:
+            st.error(f"The report could not be built: {exc}")
+            return
+        stamp = (written.get("campaign") or "campaign").replace(" ", "_")
+        st.download_button(
+            "📄 Download the campaign report (PDF)", pdf.read_bytes(),
+            file_name=f"campaign_{stamp}.pdf", mime="application/pdf",
+            key="cr_pdf", **FIT)

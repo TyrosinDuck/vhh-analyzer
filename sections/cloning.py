@@ -19,7 +19,7 @@ from compute import (derive_layout_cached, load_plasmid_cached, plan_cloning_cac
                      png_plasmid_map, primer_report_cached)
 from shell import FIT, Settings, data_download, footer
 
-__version__ = "2026.11.16c"
+__version__ = "2026.11.17a"
 
 
 def render(settings: Settings) -> None:
@@ -381,8 +381,87 @@ sequencing section of this app reads the .ab1 files back and confirms the casset
                    for _, r in cand_for_map[cand_for_map["usable"]].iterrows())
              if len(cand_for_map) else ())
 
+    _ligation(plasmid)
+
     # No footer() here: the router draws it after render() returns, so
     # that every screen gets exactly one and a new screen cannot forget
     # it. The footer() calls above are different - they precede an early
     # st.stop(), which means render() never returns and the router's
     # call is never reached.
+
+
+def _ligation(plasmid) -> None:
+    """How much insert to put with how much vector, in molecules."""
+    st.divider()
+    st.subheader("4 · Ligation")
+    st.markdown(
+        "The step above checks that the construct would encode what you "
+        "intend. This one is the number that goes in the tube: how much "
+        "insert to add to a given amount of vector, **counted in molecules "
+        "rather than in nanograms**. A 500 bp insert and a 5000 bp vector at "
+        "3:1 are three molecules of insert per molecule of vector, which is a "
+        "tenth of the vector's mass and not three times it. Doing the ratio "
+        "in nanograms is the commonest way to be out by the length ratio.")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Vector**")
+        vector_ng = st.number_input("Mass in the reaction (ng)", 0.0, 1e6,
+                                    50.0, 5.0, key="lg_vng")
+        default_bp = int(len(plasmid["record"].seq)) if plasmid else 0
+        vector_bp = st.number_input(
+            "Length (bp)", 1, 10_000_000,
+            default_bp or None, 1, key="lg_vbp",
+            placeholder="from the loaded vector, or type it",
+            help="Filled in from the vector loaded in step 1. For a cut "
+                 "backbone, type the length of the fragment you gel-purified "
+                 "rather than that of the whole plasmid.")
+    with right:
+        st.markdown("**Insert**")
+        insert_bp = st.number_input("Length (bp)", 1, 10_000_000, None, 1,
+                                    key="lg_ibp",
+                                    placeholder="length of your fragment")
+        insert_conc = st.number_input("Concentration (ng/uL)", 0.0, 1e5, 20.0,
+                                      1.0, key="lg_iconc")
+
+    ratio = st.slider(
+        "Molar ratio, insert to vector", 0.5, 10.0, 3.0, 0.5, key="lg_ratio",
+        help="A starting point that protocols give and that people titrate, "
+             "not a recommendation: efficiency depends on the ends, the "
+             "enzyme and the incubation, none of which this knows.")
+
+    if not vector_bp or not insert_bp:
+        st.info(
+            "Give both lengths. Nothing is assumed for you: a length decides "
+            "the molar mass, and a molar mass decides the whole answer.")
+        return
+
+    try:
+        plan = cl.ligation_plan(vector_ng, int(vector_bp), int(insert_bp),
+                                insert_conc, ratio)
+    except ValueError as exc:
+        st.error(f"That ligation cannot be planned: {exc}")
+        return
+
+    cards = st.columns(4)
+    with cards[0]:
+        st.metric("Vector", f"{plan['vector_pmol']:.4g} pmol")
+    with cards[1]:
+        st.metric("Insert needed", f"{plan['insert_pmol']:.4g} pmol")
+    with cards[2]:
+        st.metric("That is", f"{plan['insert_ng']:.1f} ng")
+    with cards[3]:
+        st.metric("Volume to add", f"{plan['insert_ul']:.2f} uL")
+
+    for note in plan["notes"]:
+        st.info(note)
+
+    st.caption(
+        f"Molar masses are derived, not looked up: one base pair is "
+        f"{plan['base_pair_mass']:.2f} g/mol here, worked out from the "
+        f"formulas of the four deoxynucleotide monophosphates with the same "
+        f"atomic weights the Buffers section weighs salts with, minus one "
+        f"water per strand. An A-T pair and a G-C pair differ by 0.16%, which "
+        f"is why the GC content is not asked for: it cannot move the answer "
+        f"as much as the pipetting does. Nothing here says whether the "
+        f"ligation will work.")

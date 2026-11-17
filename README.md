@@ -189,7 +189,7 @@ getting around and one section each after that.
 | **Bench** | **⚗️ Batch & QC** | The arithmetic between a purified protein and the next experiment: concentration from a measured A280, whether the measured mass is the protein you think it is, how much labelling reagent to add, what each purification step recovered, and the batch sheet that leaves with the tube. |
 |  | **🧂 Buffers & media** | What to weigh for a buffer or a medium at any volume and concentration factor, with the hydrate of each salt you actually have: the mass follows from its formula. The recipes are the laboratory's own, kept in the repository. |
 |  | **🔲 Plates & dilutions** | What to pipette for a dilution series, with the carry-over that a series by transfer needs and that is invisible when it is forgotten, and a plate map that says which well holds what. Neither needs a sequence. |
-|  | **🦠 Phage & panning** | The phage stocks that go into each round of panning: the titre from an A260, by two routes shown side by side, and how much stock a solid-phase or liquid-phase round takes. No sequence needed. |
+|  | **🦠 Phage & panning** | The phage stocks that go into each round of panning: the titre from an A260, by two routes shown side by side, how much stock a round takes, the enrichment that comes back out, and the one-page report that leaves with a selection. |
 
 <!-- /generated: sections -->
 
