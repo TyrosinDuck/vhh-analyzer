@@ -39,7 +39,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.17a"
+__version__ = "2026.11.18a"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -107,7 +107,11 @@ def _bundled_layouts() -> dict:
         except Exception:
             continue
         layouts[name] = {"layout": derived["layout"], "tags": derived["tags"],
-                         "tag_table": derived["tag_table"]}
+                         "tag_table": derived["tag_table"],
+                         # what sits between the last tag and the stop, so a
+                         # screen can name the C-terminal cysteine pHEN25
+                         # carries rather than leaving it in a tag name
+                         "trailer": derived["trailer"]}
     return layouts
 
 
@@ -121,6 +125,12 @@ VECTORS = _bundled_layouts()
 
 # C-terminal FR4 signature delimiting the end of the VHH
 FR4_RE = re.compile(r"[WF]G[A-Z]G[TA][A-Z][VLIMQ]TV[STF][SPAL]")
+
+# Shortest prefix of an expected tag that is reported as "the read ends inside
+# it" rather than as absent. Four residues is a judgement, not a measurement:
+# short enough to catch a read dying just past the histidines, long enough that
+# an accidental match at the very end of a tail is unlikely.
+MIN_PARTIAL_TAG = 4
 
 DEFAULTS = {
     "vector": "pMES3",
@@ -253,7 +263,7 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
         "n_premature_stops": 0, "premature_stop_positions": "",
         "stop_codon_present": False, "vhh_nt": "", "vhh_aa": "",
         "cassette_aa": "", "cassette_nt": "", "tags_found": "", "tags_missing": "",
-        "warnings": [],
+        "tags_partial": "", "warnings": [],
     }
     if not nt or len(nt) < 60:
         res["warnings"].append("read too short to analyse")
@@ -316,13 +326,32 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
         res["warnings"].append(f"{len(positions)} premature stop codon(s)")
 
     tail = downstream[:stop_i] if stop_i >= 0 else downstream
-    found, missing = [], []
+    found, missing, partial = [], [], []
     for tag_name, tag_seq in tags_for(vector):
-        (found if tag_seq in tail else missing).append(tag_name)
+        if tag_seq in tail:
+            found.append(tag_name)
+            continue
+        missing.append(tag_name)
+        # A read that runs out part-way through an expected stretch is short,
+        # not a clone that lost it, and the two call for different actions: one
+        # is re-sequenced, the other is discarded. They are separable only when
+        # no stop was reached and the tail ends on a prefix of what was
+        # expected. pHEN25 is where this started to matter: its fifteen
+        # C-terminal residues are far enough from the primer that an otherwise
+        # good read often stops inside them, and reporting that as a missing
+        # element reads as a bad clone.
+        if stop_i < 0:
+            for n in range(len(tag_seq) - 1, MIN_PARTIAL_TAG - 1, -1):
+                if tail.endswith(tag_seq[:n]):
+                    partial.append(f"{tag_name} ({n} of {len(tag_seq)} residues read)")
+                    break
     res["tags_found"] = ",".join(found)
     res["tags_missing"] = ",".join(missing)
+    res["tags_partial"] = ",".join(partial)
     if missing:
         res["warnings"].append(f"missing tag(s): {','.join(missing)}")
+    if partial:
+        res["warnings"].append("read ends inside " + "; ".join(partial))
     if not res["stop_codon_present"]:
         res["warnings"].append("no stop codon after the cassette (read too short?)")
 
@@ -394,6 +423,7 @@ def process_reads(files, vector: str | None = None, mott_cutoff: float | None = 
             "pelb": ex["pelb_mode"] or "", "fr4": ex["fr4_found"],
             "vhh_len": len(ex["vhh_aa"]), "vhh_aa": ex["vhh_aa"],
             "tags_found": ex["tags_found"], "tags_missing": ex["tags_missing"],
+            "tags_partial": ex["tags_partial"],
             "premature_stops": ex["n_premature_stops"],
             "stop_codon": ex["stop_codon_present"],
             "frameshift": ex["frameshift"],

@@ -19,7 +19,7 @@ from compute import (derive_layout_cached, load_plasmid_cached, plan_cloning_cac
                      png_plasmid_map, primer_report_cached)
 from shell import FIT, Settings, data_download, footer
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.18a"
 
 
 def render(settings: Settings) -> None:
@@ -96,6 +96,16 @@ def render(settings: Settings) -> None:
         st.caption("No tag could be read from this vector's annotation, so the "
                    "construct check will report the translated cassette without "
                    "looking for a tag in it.")
+    trailer = derived.get("trailer") or {}
+    if trailer.get("aa"):
+        st.caption(
+            f"The last {len(trailer['aa'])} residues of that chain "
+            f"({trailer['aa']}) carry no annotation on this map and are "
+            "translated from the sequence between the last tag and the stop"
+            + (". They end on a free cysteine, which the construct check expects "
+               "in the assembled cassette like any other element: a pair of "
+               "enzymes that leaves it out is reported as losing it."
+               if trailer.get("cys") else "."))
     if derived["beyond_stop"]:
         st.caption(
             "Also carried, past the stop that ends the cassette: "

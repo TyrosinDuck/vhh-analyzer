@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.17c"
+__version__ = "2026.11.18a"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "UNCLASSIFIED", "entries", "resolve", "value_text",
@@ -1381,6 +1381,13 @@ NOT_SCIENTIFIC: dict[str, str] = {
         "row count like any other: it decides how much of a ranking you see "
         "and never what the ranking is",
     "vhh_core.df_table(font)": "point size of the table figure",
+    "cloning.EMPTY_TRAILER": "the empty result of reading the stretch between "
+        "a vector's last tag and its stop: a sentinel with no number in it",
+    "sanger.MIN_PARTIAL_TAG": "shortest prefix of an expected tag that is "
+        "reported as a read ending inside it rather than as absent. A "
+        "judgement, four residues, and it decides the wording of a warning and "
+        "nothing else: the tag counts as missing either way, and the read's "
+        "usable verdict does not depend on it",
 }
 
 

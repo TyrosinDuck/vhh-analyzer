@@ -18,37 +18,42 @@ ran, from its Zenodo record.
 
 ### Fixed
 
-Two defects found by driving the app with proteins that are not antibody
-domains. Both were in code that is not VHH-specific, which is where the app
-claims to work on any protein, and the first one also fires between two VHHs.
-
-- **Batch & QC kept the first protein's extinction coefficient and molar
-  mass.** Picking another protein at the top of the screen, or flipping the
-  cysteine state, left the previous numbers in the boxes, and the
-  concentration underneath was computed from those while being labelled
-  *derived* from the sequence now selected. A Streamlit rule is behind it: a
-  `number_input` with a `key` honours its `value` argument on the first render
-  only, after which the stored state wins and the argument is ignored. Five
-  fields were affected: the coefficient and mass under **Quantify**, the mass
-  under **Convert** and under **Couple two proteins**, and both under
-  **Purification**, which scales every row of the balance by them. Measured by
-  driving the real screen with two proteins whose coefficients differ by
-  4000 /M/cm: both read the first one's 37 970 /M/cm, so the second protein's
-  reported 0.189 mg/mL was the first one's arithmetic. The prefill now follows
-  the picked protein and the cysteine state, and a coefficient typed by hand
-  still survives an unrelated rerun; clearing the sequence empties the boxes
-  rather than leaving a departed protein's number behind. Two smoke tests
-  cover each half of that rule.
-
-- **One non-antibody sequence took down the whole Developability family.** The
-  clinical-context tab passed an empty annotation to the CDR-length helper,
-  which numbers the sequence itself when given none and raises `anchor not
-  found: FR2 motif WxRQ` on anything without an antibody framework. The four
-  other tabs in that family already skipped those sequences; this one did not,
-  so a submission mixing a VHH with any other protein lost the liabilities,
-  aggregation, polyreactivity and plastic-resemblance views as well. The tab
-  now uses the same heavy-chain guard as its neighbours, lists only the
-  sequences that carry an annotation, and says so when none of them does.
+- **pHEN25 lost fourteen residues and a cysteine, and the app did not notice.**
+  The sequencing screen and the cloning screen both read a vector's expected
+  cassette out of its own map, from the annotations it carries. pHEN25 annotates
+  `6xHis` and stops there, while the nucleotides between those histidines and
+  the first stop codon encode the linker SPSTPPTPSPSTPP and then one cysteine,
+  neither of them annotated. So the layout read PelB–VHH–His6–stop, the
+  construct check looked for nothing past the histidines, and a clone that had
+  lost all fifteen residues, the free C-terminal cysteine included, was reported
+  as correct. The stretch between the last annotated tag and the stop is now
+  translated from the vector's own sequence and added to the layout, which makes
+  pHEN25 read PelB–VHH–His6–linker(SPSTPPTPSPSTPP)–Cys(C-term)–stop. The other
+  four bundled vectors are unchanged: on those the stop follows the last tag
+  directly, and a vector with no stop in frame downstream gets nothing added,
+  since there the end of the cassette is not established and inventing one would
+  be the defect over again. Deriving it rather than annotating it keeps the
+  cassette on one account, the vector's sequence, instead of adding a per-vector
+  table beside the maps. The cysteine is listed as its own element rather than
+  as the linker's last residue, which is this app's wording and not something
+  the map states: a clone that kept the linker and lost the cysteine is not
+  interchangeable with one that kept both, and a single element cannot say which
+  was lost. Both screens now say, under the layout, that those residues were
+  translated from the sequence and carry no annotation, because everything else
+  in the chain comes from the map and the two are not equally well attested.
+- **A pHEN25 read that stopped inside that stretch was called a bad clone.**
+  Fifteen residues is 45 nucleotides past the His tag, far enough that a Sanger
+  read of a correct clone often ends inside them, and the only verdict available
+  was that the element was missing. A read that ends part-way through an
+  expected stretch, having reached no stop codon, is now reported as ending
+  inside it, in a new `tags_partial` column and in the warnings, which calls for
+  re-sequencing rather than discarding the clone. A read that does reach a stop
+  immediately after the histidines is a clone that really lost the stretch and is
+  still reported flatly as missing it. The threshold for treating a prefix as a
+  partial match is four residues: a judgement, registered as such on the
+  provenance screen, and it decides the wording of a warning and nothing else.
+  The element counts as missing either way and the read's **usable** verdict does
+  not depend on it.
 
 A second independent audit, run in November 2026 by a reviewer that had not
 seen the code being written, over the roughly 19 000 lines added since the

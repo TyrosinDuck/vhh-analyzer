@@ -963,16 +963,6 @@ numbers on a scale nobody has calibrated, and flagging those against the
 published thresholds would be worse than reporting nothing. Use the authors'
 own web application for them: <https://opig.stats.ox.ac.uk/webapps/tnp>.
 
-**Heavy-chain domains only.** The metrics are CDR lengths, so this view covers
-the VHHs and conventional VHs in the submission and leaves anything else out,
-naming how many it left out, the same rule as the other antibody-specific
-panels (§3.1c). A sequence that is a heavy-chain domain but whose annotation
-failed is left out too, because there are no CDRs to count. Until November
-2026 this tab instead tried to number every submitted sequence itself, and a
-single non-antibody protein in the list raised an error that took down the
-whole Developability family, including the four views that had nothing to do
-with it.
-
 **IMGT or no flag.** TNP counts CDR residues in IMGT numbering. When ANARCI is
 unavailable the app annotates with regex anchors instead, and those boundaries
 are not the same, on cAbLys3 the two differ by several residues. A profile
@@ -2202,18 +2192,6 @@ exactly like one computed from a real sequence. The same applies to the
 conjugation and purification views, where an arbitrary molar mass would have
 set a reagent excess or scaled a whole table of yields.
 
-**The prefill follows the protein you pick, and your own number survives.**
-Changing the protein at the top of the screen, or flipping the cysteine state,
-rewrites the extinction coefficient and the molar mass to match. Clearing the
-sequence empties them again rather than leaving the departed protein's numbers
-in place. A coefficient or mass you typed yourself is left alone until one of
-those things changes, so an A280 retyped against a hand-entered coefficient
-does not quietly revert to a predicted one. Until November 2026 none of this
-was true: the boxes kept whichever protein was selected first, and the mg/mL
-underneath was that protein's arithmetic under the new protein's name. The
-same prefill now applies in **Convert**, **Couple two proteins** and
-**Purification**.
-
 **Cystines formed or all reduced.** Pairing two cysteines adds exactly
 125 /M/cm, so the gap between the two values is 125 times the number of
 disulfides, and the *relative* gap depends entirely on how many cysteines the
@@ -3087,7 +3065,7 @@ the warning travels with the file when it leaves the app.
 
 | Setting | Default | Effect |
 |---|---|---|
-| Vector | pMES3 | which tags are expected after the VHH, read from that vector's own map: pMES3, pMES4, pHEN6 and pHEN25 are PelB–VHH–His6–stop, pMECS is PelB–VHH–HA–spacer(GS)–His6–stop |
+| Vector | pMES3 | which tags are expected after the VHH, read from that vector's own map: pMES3, pMES4 and pHEN6 are PelB–VHH–His6–stop, pMECS is PelB–VHH–HA–spacer(GS)–His6–stop, pHEN25 is PelB–VHH–His6–linker(SPSTPPTPSPSTPP)–Cys(C-term)–stop |
 | Trim cutoff | 0.05 | Mott error-probability cutoff, roughly Q13. Lower is stricter |
 | Min trimmed length | 150 nt | below this the read is flagged, and the raw sequence is analysed instead of the trimmed one |
 | Min mean Phred | 20 | QC threshold on the trimmed window |
@@ -3114,6 +3092,43 @@ is a question about the antibody, and the app does not answer it.
 
 Two vectors had an entry and three did not, and the three were checked against
 pMES3's tags. All five now carry their own.
+
+**What a vector encodes and what its map annotates are not the same set, and
+pHEN25 is where that shows.** Its map annotates `6xHis` and nothing after it,
+while the nucleotides between those histidines and the first stop codon encode
+fourteen more residues, the proline-rich linker SPSTPPTPSPSTPP, and then a
+single cysteine. Reading tags from annotations alone cannot see any of it: this
+screen announced PelB–VHH–His6–stop for pHEN25, and the cloning screen's
+construct check looked for nothing past the histidines, so a clone that had lost
+the linker and the cysteine was reported as correct. The stretch between the
+last annotated tag and the stop is now translated from the vector's own sequence
+and added to the layout, which leaves the other four unchanged because on those
+four the stop follows the last tag directly. The screen says, under the layout,
+that those residues come from the sequence and not from an annotation, because
+everything else in the chain comes from the map and the two are not equally well
+attested.
+
+The cysteine is listed as its own element rather than as the last residue of the
+linker. That split is this app's wording, not something the map states. It is
+there because a free C-terminal cysteine is the handle for site-specific
+conjugation and it disulphide-dimerises the protein when it is left unblocked,
+so a clone that kept the linker and lost the cysteine is not interchangeable
+with one that kept both, and a layout that folds the two together cannot say
+which was lost. What is read from the vector is the whole fifteen-residue
+stretch, and that is what the construct check searches for.
+
+Those fifteen residues are 45 nucleotides past the His tag, far enough out that
+a Sanger read of a correct clone often stops inside them. A read that ends
+part-way through the stretch, with no stop codon reached, is reported as ending
+inside it, in a `tags_partial` column and in the warnings, rather than as
+missing it: the first calls for re-sequencing and the second for discarding the
+clone. The two are distinguishable only when the read reached no stop, so that
+is the only case in which the partial match is reported; a read that reaches a
+stop immediately after the histidines is a clone that lost the stretch, and is
+reported flatly as missing it. The threshold for calling a prefix a partial
+match is four residues, which is a judgement and not a measurement, and it
+changes the wording of a warning and nothing else: the element counts as missing
+either way, and the read's **usable** verdict does not depend on it.
 
 What this moves rather than removes is the trust: a map whose annotation is
 wrong is read wrongly. The *source* column in the cloning screen's feature
@@ -3554,6 +3569,18 @@ vector encodes: pMECS gives the eight residues YPYDVPDY, not the nine the HA
 epitope is known by. A vector whose annotation yields no tag at all says so, and
 the construct check then reports the translated cassette without looking for a
 tag in it.
+
+**What the map does not annotate is read from the sequence.** On pHEN25 the
+annotation stops at the histidines while the vector goes on to encode
+SPSTPPTPSPSTPP and a cysteine before the stop, so the layout stated here is
+*PelB → VHH → His6 → linker(SPSTPPTPSPSTPP) → Cys(C-term) → stop* and the
+construct check expects that cysteine in the assembled cassette like any other
+element: a pair of enzymes that leaves it out is reported as losing it. Before
+this was read, a construct ending at the histidines passed. A caption under the
+layout says that the last residues of the chain carry no annotation and were
+translated from the sequence between the last tag and the stop, so the two kinds
+of evidence are not presented as one. Section 8.2 has the rest of it, including
+what the cysteine is split out for and why the other four vectors are unaffected.
 
 The cassette **ends at the first stop codon**, read in the tags' own frame and
 not the leader's, because an empty vector's stuffer puts the two out of frame. A

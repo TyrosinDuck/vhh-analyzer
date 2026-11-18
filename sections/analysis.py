@@ -65,7 +65,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
                    usage_prompt)
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.17a"
 
 
 @dataclass
@@ -1462,6 +1462,7 @@ def _clinical_context(r: Run) -> None:
     citation, the thresholds and the table that uses them in one function is
     what stops the caption and the flags drifting apart.
     """
+    sequences = r.sequences
     df = r.df
     annotations = r.annotations
 
@@ -1471,31 +1472,13 @@ def _clinical_context(r: Run) -> None:
         "of this family: not whether a sequence carries a known problem, but "
         "whether anything like it has ever been taken into a clinic.")
 
-    if not r.heavy_only_notice("The clinical-stage comparison"):
-        return
-
     methods = {}
     if "annotation_method" in df:
         methods = dict(zip(df["name"], df["annotation_method"]))
 
-    # Only the sequences that actually carry an annotation. The metrics are CDR
-    # lengths, and `tnp.cdr_lengths` renumbers a sequence itself when handed no
-    # annotation, which raises on anything that is not an antibody domain
-    # ("anchor not found: FR2 motif WxRQ") and took the whole Developability
-    # family down with it: one lysozyme in the submission was enough. The other
-    # tabs in this family already skip those sequences, this one did not.
-    annotated = {name: seq for name, seq in r.heavy_sequences.items()
-                 if annotations.get(name)}
-    if not annotated:
-        st.info(
-            "None of the heavy-chain domains submitted could be annotated, so "
-            "there are no CDR lengths to compare. The annotation failure is "
-            "reported above the family selector.")
-        return
-
     rows = [tnp_profile_for(name, seq, annotations.get(name),
                             methods.get(name), None)
-            for name, seq in annotated.items()]
+            for name, seq in sequences.items()]
     table = pd.DataFrame(rows)
 
     off_scheme = [row["name"] for row in rows if not row.get("scheme_ok")]

@@ -43,7 +43,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.17b"
+__version__ = "2026.11.18a"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -634,6 +634,56 @@ def tag_name_for(label: str) -> str | None:
     return None
 
 
+EMPTY_TRAILER = {"aa": "", "linker": "", "cys": False, "labels": [],
+                 "name": "", "start": 0, "end": 0}
+
+
+def c_terminal_trailer(seq: str, after: int) -> dict:
+    """Translate what the vector encodes between the last tag and the stop.
+
+    ``after`` is the 1-based end coordinate of the last in-frame tag, so the
+    trailer begins at ``seq[after]`` and is already in that tag's frame.
+
+    Tags are read from annotations, and a stretch nobody annotated is invisible
+    to that scan however much it matters. pHEN25 is the case that showed it: its
+    map annotates the six histidines and nothing after them, while the sequence
+    between them and the first stop codon encodes SPSTPPTPSPSTPP and then a
+    single cysteine. The sequencing screen announced PelB - VHH - His6 - stop
+    for it, and the construct check looked for nothing past the histidines, so a
+    clone that had lost fourteen residues and the cysteine passed as correct.
+    Reading the stretch instead of annotating it keeps this on one account, the
+    vector's own sequence, rather than adding a per-vector table beside it.
+
+    The cysteine is split out from the linker as its own layout element. That
+    split is a naming choice made here, not something the map says: a free
+    C-terminal cysteine is the handle for site-specific conjugation and it
+    disulphide-dimerises the protein when it is left unblocked, so a clone that
+    kept the linker and lost the cysteine is not interchangeable with one that
+    kept both, and a layout that folds the two together cannot say which was
+    lost. What is read from the vector is the whole stretch; ``aa`` carries it.
+
+    Returns ``EMPTY_TRAILER`` when the stop follows the last tag directly, which
+    is what the other four bundled vectors do, and also when no stop codon sits
+    in frame downstream: there the end of the cassette is not established and
+    guessing one would invent the very thing this function is meant to read.
+    """
+    tail = seq[after:]
+    tail = tail[:len(tail) // 3 * 3]
+    if not tail:
+        return dict(EMPTY_TRAILER)
+    protein = str(Seq(tail).translate())
+    stop_i = protein.find("*")
+    if stop_i <= 0:                 # stop first (nothing there), or none in frame
+        return dict(EMPTY_TRAILER)
+    aa = protein[:stop_i]
+    cys = aa.endswith("C")
+    linker = aa[:-1] if cys else aa
+    labels = ([f"linker({linker})"] if linker else []) + (["Cys(C-term)"] if cys else [])
+    name = ("linker-Cys" if linker and cys else "Cys" if cys else "linker")
+    return {"aa": aa, "linker": linker, "cys": cys, "labels": labels,
+            "name": name, "start": after + 1, "end": after + 3 * len(aa)}
+
+
 def derive_layout(plasmid: dict, features: pd.DataFrame | None = None) -> dict:
     """Read the expression cassette's tag layout out of the plasmid itself.
 
@@ -738,15 +788,31 @@ def derive_layout(plasmid: dict, features: pd.DataFrame | None = None) -> dict:
                 layout.append(f"spacer({gap_aa})")
         layout.append(row["tag"])
         cursor = row["end"]
+
+    # What the vector encodes after the last annotated tag, read from the
+    # sequence rather than from an annotation, because on pHEN25 there is none.
+    trailer = c_terminal_trailer(seq, cursor) if kept else dict(EMPTY_TRAILER)
+    layout.extend(trailer["labels"])
     layout.append("stop")
 
-    table = pd.DataFrame(kept, columns=["tag", "aa", "start", "end", "source",
-                                        "kind"])
-    return {"layout": layout, "tags": [(r["tag"], r["aa"]) for r in kept],
+    rows_out = list(kept)
+    if trailer["aa"]:
+        rows_out.append({"tag": trailer["name"], "aa": trailer["aa"],
+                         "start": trailer["start"], "end": trailer["end"],
+                         # not an annotation: say where it came from, so the
+                         # screen showing this table does not imply the map
+                         # labelled it
+                         "source": "sequence after last tag", "kind": "derived"})
+    table = pd.DataFrame(rows_out, columns=["tag", "aa", "start", "end", "source",
+                                            "kind"])
+    return {"layout": layout, "tags": [(r["tag"], r["aa"]) for r in rows_out],
             "tag_table": table.drop(columns=["kind"]) if len(table) else table,
             # tags the vector carries that the soluble protein does not, named
             # so a screen can say so rather than leaving them unexplained
-            "beyond_stop": [(r["tag"], r["start"], r["end"]) for r in beyond]}
+            "beyond_stop": [(r["tag"], r["start"], r["end"]) for r in beyond],
+            # the stretch between the last tag and the stop, split into its
+            # linker and its C-terminal cysteine when it carries one
+            "trailer": trailer}
 
 
 def recommend_enzymes(backbone: SeqRecord, insert: str | SeqRecord | None = None,

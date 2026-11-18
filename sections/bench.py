@@ -27,57 +27,7 @@ from compute import analyze_one
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.17c"
-
-
-# --------------------------------------------------------------------------
-# Prefills that follow the sequence
-# --------------------------------------------------------------------------
-# `st.number_input(..., value=x, key=k)` honours `value` on the first render
-# only: once `k` exists in `st.session_state`, Streamlit serves the stored
-# number and ignores the argument. Every field on this screen prefilled from
-# the picked protein was therefore frozen on whichever protein was picked
-# first. Selecting another one, or flipping the cysteine state, left the
-# previous coefficient and molar mass in the boxes, and the concentration
-# underneath was computed from those and labelled "derived", with nothing on
-# the screen saying the sequence had moved on. Measured by driving the real
-# app: lysozyme then ubiquitin kept eps 37970 /M/cm and 14313 Da, so
-# ubiquitin's 0.189 mg/mL was lysozyme's arithmetic.
-#
-# `_prefill` writes the new default into session_state *before* the widget is
-# built, and only when the derived value itself changed, so a number typed by
-# hand survives a rerun but not a change of protein.
-_PREFILLED = "_bench_prefilled"
-
-
-def _prefill(key: str, value: float | None) -> float | None:
-    """Keep a keyed widget's prefill in step with the sequence it comes from.
-
-    ``value`` is the number the sequence implies, or None when there is no
-    sequence to imply one. A None clears a box this function filled earlier,
-    rather than leaving the departed protein's number behind; a box the user
-    typed into is left alone, because the last value written for that key is
-    remembered and compared against the new one.
-
-    Returns what to pass as that widget's own ``value`` argument. It is None
-    whenever this call has just written into session_state: the state wins in
-    any case, and Streamlit logs a warning for a keyed widget handed both a
-    default and a fresh state entry.
-    """
-    written = st.session_state.setdefault(_PREFILLED, {})
-
-    if value is None:
-        if key in written:
-            del written[key]
-            st.session_state[key] = None
-        return None
-
-    value = float(value)
-    if written.get(key) != value:
-        written[key] = value
-        st.session_state[key] = value
-        return None
-    return value
+__version__ = "2026.11.17b"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -297,10 +247,7 @@ def _quantify(t: Tube) -> None:
             default_eps = float(props["ext_coeff_cystines"]
                                 if cys_state == "Cystines formed"
                                 else props["ext_coeff_reduced"])
-        # The cysteine state is read above, so flipping it moves the prefill
-        # here too: the 125 /M/cm per disulfide was being ignored as well.
-        _eps_prefill = _prefill("q_eps", default_eps)
-        eps = st.number_input("eps 280 (/M/cm)", 0.0, 1e7, _eps_prefill, 10.0,
+        eps = st.number_input("eps 280 (/M/cm)", 0.0, 1e7, default_eps, 10.0,
                               key="q_eps",
                               placeholder="from a sequence, or type it")
         # Whether the coefficient is a ProtParam prediction or the user's own
@@ -308,8 +255,7 @@ def _quantify(t: Tube) -> None:
         _eps_from_sequence = (default_eps is not None
                               and eps == default_eps)
         mw = st.number_input("Molar mass (Da)", 0.0, 1e7,
-                             _prefill("q_mw",
-                                      props["mw_da"] if props else None), 1.0,
+                             float(props["mw_da"]) if props else None, 1.0,
                              key="q_mw",
                              placeholder="from a sequence, or type it")
 
@@ -683,8 +629,7 @@ def _convert(t: Tube) -> None:
     if crosses:
         mw = st.number_input(
             "Molar mass (Da)", 0.0, 1e7,
-            _prefill("cv_mw", props["mw_da"] if props else None), 1.0,
-            key="cv_mw",
+            float(props["mw_da"]) if props else None, 1.0, key="cv_mw",
             placeholder="from a sequence, or type it")
         if not mw:
             st.info(
@@ -806,8 +751,7 @@ def _pair(t: Tube) -> None:
                                  1.0, 0.1, format="%.4f", key="pr_aconc")
         a_mw = st.number_input(
             "Molar mass of A (Da)", 0.0, 1e7,
-            _prefill("pr_amw", props["mw_da"] if props else None), 1.0,
-            key="pr_amw",
+            float(props["mw_da"]) if props else None, 1.0, key="pr_amw",
             placeholder="from a sequence, or type it",
             help="From the sequence picked at the top when there is one, "
                  "which is theoretical: computed from the sequence, not "
@@ -922,15 +866,13 @@ def _balance(t: Tube) -> None:
         # plausible-looking yields resting on nothing.
         eps = st.number_input(
             "eps 280 (/M/cm)", 0.0, 1e7,
-            _prefill("pb_eps",
-                     props["ext_coeff_cystines"] if props else None), 10.0,
+            float(props["ext_coeff_cystines"]) if props else None, 10.0,
             key="pb_eps",
             placeholder="from a sequence, or type it",
             help="Prefilled from the sequence, with the cystines formed. Used "
                  "for every step quantified by A280.")
         mw = st.number_input("Molar mass (Da)", 0.0, 1e7,
-                             _prefill("pb_mw",
-                                      props["mw_da"] if props else None), 1.0,
+                             float(props["mw_da"]) if props else None, 1.0,
                              key="pb_mw",
                              placeholder="from a sequence, or type it")
     with right:

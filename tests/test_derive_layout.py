@@ -38,7 +38,15 @@ EXPECTED = {
     "pMES3": (["PelB", "VHH", "His6", "stop"], [("His6", "HHHHHH")]),
     "pMES4": (["PelB", "VHH", "His6", "stop"], [("His6", "HHHHHH")]),
     "pHEN6": (["PelB", "VHH", "His6", "stop"], [("His6", "HHHHHH")]),
-    "pHEN25": (["PelB", "VHH", "His6", "stop"], [("His6", "HHHHHH")]),
+    # pHEN25 is the one map whose cassette carries something past the last
+    # annotated tag: the sequence between the histidines and the first stop
+    # codon encodes a proline-rich linker and then a single cysteine, neither of
+    # them annotated. Until that was read from the sequence this entry said
+    # PelB - VHH - His6 - stop, and a clone missing those fifteen residues
+    # passed the construct check.
+    "pHEN25": (["PelB", "VHH", "His6", "linker(SPSTPPTPSPSTPP)", "Cys(C-term)",
+                "stop"],
+               [("His6", "HHHHHH"), ("linker-Cys", "SPSTPPTPSPSTPPC")]),
     "pMECS": (["PelB", "VHH", "HA", "spacer(GS)", "His6", "stop"],
               [("HA", "YPYDVPDY"), ("His6", "HHHHHH")]),
 }
@@ -311,3 +319,149 @@ def _clone_in(vector: str) -> str:
     built = cl.assemble(plasmid["record"], insert, "PstI", "BstEII", circular=True)
     assert built["ok"]
     return built["construct"]
+
+
+# --------------------------------------------------------------------------- #
+# What sits between the last annotated tag and the stop
+# --------------------------------------------------------------------------- #
+
+def test_phen25_carries_a_linker_and_a_cysteine_its_map_does_not_annotate():
+    """The element that is in the sequence and in no annotation.
+
+    pHEN25's map annotates `6xHis` and stops there, while the nucleotides
+    between those histidines and the first stop codon encode SPSTPPTPSPSTPP and
+    then one cysteine. A tag scan driven by annotations cannot see any of it, so
+    the sequencing screen announced a cassette ending at the histidines and the
+    construct check looked for nothing after them. These assertions read the
+    stretch out of the shipped file, so they fail if the file is replaced by a
+    map that encodes something else there.
+    """
+    plasmid = cl.load_plasmid(cl.list_bundled_plasmids()["pHEN25"])
+    features = cl.feature_table(plasmid)
+    derived = cl.derive_layout(plasmid, features)
+    trailer = derived["trailer"]
+
+    assert trailer["aa"] == "SPSTPPTPSPSTPPC"
+    assert trailer["linker"] == "SPSTPPTPSPSTPP"
+    assert trailer["cys"] is True
+    assert trailer["labels"] == ["linker(SPSTPPTPSPSTPP)", "Cys(C-term)"]
+    # the cysteine is the last residue before the stop, which is what makes it
+    # a free C-terminal cysteine rather than one inside a linker
+    assert trailer["aa"].endswith("C")
+
+    # it is in the sequence at the coordinates reported, and nothing annotates it
+    seq = str(plasmid["record"].seq)
+    span = seq[trailer["start"] - 1:trailer["end"]]
+    from Bio.Seq import Seq as _Seq
+    assert str(_Seq(span).translate()) == trailer["aa"]
+    annotated = features[(features["start"] >= trailer["start"])
+                         & (features["end"] <= trailer["end"])]
+    assert annotated.empty, \
+        "the map now annotates this stretch; derive it from the annotation instead"
+
+
+def test_the_other_four_vectors_stop_right_after_their_last_tag():
+    """Deriving the trailer must not invent one where the stop follows the tag.
+
+    This is what keeps the change to pHEN25 from moving the other four layouts,
+    which `EXPECTED` above pins residue by residue.
+    """
+    for name in ("pMES3", "pMES4", "pHEN6", "pMECS"):
+        derived = cl.derive_layout(cl.load_plasmid(cl.list_bundled_plasmids()[name]))
+        assert derived["trailer"]["aa"] == "", f"{name}: {derived['trailer']}"
+        assert derived["trailer"]["labels"] == []
+        assert derived["layout"][-1] == "stop"
+        assert derived["layout"][-2].startswith("His"), derived["layout"]
+
+
+def test_a_trailer_with_no_stop_in_frame_is_not_guessed_at():
+    """No stop downstream means the end of the cassette is not established."""
+    assert cl.c_terminal_trailer("CCT" * 40, 0)["aa"] == ""          # no stop
+    assert cl.c_terminal_trailer("TAA", 0)["aa"] == ""               # stop first
+    assert cl.c_terminal_trailer("", 0)["aa"] == ""
+    assert cl.c_terminal_trailer("CC", 0)["aa"] == ""                # no full codon
+
+
+def test_a_trailer_without_a_cysteine_is_reported_as_a_linker_alone():
+    """The cysteine is split out when it is there, not assumed to be."""
+    # GGT GGT TCT TAA -> GGS, stop
+    plain = cl.c_terminal_trailer("GGTGGTTCTTAA", 0)
+    assert plain["aa"] == "GGS"
+    assert plain["cys"] is False
+    assert plain["linker"] == "GGS"
+    assert plain["labels"] == ["linker(GGS)"]
+    assert plain["name"] == "linker"
+
+    # a lone cysteine, no linker in front of it
+    lone = cl.c_terminal_trailer("TGTTAA", 0)
+    assert lone["aa"] == "C"
+    assert lone["cys"] is True
+    assert lone["linker"] == ""
+    assert lone["labels"] == ["Cys(C-term)"]
+    assert lone["name"] == "Cys"
+
+
+def test_a_correct_phen25_clone_reports_the_cysteine_as_present():
+    """The construct check has to find it, which is the point of deriving it."""
+    derived = cl.derive_layout(cl.load_plasmid(cl.list_bundled_plasmids()["pHEN25"]))
+    check = cl.verify_construct(_clone_in("pHEN25"), derived)
+
+    assert check["ok"]
+    assert check["tags_found"] == "His6,linker-Cys"
+    assert check["tags_missing"] == ""
+    assert check["cassette_aa"].rstrip("*").endswith("SPSTPPTPSPSTPPC")
+
+
+def test_a_phen25_construct_that_lost_the_cysteine_is_not_reported_as_correct():
+    """Before the trailer was derived this construct passed as a good clone."""
+    construct = _clone_in("pHEN25")
+    # cut the cassette short: stop immediately after the histidines, which is
+    # the layout the app used to expect for this vector
+    i = construct.find("CACCACCATCACCATCAC")
+    assert i > 0
+    truncated = construct[:i + 18] + "TAATAG" + construct[i + 18 + 6:]
+
+    check = cl.verify_construct(truncated, derived_phen25())
+    assert check["tags_found"] == "His6"
+    assert check["tags_missing"] == "linker-Cys"
+    assert any("missing tag(s): linker-Cys" in w for w in check["warnings"])
+
+
+def test_a_read_that_stops_inside_the_linker_is_short_not_a_bad_clone():
+    """Fifteen residues past the His tag is far enough out that reads die there.
+
+    Reporting that as a missing element reads as a clone that lost its cysteine,
+    which is a different verdict and a different action: re-sequence rather than
+    discard. The two are separable only when no stop was reached, so that is the
+    only case in which the partial match is reported.
+    """
+    full = _clone_in("pHEN25")
+    i = full.find("CACCACCATCACCATCAC")
+    # a read ending part-way through the linker, with no stop codon reached
+    short = full[:i + 18 + 24]
+
+    inside = sg.extract_cassette(short, "pHEN25")
+    assert inside["tags_missing"] == "linker-Cys"
+    assert "linker-Cys (8 of 15 residues read)" == inside["tags_partial"]
+    assert any("read ends inside" in w for w in inside["warnings"])
+
+    # the whole thing read: nothing partial, nothing missing
+    whole = sg.extract_cassette(full[:i + 18 + 45 + 6], "pHEN25")
+    assert whole["tags_found"] == "His6,linker-Cys"
+    assert whole["tags_partial"] == ""
+
+
+def test_a_clone_that_really_lost_the_trailer_is_not_called_a_short_read():
+    """The stop was reached, so the absence is the clone's and is reported flat."""
+    full = _clone_in("pHEN25")
+    i = full.find("CACCACCATCACCATCAC")
+    lost = full[:i + 18] + "TAATAG"
+
+    ex = sg.extract_cassette(lost, "pHEN25")
+    assert ex["stop_codon_present"]
+    assert ex["tags_missing"] == "linker-Cys"
+    assert ex["tags_partial"] == "", "a clone that stops at the His tag is not a short read"
+
+
+def derived_phen25():
+    return cl.derive_layout(cl.load_plasmid(cl.list_bundled_plasmids()["pHEN25"]))

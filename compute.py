@@ -48,7 +48,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.16f"
+__version__ = "2026.11.18a"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -622,7 +622,10 @@ def derive_layout_cached(payload, name):
     return {"layout": list(derived["layout"]),
             "tags": tuple((n, s) for n, s in derived["tags"]),
             "tag_table": derived["tag_table"],
-            "beyond_stop": tuple(derived["beyond_stop"])}
+            "beyond_stop": tuple(derived["beyond_stop"]),
+            # read from the sequence past the last annotation, so the cloning
+            # screen can show the C-terminal linker and cysteine it carries
+            "trailer": dict(derived["trailer"])}
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)

@@ -18,7 +18,7 @@ import sanger as sg
 from compute import png_quality, process_ab1, quality_table_for
 from shell import FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.16c"
+__version__ = "2026.11.18a"
 
 
 def _zipped(files) -> bytes:
@@ -103,6 +103,21 @@ def render(settings: Settings) -> None:
         min_phred = st.number_input("Min mean Phred", 5, 50,
                                     sg.DEFAULTS["min_mean_phred"], 1)
     st.caption(f"{vector} layout: " + " → ".join(sg.VECTORS[vector]["layout"]))
+    # The stretch after the last annotated tag is read from the vector's
+    # sequence, so say so: on this screen everything else in the layout comes
+    # from an annotation on the map, and the two are not equally well attested.
+    trailer = sg.VECTORS[vector].get("trailer") or {}
+    if trailer.get("aa"):
+        note = (f"The {len(trailer['aa'])} residues after the last tag "
+                f"({trailer['aa']}, {3 * len(trailer['aa'])} nt) are translated "
+                "from this vector's sequence, not read from an annotation on its "
+                "map")
+        if trailer.get("cys"):
+            note += (", and they end on a cysteine immediately before the stop. "
+                     "A read has to reach that far to show the clone carries it; "
+                     "one that stops earlier is reported as ending inside the "
+                     "stretch rather than as missing it")
+        st.caption(note + ".")
 
     if not ab1_files and not example_files:
         st.info("No chromatogram uploaded yet.")
@@ -135,7 +150,8 @@ def render(settings: Settings) -> None:
 
         show_cols = [c for c in ["read", "status", "qc_pass", "trimmed_len",
                                  "mean_phred_trim", "strand", "frame", "vhh_len",
-                                 "tags_found", "tags_missing", "premature_stops",
+                                 "tags_found", "tags_missing", "tags_partial",
+                                 "premature_stops",
                                  "n_copies", "duplicate_of", "warnings"]
                      if c in sanger_df.columns]
         data_download("The results as shown", sanger_df[show_cols],
