@@ -197,6 +197,40 @@ def test_analysis_renders_every_family(app):
         _no_failure(app, f"family {family}")
 
 
+@pytest.mark.skipif(not HAS_HMMER, reason="domain splitting needs ANARCI")
+def test_a_biparatopic_is_split_into_its_domains(app):
+    """Submitting one chain that carries two VHHs must put both domains into
+    the run as sequences of their own.
+
+    This is the end of the chain the feature exists for: before it, the whole
+    construct was classified "contains a V domain" and every antibody-specific
+    tab skipped it, so the screen had nothing to say about a biparatopic. The
+    assertion is on what the table holds rather than on the wording of the
+    panel, so rewording the panel does not fail the test, and losing the
+    domains does."""
+    _goto(app, "🔬 Sequence analysis")
+    first = _FRAME.format(cdr3="DRGYSSSWYDY")
+    second = _FRAME.format(cdr3="DRGYSSSWYDK")
+    app.text_area[0].set_value(
+        f">bip\n{first}GGGGSGGGGSGGGGS{second}HHHHHH\n")
+    _click(app, "Analyze")
+    _no_failure(app, "biparatopic")
+
+    names = set()
+    for frame in app.dataframe:
+        data = frame.value
+        if data is not None and "name" in getattr(data, "columns", []):
+            names |= set(data["name"].astype(str))
+    assert "bip_D1" in names and "bip_D2" in names, \
+        f"the two domains were not analysed separately; saw {sorted(names)}"
+    assert "bip" in names, "the submitted chain was dropped from the run"
+
+    # Put the shared fixture back, the app is module-scoped.
+    app.text_area[0].set_value(FASTA)
+    _click(app, "Analyze")
+    _no_failure(app, "restoring the shared fixture")
+
+
 def test_the_comparison_view_draws_its_three_layers(app):
     """Ranks, gates and a front all draw, and the refusal is on the screen."""
     _goto(app, "🔬 Sequence analysis")

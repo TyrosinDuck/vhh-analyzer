@@ -41,6 +41,7 @@ import tnp
 import triage as tg
 import vhh_core as vc
 from compute import (aggregation_for, analyze_with_progress, annotation_for,
+                     dissect_cached,
     annotations, cdr3_identity_example,
     charge_curves_for, chou_fasman_table_for,
     classify_cached, comparison_for, comparison_for_set, ctm, disulfides_for,
@@ -65,7 +66,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
                    usage_prompt)
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.19a"
 
 
 @dataclass
@@ -152,6 +153,160 @@ _FAMILIES = {
                    "constructs, CSV, figures, the PDF report, and the session "
                    "file that lets somebody run this again."),
 }
+
+
+
+# --------------------------------------------------------------------------- #
+# Multi-domain constructs
+# --------------------------------------------------------------------------- #
+#
+# A bivalent or biparatopic VHH is one chain carrying two variable domains, and
+# every VHH-specific reading in this screen is written for one domain. Before
+# this, such a chain was classified "contains a V domain" and dropped out of all
+# of them, which is correct for the chain and useless at the bench.
+#
+# What happens instead: the chain is cut into its domains, and each domain is
+# added to the run as a sequence in its own right, named `<submitted>_D1`,
+# `_D2`. From there every tab treats a domain as what it is, an independent
+# VHH, with no tab needing to know that constructs exist. The submitted chain
+# stays in the run as itself and keeps the readings that are valid for a whole
+# protein, mass, pI, extinction, charge, aggregation, liabilities, DNA.
+#
+# Deriving sequences rather than teaching fourteen tabs about domains is the
+# whole point: the alignment, the identity matrix and the clonal families then
+# compare the two domains of a biparatopic against each other and against
+# everything else in the submission, which is exactly the comparison worth
+# having, and none of that code changed.
+
+DOMAIN_SUFFIX = "_D"
+
+
+def _construct_base_name(name: str, taken: set[str]) -> str:
+    """A base name whose derived domain names collide with nothing submitted."""
+    base = name
+    while any(f"{base}{DOMAIN_SUFFIX}{i}" in taken for i in range(1, 10)):
+        base = f"{base}'"
+    return base
+
+
+def _expand_constructs(sequences: dict, method: str, ph: float):
+    """Dissect every multi-domain submission and add its domains to the run.
+
+    Returns ``(sequences, constructs, note)``: the sequence set the screen will
+    analyse, the dissection of each construct keyed by its submitted name, and
+    a note when the expansion was refused.
+
+    Only sequences that classification already called a fusion are dissected,
+    so a submission of ordinary VHHs costs no extra ANARCI pass.
+    """
+    constructs, derived = {}, {}
+    for name, seq in list(sequences.items()):
+        kind = classify_cached(seq, method)
+        if kind["kind"] != vc.KIND_FUSION:
+            continue
+        base = _construct_base_name(name, set(sequences))
+        cut = dissect_cached(seq, base, method, ph)
+        if not cut["domains"]:
+            continue
+        constructs[name] = cut
+        for d in cut["domains"]:
+            derived[d["name"]] = d["sequence"]
+
+    if not derived:
+        return sequences, constructs, None
+
+    total = len(sequences) + len(derived)
+    ceiling = vc.DEFAULTS["max_sequences"]
+    if total > ceiling:
+        return sequences, constructs, (
+            f"{len(constructs)} multi-domain construct(s) were found, and "
+            f"analysing their {len(derived)} domains separately would bring the "
+            f"run to {total} sequences, above the {ceiling} allowed. The "
+            "constructs are described below but their domains are not added; "
+            "submit fewer sequences to get the per-domain analysis.")
+
+    return {**sequences, **derived}, constructs, None
+
+
+def _construct_panel(constructs: dict, expanded: bool) -> None:
+    """What was found in each multi-domain chain, and what was done with it."""
+    n = len(constructs)
+    total_domains = sum(c["n_domains"] for c in constructs.values())
+    st.success(
+        f"**{n} multi-domain construct(s) detected, carrying {total_domains} "
+        "variable domain(s).**"
+        + (" Each domain was added to this run as a sequence of its own, named "
+           "`<construct>_D1`, `_D2`, and goes through every antibody-specific "
+           "analysis on its own. The submitted chain stays in the run and keeps "
+           "the readings that apply to a whole protein."
+           if expanded else ""), icon="🧩")
+
+    for name, cut in constructs.items():
+        with st.expander(f"🧩 {name}, {cut['n_domains']} domain(s), "
+                         f"{cut['length']} aa", expanded=n == 1):
+            st.image(png_construct(cut, name), **FIT)
+
+            seg = cut["segments"]
+            st.dataframe(
+                seg[["label", "kind", "start", "end", "length"]],
+                hide_index=True, **FIT,
+                column_config={"label": "Segment", "kind": "Type",
+                               "start": "Start", "end": "End",
+                               "length": "Length (aa)"})
+
+            comp = cut["composition"]
+            props = cut["properties"].iloc[0]
+            cols = st.columns(4)
+            cols[0].metric("Whole chain", f"{cut['length']} aa")
+            cols[1].metric("In domains", f"{comp['vhh']} aa")
+            cols[2].metric("Linker", f"{comp['linker']} aa")
+            cols[3].metric("Tags and other", f"{comp['tag'] + comp['other']} aa")
+
+            if "mw_kda" in props and "pI" in props:
+                m = st.columns(3)
+                m[0].metric("Mass", f"{props['mw_kda']:.2f} kDa")
+                m[1].metric("pI", f"{props['pI']:.2f}")
+                if "ext_coeff_reduced" in props:
+                    m[2].metric("ε (reduced)",
+                                f"{props['ext_coeff_reduced']:,.0f}".replace(",", " ")
+                                + " M⁻¹cm⁻¹")
+                st.caption(
+                    "Mass, pI and extinction coefficient are for the whole "
+                    "chain. They are additive over the segments, so a fusion "
+                    "does not invalidate them. They are **derived from the "
+                    "sequence, not measured**; the extinction coefficient in "
+                    "particular is the Gill and von Hippel prediction, which is "
+                    "what the Bench section uses when it turns an A280 into a "
+                    "concentration.")
+
+            js = cut.get("junction_sites")
+            if js is not None and not js.empty:
+                strong = js[js["score"] >= 5]
+                st.markdown("**Protease sites outside the domains**")
+                st.caption(
+                    f"{len(js)} predicted site(s) fall in a linker or a tag "
+                    "rather than in a domain. This is where a construct is cut "
+                    "in practice, and it is the one place a per-domain analysis "
+                    "cannot look. Most are the generic trypsin and chymotrypsin "
+                    "motifs that any sequence carries; the recognition sites "
+                    "worth reading are the high-scoring ones.")
+                show = strong if not strong.empty else js
+                st.dataframe(show[["segment", "protease", "position", "motif",
+                                   "score", "note"]].head(25),
+                             hide_index=True, **FIT)
+
+            for w in cut["warnings"]:
+                st.warning(w, icon="⚠️")
+
+            st.caption(
+                f"Domain boundaries: **{cut['bounds_quality']}**. "
+                + ("ANARCI numbered each domain, so the boundaries are the "
+                   "numbering's own and the linker is what is left between "
+                   "them."
+                   if cut["bounds_quality"] == "exact" else
+                   "No ANARCI on this server, so the boundaries come from the "
+                   "regex scanner and the N-terminal end of each domain is "
+                   "placed by convention."))
 
 
 def view_count() -> int:
@@ -2824,6 +2979,10 @@ def render(settings: Settings) -> None:
         footer()
         st.stop()
 
+    # Multi-domain constructs are cut into their domains before anything else
+    # runs, so that every tab downstream sees a domain as an ordinary sequence.
+    sequences, constructs, expand_note = _expand_constructs(sequences, method, ph)
+
     df, annotations, errors = analyze_with_progress(sequences, ph, method,
                                                     slot=status_slot)
 
@@ -2854,6 +3013,11 @@ def render(settings: Settings) -> None:
             "CDR1–CDR3 disulfide.\n\n"
             + "\n".join(f"- **{n}**, {kinds[n]['note']}" for n in _vh_only),
             icon="🧬")
+
+    if constructs:
+        _construct_panel(constructs, expanded=expand_note is None)
+    if expand_note:
+        st.warning(expand_note, icon="⚠️")
 
     if other_names:
         st.info(

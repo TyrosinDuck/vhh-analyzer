@@ -33,10 +33,11 @@ import vhh_core as vc
 
 __all__ = [
     "TAGS", "LINKERS", "FORMATS", "VERIFY_NOTICE",
-    "build_construct", "plot_construct", "construct_dna", "__version__",
+    "build_construct", "plot_construct", "construct_dna",
+    "dissect_construct", "SPACER_KINDS", "__version__",
 ]
 
-__version__ = "2026.10.21d"
+__version__ = "2026.11.19a"
 
 VERIFY_NOTICE = (
     "Check every tag and linker sequence against your own vector or reference "
@@ -208,7 +209,190 @@ def construct_dna(construct: dict, avoid: set[str] | None = None,
     return dna
 
 
-KIND_COLORS = {"vhh": "#4c72b0", "linker": "#c7c7c7", "tag": "#dd8452"}
+
+# --------------------------------------------------------------------------- #
+# The other direction: a construct in, its pieces out
+# --------------------------------------------------------------------------- #
+#
+# `build_construct` goes from pieces to a sequence. Working from a construct
+# that already exists, ordered or received, the question is the reverse one:
+# given one long chain, which parts of it are VHHs, what joins them, and what
+# is stuck on the ends. A bivalent or biparatopic VHH submitted whole used to
+# be classified as "contains a V domain" and dropped out of every VHH-specific
+# analysis, which is correct for the chain as a whole and useless in practice.
+#
+# The cut is not a guess. `vhh_core.find_domains` returns the bounds of every
+# variable domain ANARCI numbers, so the linker is what is left between two of
+# them, by subtraction. Measured on caplacizumab fused to cAbLys3 through five
+# different linkers, from a direct fusion to (EAAAK)3: both domains found every
+# time, and the recovered inter-domain stretch equal to the linker that went in,
+# residue for residue. Without ANARCI the regex scanner finds the same domains
+# on a canonical scaffold but places their N-terminal boundary by convention,
+# which moves a few residues of framework into the linker; `bounds_quality`
+# says which of the two produced the segments below.
+
+SPACER_KINDS = ("linker", "tag", "other")
+
+
+def _known_pieces() -> list[tuple[str, str, str]]:
+    """(sequence, label, kind) for every tag and linker this module knows.
+
+    Derived from TAGS and LINKERS rather than written out again, so a tag added
+    above is recognised here without a second edit. Sorted longest first so
+    that His8 is matched before His6 finds its first six residues.
+    """
+    pieces = [(d["seq"], name, "tag") for name, d in TAGS.items() if d["seq"]]
+    pieces += [(d["seq"], name, "linker") for name, d in LINKERS.items() if d["seq"]]
+    return sorted(pieces, key=lambda p: -len(p[0]))
+
+
+def _label_spacer(seq: str, default_kind: str) -> list[tuple[str, str, str]]:
+    """Cut a stretch between domains into recognised tags and the rest.
+
+    Returns (label, kind, sequence) triples covering `seq` end to end. A stretch
+    that matches nothing comes back as one "unassigned" piece: an unrecognised
+    sequence is reported as unrecognised rather than called a linker because it
+    happens to sit where a linker would.
+    """
+    if not seq:
+        return []
+    for piece, label, kind in _known_pieces():
+        idx = seq.find(piece)
+        if idx == -1:
+            continue
+        out = []
+        out += _label_spacer(seq[:idx], default_kind)
+        out.append((label, kind, piece))
+        out += _label_spacer(seq[idx + len(piece):], default_kind)
+        return out
+    return [("unassigned", default_kind, seq)]
+
+
+def dissect_construct(seq: str, name: str = "construct",
+                      method: str | None = None,
+                      ph: float | None = None) -> dict:
+    """Cut a multi-domain construct into its domains, linkers and tags.
+
+    The inverse of `build_construct`, and it returns the same shape of dict, so
+    `plot_construct`, `construct_dna` and the segment table work on a dissected
+    construct exactly as they do on an assembled one.
+
+    Beyond that shape it adds ``domains``, one entry per variable domain with
+    its name, sequence and bounds, ``bounds_quality`` ("exact" from ANARCI,
+    "approximate" from the regex scanner), and ``junction_sites``, the
+    predicted protease sites that fall outside the domains, which is where a
+    linker is cut in practice and where the per-domain analyses would never
+    look.
+
+    ``per_vhh`` characterises each domain on its own. The whole chain is
+    characterised too, in ``properties``: mass, pI and extinction coefficient
+    are additive and stay meaningful across a fusion. Nothing camelid is
+    computed on the whole chain, because a hallmark tetrad or a CDR3 length
+    read across two domains would be an artefact of the concatenation.
+    """
+    seq = vc.clean_sequence(seq)
+    domains = vc.find_domains(seq, method=method)
+
+    quality = ({d.get("bounds", "exact") for d in domains} or {"exact"})
+    bounds_quality = "approximate" if "approximate" in quality else "exact"
+
+    pieces: list[tuple[str, str, str]] = []      # (label, kind, sequence)
+    cursor = 0
+    named_domains = []
+    for i, d in enumerate(domains, start=1):
+        if d["start"] > cursor:
+            # Before the first domain this is an N-terminal extension; between
+            # two domains it is the linker. The default kind differs so that a
+            # stretch matching nothing is not called a linker when it sits on
+            # the end of the chain.
+            pieces += _label_spacer(seq[cursor:d["start"]],
+                                    "linker" if i > 1 else "other")
+        label = f"{name}_D{i}"
+        body = seq[d["start"]:d["end"] + 1]
+        pieces.append((label, "vhh", body))
+        named_domains.append({"name": label, "sequence": body,
+                              "start": d["start"] + 1, "end": d["end"] + 1,
+                              "length": len(body), "chain": d.get("chain"),
+                              "evalue": d.get("evalue"),
+                              "bounds": d.get("bounds", "exact")})
+        cursor = d["end"] + 1
+    if cursor < len(seq):
+        pieces += _label_spacer(seq[cursor:], "other")
+
+    pieces = [p for p in pieces if p[2]]
+    segments, pos = [], 0
+    for label, kind, piece in pieces:
+        segments.append(_segment(label, kind, piece, pos))
+        pos += len(piece)
+    segments_df = pd.DataFrame(segments)
+
+    # Protease sites outside the domains. Computed on the whole chain so that a
+    # motif straddling a junction is seen, then kept only where it falls in a
+    # segment that is not a domain.
+    sites = vc.find_protease_sites(seq)
+    junction = sites.iloc[0:0] if sites.empty else None
+    if not sites.empty:
+        spans = [(s["start"], s["end"], s["label"], s["kind"])
+                 for s in segments if s["kind"] != "vhh"]
+        keep, seg_label = [], []
+        for _idx, row in sites.iterrows():
+            hit = next((lab for a, b, lab, _k in spans if a <= row["position"] <= b),
+                       None)
+            keep.append(hit is not None)
+            seg_label.append(hit)
+        junction = sites[pd.Series(keep, index=sites.index)].copy()
+        junction["segment"] = [s for s in seg_label if s is not None]
+
+    warnings = []
+    if not domains:
+        warnings.append(
+            "No immunoglobulin variable domain was found, so there is nothing "
+            "to cut: the sequence is reported as one piece.")
+    if bounds_quality == "approximate":
+        warnings.append(
+            "Domain boundaries come from the regex scanner, not ANARCI. The "
+            "C-terminal end of each domain is the FR4 motif and is located "
+            "directly; the N-terminal end is placed by IMGT convention, so the "
+            "first residues of a domain can be reported as part of the linker. "
+            "Read the linker length as approximate.")
+    unassigned = [s for s in segments if s["label"] == "unassigned"]
+    if unassigned:
+        warnings.append(
+            f"{len(unassigned)} stretch(es) between or around the domains match "
+            "no tag or linker this module knows, and are left as "
+            "'unassigned' rather than guessed at.")
+    if len(domains) > 1:
+        warnings.append(
+            "Mass, pI and extinction coefficient below are for the whole chain "
+            "and stay valid across a fusion. Everything camelid, the hallmark "
+            "tetrad, CDR lengths, germline and humanness, is reported per "
+            "domain only; read across the junction it would describe an "
+            "artefact of the concatenation rather than the protein.")
+    if len(seq) > vc.DEFAULTS["max_length"]:
+        warnings.append(
+            f"The chain is {len(seq)} residues, above the "
+            f"{vc.DEFAULTS['max_length']}-residue limit the analysis tools use.")
+
+    whole = pd.DataFrame([vc.characterize(name, seq, ph=ph)])
+    per_vhh = (pd.DataFrame([vc.characterize(d["name"], d["sequence"], ph=ph)
+                             for d in named_domains])
+               if named_domains else pd.DataFrame())
+
+    return {"sequence": seq, "length": len(seq), "name": name,
+            "segments": segments_df,
+            "properties": whole, "per_vhh": per_vhh,
+            "domains": named_domains,
+            "n_domains": len(named_domains),
+            "bounds_quality": bounds_quality,
+            "junction_sites": junction,
+            "warnings": warnings,
+            "composition": {k: sum(s["length"] for s in segments
+                                   if s["kind"] == k)
+                            for k in ("vhh", "linker", "tag", "other")}}
+
+
+KIND_COLORS = {"vhh": "#4c72b0", "linker": "#c7c7c7", "tag": "#dd8452",
+               "other": "#8c8c8c"}
 
 
 def plot_construct(construct: dict, title: str = "Construct"):

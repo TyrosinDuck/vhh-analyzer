@@ -23,11 +23,11 @@ import streamlit as st
 
 import bench as bn
 import vhh_core as vc
-from compute import analyze_one
+from compute import analyze_one, classify_cached
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.19a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -195,6 +195,24 @@ def _sequence_source(ph: float, method: str):
             f"eps(280) {props['ext_coeff_cystines']} /M/cm with the cystines "
             f"formed, {props['ext_coeff_reduced']} reduced · "
             f"{props['n_primary_amines']} primary amines")
+        # A bivalent or biparatopic chain is one molecule in one tube, so every
+        # figure on this screen is the whole chain's and that is the right
+        # answer here. Said out loud because the analysis screen does the
+        # opposite with the same sequence, cutting it into its domains, and two
+        # screens disagreeing without explanation is how a number gets used for
+        # the wrong thing.
+        try:
+            n_dom = classify_cached(seq, method).get("n_domains") or 0
+        except Exception:
+            n_dom = 0
+        if n_dom > 1:
+            st.caption(
+                f"This chain carries **{n_dom} variable domains**. Everything on "
+                "this screen, mass, extinction coefficient, concentration, "
+                "labelling ratios, is for the whole construct, which is what "
+                "goes in the tube. The sequence analysis screen cuts the same "
+                "chain into its domains; use that one for the per-domain "
+                "readings.")
     elif not seq:
         st.info(
             "The calculators below still work if you type the molar mass and "

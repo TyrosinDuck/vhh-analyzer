@@ -16,6 +16,72 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **Bivalent and biparatopic constructs are cut into their domains and
+  analysed.** A chain carrying two VHHs joined by a linker was classified
+  "contains a V domain" and skipped by every antibody-specific tab, which is
+  the right answer for the chain and no answer at all for the molecule in the
+  tube. The sequence analysis screen now dissects any submission that
+  classification calls a fusion: each variable domain is added to the run as a
+  sequence of its own, named `<submitted>_D1`, `_D2`, and goes through
+  annotation, CDRs, hallmarks, germline, humanness, the alignment, the identity
+  matrix and the clonal families like any other sequence, while the submitted
+  chain stays in the run and keeps mass, pI, extinction coefficient, charge,
+  aggregation, liabilities and DNA. Nothing is switched on: a VHH fused to
+  something that is not an antibody domain is covered by the same path, the
+  domain analysed and the whole characterised.
+
+  The cut is not a guess and does not need one. ANARCI numbers every variable
+  domain in a chain, not only the first; the code here was taking `[0]` and
+  discarding the rest. `vhh_core.find_domains` now returns all of them with
+  their bounds, `classify` is built on it rather than running its own ANARCI
+  pass, and the linker is what is left between two domains, by subtraction.
+  Measured on caplacizumab fused to cAbLys3 through five linkers, from a direct
+  fusion to (EAAAK)3: both domains found in every case, and the recovered
+  inter-domain stretch equal to the linker that went in, residue for residue.
+
+  `constructs.dissect_construct` is the inverse of `build_construct` and
+  returns the same shape of dict, so `plot_construct` and `construct_dna` take
+  either one and the schematic, the segment table and the codon optimiser did
+  not need a second implementation. Linkers and tags are named by matching
+  against the module's existing `TAGS` and `LINKERS`, derived rather than
+  listed again, so a tag added for the builder is recognised by the dissector.
+  A stretch matching neither is labelled `unassigned`: it is not called a
+  linker on the strength of sitting where one would be.
+
+  Two things the per-domain analyses cannot see are reported with the
+  construct. The protease sites that fall in a linker or a tag rather than in a
+  domain, which is where a construct is actually cut and which a rigid (EAAAK)
+  linker supplies one of per repeat. And the boundary quality: `exact` when
+  ANARCI numbered the domains, `approximate` when the regex scanner did, since
+  that path places a domain's N-terminal end at the conserved cysteine minus 22
+  residues by IMGT convention and moves the first residues of a domain into the
+  linker. The deployed app has ANARCI; a notebook without it gets the weaker
+  answer and is told so.
+
+  Nothing camelid is computed on the whole chain. A hallmark tetrad, a CDR3
+  length, a germline or a humanness score read across a junction describes the
+  concatenation and not the protein. Mass, pI and extinction coefficient go the
+  other way, being additive over the segments, which is why the chain keeps
+  them, and why the **Bench** section continues to treat a biparatopic as one
+  molecule: that is the species in the tube, and its whole-chain extinction
+  coefficient is what turns an A280 into a concentration. Bench now says so
+  when the chain carries more than one domain, because two screens doing
+  opposite and correct things to the same sequence without explaining
+  themselves is how a number gets used for the wrong thing.
+
+  The regex scanner needed rebuilding to find a second domain at all:
+  `annotate_regex` looks for the conserved cysteine only in the first 30
+  residues, which assumes the domain starts at residue 0, so behind a linker it
+  found nothing and the app reported a monovalent VHH. It now locates each
+  candidate domain by its FR2 motif first. Found while testing this feature,
+  and it would have been invisible without it.
+
+  Sequence library entries are unaffected and stay whole: a biparatopic is
+  stored as one entry, and the splitting happens in the analysis, not in the
+  file.
+
 ### Fixed
 
 - **pHEN25 lost fourteen residues and a cysteine, and the app did not notice.**

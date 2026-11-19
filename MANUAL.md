@@ -347,7 +347,7 @@ That gives six verdicts, shown in the `type` column of the Properties table:
 | **VHH** | everything runs |
 | **V domain, VHH/VH ambiguous** | everything runs, with a caution (1/4 hallmarks usually means a humanised VHH or a VH-like construct | | **Conventional VH** | everything runs, labelled VH throughout) see below |
 | **Light-chain V domain** | antibody-specific tabs skipped |
-| **Contains a V domain** | antibody-specific tabs skipped, a V domain covering less than 80% of the sequence means a fusion or a multi-domain protein, and running CDR analysis on the whole thing would be meaningless |
+| **Contains a V domain** | the chain is cut into its domains, each domain is analysed on its own, and the chain itself keeps the whole-protein readings. Either more than one V domain, or one covering less than 80% of the sequence. See §3.1d |
 | **Other protein** | antibody-specific tabs skipped |
 
 **A conventional VH gets the full analysis.** Most of what this app calls "the
@@ -404,6 +404,84 @@ match. So the **Alignment** tab aligns the heavy-chain subset by default (VHH
 and VH together, which align perfectly well) with a checkbox to include the
 rest. If
 nothing in the submission is an antibody domain, it aligns what you gave it.
+
+### 3.1d Multi-domain constructs: bivalent, biparatopic, and fusions
+
+A bivalent or biparatopic VHH is one chain carrying two variable domains joined
+by a linker, usually with a tag on one end. Every VHH-specific reading in this
+screen is written for a single domain, so a construct submitted whole used to be
+classified **Contains a V domain** and dropped out of all of them. Correct for
+the chain, useless at the bench.
+
+**What happens now.** The chain is cut into its pieces and each variable domain
+is added to the run as a sequence of its own, named `<submitted>_D1`, `_D2` and
+so on, in order from the N-terminus. From there a domain is an ordinary
+sequence: it is annotated, its CDRs and hallmarks are read, it gets a germline
+and a humanness score, it goes into the alignment, the identity matrix and the
+clonal families. The submitted chain stays in the run as itself and keeps the
+readings that are valid for a whole protein: mass, pI, extinction coefficient,
+charge, aggregation, liabilities, codon-optimised DNA.
+
+Nothing has to be switched on. Any submitted sequence that classification calls
+a fusion is dissected, so this covers a VHH fused to something that is not an
+antibody domain at all, not only VHH-linker-VHH: the VHH part is analysed, and
+the whole thing is characterised as a protein.
+
+**How the cut is made, and why it is not a guess.** ANARCI numbers every
+variable domain in a sequence, not just the first, and reports where each one
+starts and ends. The linker is then what is left between two domains, by
+subtraction. Measured, on caplacizumab fused to cAbLys3 through five linkers
+from a direct fusion to (EAAAK)3: both domains found every time, and the
+recovered stretch between them equal, residue for residue, to the linker that
+went in. The test that checks this is
+`tests/test_constructs_dissect.py::test_both_domains_found_and_linker_recovered`.
+
+Without ANARCI the regex scanner finds the same domains on a canonical
+scaffold, but it places the N-terminal end of a domain at the conserved
+cysteine minus 22 residues, which is where IMGT numbering puts the start of a
+framework and not a measurement of your sequence. A few residues of framework
+then land in the linker. The panel says which of the two produced the segments,
+`exact` or `approximate`, and the app on vhh-tools-app.org has ANARCI.
+
+**What the panel shows.** A schematic of the construct drawn to scale, the
+segment table with every piece and its coordinates, how the length splits
+between domains, linker and tags, and the whole chain's mass, pI and extinction
+coefficient.
+
+Linkers and tags are named by matching against the same lists the **Constructs**
+tab builds from, so a tag added there is recognised here. **A stretch that
+matches nothing is labelled `unassigned`, not guessed at.** It is not called a
+linker because it sits where a linker would.
+
+**Protease sites outside the domains.** The panel lists the predicted cleavage
+sites that fall in a linker or a tag rather than in a domain. This is the one
+place a per-domain analysis cannot look, and it is where a construct is cut in
+practice. Most of what it finds are the generic trypsin and chymotrypsin motifs
+any sequence carries; the ones worth reading are the high-scoring recognition
+sites. Note that a rigid (EAAAK) linker carries a lysine per repeat, so it is
+not inert here, where a (GGGGS) linker is.
+
+**What is deliberately not computed on the whole chain.** Nothing camelid. The
+hallmark tetrad, CDR lengths, germline assignment and humanness are reported per
+domain only. Read across a junction they would describe an artefact of the
+concatenation rather than the protein. Mass, pI and extinction coefficient go
+the other way: they are additive over the segments and stay valid across a
+fusion, which is why the whole chain keeps them.
+
+**The Bench section treats the same chain as one molecule**, on purpose. A
+biparatopic is one species in one tube, so its mass and extinction coefficient
+are the whole chain's, and that is what turns an A280 into a concentration. The
+Bench screen says so when the chain carries more than one domain. The two
+screens are answering different questions about the same sequence, which is why
+each of them states which one it is answering.
+
+**Limits worth knowing.** The run-wide ceiling of sequences applies after the
+split, so a submission whose domains would push it over the limit is described
+but not split, and the screen says so. A domain that is truncated, or a
+scaffold engineered far enough from a canonical framework, can be missed by the
+numbering, in which case it will not appear as a segment: the segment table
+covers the chain end to end, so a missed domain shows up as an oversized
+`unassigned` stretch rather than as silence.
 
 ### 3.2 Sidebar settings
 

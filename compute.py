@@ -48,7 +48,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.18a"
+__version__ = "2026.11.19a"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -68,6 +68,17 @@ def _analyze_one(name: str, seq: str, ph: float, method: str):
 def classify_cached(seq: str, method: str):
     """What kind of sequence this is, ANARCI numbering, so worth caching."""
     return vc.classify(seq, method=method)
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=64)
+def dissect_cached(seq: str, name: str, method: str, ph: float):
+    """Cut a multi-domain construct into its pieces (cached: one ANARCI pass).
+
+    Keyed on the sequence rather than on the submission, so adding a sequence
+    to a list of ten re-dissects one construct, not eleven.
+    """
+    import constructs as ctm
+    return ctm.dissect_construct(seq, name=name, method=method, ph=ph)
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=128)

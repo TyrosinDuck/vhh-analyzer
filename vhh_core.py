@@ -45,6 +45,7 @@ __all__ = [
     "chou_fasman_table", "liability_profile_matrix", "linkage_table",
     "analyze", "REGIONS", "REGION_COLORS", "DEFAULTS", "MIN_LENGTH",
     "classify", "classify_all", "VHH_KINDS", "HEAVY_KINDS",
+    "find_domains", "DOMAIN_COVERAGE",
     "KIND_VHH", "KIND_VH",
     "KIND_VL", "KIND_AMBIGUOUS", "KIND_FUSION", "KIND_OTHER",
     "pairwise_scores", "cluster_families", "plot_family_dendrogram",
@@ -60,7 +61,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.17a"
+__version__ = "2026.11.19a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -230,6 +231,122 @@ HEAVY_KINDS = {KIND_VHH, KIND_AMBIGUOUS, KIND_VH}
 DOMAIN_COVERAGE = 0.80      # fraction of the sequence the V domain must cover
 
 
+def _domains_regex(seq: str) -> list[dict]:
+    """Locate V domains with the regex anchors, scanning N to C.
+
+    The fallback for a machine without ANARCI, and the reason it is not a
+    simple loop over `annotate_regex`: that function expects the domain to
+    start at residue 0, because it looks for the conserved cysteine at IMGT 23
+    only within the first 30 residues. A second domain sits behind a linker and
+    a first domain, so the cysteine falls outside that window and the domain is
+    missed. Measured, not assumed: before this, the regex path found one domain
+    in a two-domain construct and the app silently reported a monovalent VHH.
+
+    So each candidate domain is located by its FR2 motif first, and
+    `annotate_regex` is then given a window that starts far enough ahead of it
+    for the cysteine to land where it is looked for. The window offsets are
+    tried in order rather than computed from a fixed spacing, because the
+    distance between the cysteine and the FR2 motif varies with CDR1 length.
+
+    **The N-terminal bound is approximate, and every domain this returns is
+    marked "approximate" because of it.** The regex annotator never locates the
+    true start of FR1: it finds the conserved cysteine and calls everything
+    before it FR1. The start below is that cysteine minus 22 residues, which is
+    where IMGT numbering puts the start of a canonical framework; it is a
+    convention, not a measurement of this sequence. The C-terminal bound is the
+    last residue of the matched FR4 motif and is located directly.
+    """
+    out: list[dict] = []
+    offset = 0
+    while offset < len(seq) - MIN_LENGTH:
+        m2 = RX_FR2.search(seq, offset)
+        if not m2:
+            break
+        # Candidate starts for the window handed to `annotate_regex`: far
+        # enough before the FR2 motif that the conserved cysteine falls inside
+        # the 15-30 window that function searches.
+        ann, base = None, None
+        for back in range(28, 52):
+            cand = m2.start() - back
+            if cand < offset:
+                break
+            try:
+                ann = annotate_regex(seq[cand:])
+            except ValueError:
+                continue
+            if ann["FR2"]["start"] - 1 + cand == m2.start():
+                base = cand
+                break
+            ann = None
+        if ann is None or base is None:
+            offset = m2.start() + 1
+            continue
+
+        cys23 = base + ann["FR1"]["end"] - 4              # 0-based
+        m4 = RX_FR4.search(seq, base + ann["CDR3"]["start"] - 1)
+        if not m4:
+            break
+        start = max(offset, cys23 - 22)
+        end = m4.end() - 1
+        if end <= start:
+            offset = m2.start() + 1
+            continue
+        out.append({"start": start, "end": end, "chain": None,
+                    "evalue": None, "bounds": "approximate"})
+        offset = end + 1
+    return out
+
+
+def find_domains(seq: str, method: str | None = None) -> list[dict]:
+    """Every immunoglobulin variable domain in a sequence, ordered N to C.
+
+    One entry per domain, each with 0-based inclusive ``start`` and ``end``,
+    the ``chain`` ANARCI reported ("H", "K", "L"), its ``evalue``, and whether
+    the ``bounds`` are "exact" or "approximate".
+
+    This is the one place that asks how many domains a sequence carries.
+    `classify` calls it to decide what a sequence is, and `constructs.dissect`
+    calls it to cut a fusion into its pieces; neither re-runs the search.
+
+    ANARCI returns every domain it finds, which is what makes a bivalent or
+    biparatopic construct separable at all: the residues between two domains
+    are the linker, by subtraction rather than by guessing. Without ANARCI the
+    regex fallback finds the same domains on a canonical scaffold but places
+    their N-terminal boundary by convention rather than by measurement, see
+    `_domains_regex`.
+    """
+    seq = clean_sequence(seq)
+    method = method or DEFAULTS["annotation_method"]
+
+    if method in ("auto", "anarci"):
+        try:
+            from anarci import anarci
+            numbered, details, _ = anarci([("q", seq)], scheme="imgt",
+                                          output=False)
+        except Exception:
+            if method == "anarci":
+                raise
+            numbered = None
+        if numbered is not None:
+            if numbered[0] is None:
+                return []
+            out = []
+            for i, (_numbering, start, end) in enumerate(numbered[0]):
+                detail = details[0][i] if details[0] else {}
+                out.append({"start": start, "end": end,
+                            "chain": detail.get("chain_type"),
+                            "evalue": detail.get("evalue"),
+                            "bounds": "exact"})
+            return sorted(out, key=lambda d: d["start"])
+        if method == "anarci":
+            return []
+
+    try:
+        return _domains_regex(seq)
+    except Exception:
+        return []
+
+
 def classify(seq: str, method: str | None = None) -> dict:
     """Decide what a sequence is, and therefore which analyses apply.
 
@@ -241,24 +358,46 @@ def classify(seq: str, method: str | None = None) -> dict:
     seq = clean_sequence(seq)
     out = {"length": len(seq), "chain": None, "hallmark_score": None,
            "coverage": None, "evalue": None, "method": "ANARCI",
-           "full_analysis": False}
+           "full_analysis": False, "n_domains": 0}
 
+    method = method or DEFAULTS["annotation_method"]
+    anarci_ran = True
     try:
-        from anarci import anarci
-        numbered, details, _ = anarci([("q", seq)], scheme="imgt", output=False)
+        domains = find_domains(seq, method="anarci")
     except Exception:
         # No ANARCI: fall back to the regex annotator, which only ever
         # recognises a VHH-like domain. It cannot tell VH from VHH, nor find a
         # light chain, so the verdict is deliberately coarser.
+        anarci_ran = False
+        domains = []
+        if method != "anarci":
+            try:
+                domains = _domains_regex(seq)
+            except Exception:
+                domains = []
+
+    out["n_domains"] = len(domains)
+
+    if not anarci_ran:
         out["method"] = "regex anchors"
-        try:
-            annotate_regex(seq)
+        if domains:
             score = hallmarks(seq).get("camelid_score")
             out["hallmark_score"] = score
             out["kind"] = KIND_VHH if (score or 0) >= 2 else KIND_AMBIGUOUS
             out["note"] = ("recognised by regex anchors; without ANARCI this "
                            "cannot be told apart from a conventional VH")
-        except Exception:
+            d0 = domains[0]
+            coverage = (d0["end"] - d0["start"] + 1) / len(seq)
+            out["coverage"] = round(coverage, 3)
+            if len(domains) > 1 or coverage < DOMAIN_COVERAGE:
+                out.update({
+                    "kind": KIND_FUSION, "is_vhh": False,
+                    "note": f"{len(domains)} V domain(s) found by regex anchors "
+                            f"covering {coverage:.0%} of the sequence from the "
+                            "first one, this looks like a fusion or a "
+                            "multi-domain protein; the domains are analysed "
+                            "separately rather than the whole chain"})
+        else:
             out["kind"] = KIND_OTHER
             out["note"] = ("no VHH anchors found; generic analyses only "
                            "(install ANARCI for a reliable verdict)")
@@ -266,18 +405,33 @@ def classify(seq: str, method: str | None = None) -> dict:
         out["full_analysis"] = out["kind"] in HEAVY_KINDS
         return out
 
-    if numbered[0] is None:
+    if not domains:
         out.update({"kind": KIND_OTHER, "is_vhh": False, "full_analysis": False,
                     "note": "ANARCI finds no immunoglobulin variable domain, "
                             "generic analyses only"})
         return out
 
-    _numbering, start, end = numbered[0][0]
-    detail = details[0][0]
-    chain = detail.get("chain_type")
+    first = domains[0]
+    start, end = first["start"], first["end"]
+    chain = first["chain"]
     coverage = (end - start + 1) / len(seq)
     out.update({"chain": chain, "coverage": round(coverage, 3),
-                "evalue": detail.get("evalue")})
+                "evalue": first["evalue"]})
+
+    # Two ways to be a fusion rather than a bare domain: more than one V domain
+    # in the chain, or a single domain that leaves most of the chain
+    # unaccounted for. Both are handed to the dissection path, which cuts the
+    # construct into its domains and analyses each one; what is refused here is
+    # only running the VHH readings on the whole chain at once.
+    if len(domains) > 1:
+        spans = ", ".join(f"{d['start'] + 1}-{d['end'] + 1}" for d in domains)
+        out.update({
+            "kind": KIND_FUSION, "is_vhh": False, "full_analysis": False,
+            "note": f"{len(domains)} V domains at residues {spans}, this is a "
+                    "multi-domain construct; each domain is analysed on its "
+                    "own and the whole chain is characterised as one protein",
+        })
+        return out
 
     if coverage < DOMAIN_COVERAGE:
         out.update({
