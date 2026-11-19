@@ -78,6 +78,22 @@ ran, from its Zenodo record.
   candidate domain by its FR2 motif first. Found while testing this feature,
   and it would have been invisible without it.
 
+  Protease sites are computed in one pass over the whole chain rather than
+  segment by segment, because a motif's rule reads the residues around it and a
+  per-segment pass would answer differently on each side of every junction. The
+  segments decide what is shown, not what is computed. On top of that, each
+  domain is read twice, inside the chain and as the isolated sequence the tabs
+  analyse, and the sites the two readings disagree about are listed. This is a
+  comparison of two results and not a distance to a boundary, so there is no
+  window width to invent and nothing to tune, and it is empty whenever the two
+  agree. It catches two things nothing else in the app sees: a cleavable bond
+  at the junction itself, such as the AspN-like site on the bond joining a
+  linker to a domain that starts with aspartate, whose position falls inside
+  the domain and so is skipped by the junction table while the isolated domain
+  has no preceding residue to form it; and the reverse, a site the isolated
+  domain shows and the construct blocks, which is what a linker beginning with
+  proline does to a trypsin site on a domain's last residue.
+
   Sequence library entries are unaffected and stay whole: a biparatopic is
   stored as one entry, and the splitting happens in the analysis, not in the
   file.

@@ -37,7 +37,7 @@ __all__ = [
     "dissect_construct", "SPACER_KINDS", "__version__",
 ]
 
-__version__ = "2026.11.19a"
+__version__ = "2026.11.19b"
 
 VERIFY_NOTICE = (
     "Check every tag and linker sequence against your own vector or reference "
@@ -268,6 +268,53 @@ def _label_spacer(seq: str, default_kind: str) -> list[tuple[str, str, str]]:
     return [("unassigned", default_kind, seq)]
 
 
+def _context_differences(seq: str, domains: list[dict],
+                        whole: pd.DataFrame) -> pd.DataFrame:
+    """Sites a domain reads differently on its own than inside the chain.
+
+    Each domain is analysed twice in this app: once as part of the submitted
+    chain, and once as a sequence of its own in the analysis screen. The two
+    readings can disagree at a domain's ends, because a motif's rule looks at
+    residues that exist in the chain and not in the domain. The trypsin rule is
+    the clearest case: it does not cleave before a proline, so a lysine at a
+    domain's last residue is a site when the domain is read alone, with nothing
+    after it, and not a site in a construct whose linker starts with a proline.
+
+    Rather than flagging everything near a boundary, which would need a window
+    width that nothing fixes and would mostly flag sites that read the same
+    both ways, this runs the two readings and returns where they actually
+    differ. The result is empty for most constructs, and when it is not, it is
+    a difference and not a proximity.
+
+    ``verdict`` says which reading has the site. "only in the construct" means
+    the chain creates one the isolated domain does not show; "only alone" means
+    the construct removes one the isolated domain appears to have. The chain is
+    the one to believe in both cases, because it is the molecule.
+    """
+    rows = []
+    for d in domains:
+        start, end = d["start"], d["end"]          # 1-based, inclusive
+        alone = vc.find_protease_sites(d["sequence"])
+        in_chain = set()
+        if not whole.empty:
+            sub = whole[(whole["position"] >= start) & (whole["position"] <= end)]
+            in_chain = {(r.protease, r.position - start + 1, r.motif, r.score)
+                        for r in sub.itertuples()}
+        isolated = set()
+        if not alone.empty:
+            isolated = {(r.protease, r.position, r.motif, r.score)
+                        for r in alone.itertuples()}
+        for verdict, keys in (("only in the construct", in_chain - isolated),
+                              ("only alone", isolated - in_chain)):
+            for protease, pos, motif, score in sorted(keys, key=lambda k: k[1]):
+                rows.append({"domain": d["name"], "protease": protease,
+                             "position_in_domain": pos,
+                             "position_in_chain": pos + start - 1,
+                             "motif": motif, "score": score,
+                             "verdict": verdict})
+    return pd.DataFrame(rows)
+
+
 def dissect_construct(seq: str, name: str = "construct",
                       method: str | None = None,
                       ph: float | None = None) -> dict:
@@ -279,10 +326,16 @@ def dissect_construct(seq: str, name: str = "construct",
 
     Beyond that shape it adds ``domains``, one entry per variable domain with
     its name, sequence and bounds, ``bounds_quality`` ("exact" from ANARCI,
-    "approximate" from the regex scanner), and ``junction_sites``, the
+    "approximate" from the regex scanner), ``junction_sites``, the
     predicted protease sites that fall outside the domains, which is where a
     linker is cut in practice and where the per-domain analyses would never
-    look.
+    look, and ``context_differences``, the sites inside a domain that the whole
+    chain and the isolated domain disagree about.
+
+    Every protease figure here comes from one pass over the whole chain, not
+    from a pass per segment. A motif's rule reads the residues around it, so a
+    segment-by-segment pass would cut that context at each boundary and answer
+    differently on both sides of every junction.
 
     ``per_vhh`` characterises each domain on its own. The whole chain is
     characterised too, in ``properties``: mass, pI and extinction coefficient
@@ -330,6 +383,7 @@ def dissect_construct(seq: str, name: str = "construct",
     # motif straddling a junction is seen, then kept only where it falls in a
     # segment that is not a domain.
     sites = vc.find_protease_sites(seq)
+    context = _context_differences(seq, named_domains, sites)
     junction = sites.iloc[0:0] if sites.empty else None
     if not sites.empty:
         spans = [(s["start"], s["end"], s["label"], s["kind"])
@@ -385,6 +439,7 @@ def dissect_construct(seq: str, name: str = "construct",
             "n_domains": len(named_domains),
             "bounds_quality": bounds_quality,
             "junction_sites": junction,
+            "context_differences": context,
             "warnings": warnings,
             "composition": {k: sum(s["length"] for s in segments
                                    if s["kind"] == k)

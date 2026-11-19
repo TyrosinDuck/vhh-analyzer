@@ -66,7 +66,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
                    usage_prompt)
 
-__version__ = "2026.11.19a"
+__version__ = "2026.11.19b"
 
 
 @dataclass
@@ -289,11 +289,50 @@ def _construct_panel(constructs: dict, expanded: bool) -> None:
                     "in practice, and it is the one place a per-domain analysis "
                     "cannot look. Most are the generic trypsin and chymotrypsin "
                     "motifs that any sequence carries; the recognition sites "
-                    "worth reading are the high-scoring ones.")
+                    "worth reading are the high-scoring ones.\n\n"
+                    "Every site here was found in one pass over the whole "
+                    "chain, not segment by segment: a motif's rule reads the "
+                    "residues around it, so cutting the sequence first would "
+                    "give a different answer on each side of every junction.")
                 show = strong if not strong.empty else js
                 st.dataframe(show[["segment", "protease", "position", "motif",
                                    "score", "note"]].head(25),
                              hide_index=True, **FIT)
+
+            cd = cut.get("context_differences")
+            if cd is not None and not cd.empty:
+                st.markdown("**Read differently alone than in the chain**")
+                st.caption(
+                    "Each domain is read twice, once inside this chain and "
+                    "once as the separate sequence the tabs above analyse. "
+                    "These are the sites the two readings disagree about, and "
+                    "they are differences rather than anything within a few "
+                    "residues of a boundary. **The chain is the one to "
+                    "believe**, it is the molecule.\n\n"
+                    "`only in the construct` means the junction creates a site "
+                    "the isolated domain cannot show. At a domain's first or "
+                    "last residue this is usually the junction bond itself, "
+                    "for instance an AspN-like cleavage before a domain that "
+                    "starts with aspartate, which exists only because "
+                    "something precedes it here. `only alone` is the opposite "
+                    "and the one to watch: the isolated domain shows a site "
+                    "that the construct blocks, which is what happens when a "
+                    "linker begins with proline.")
+                st.dataframe(cd[["domain", "protease", "position_in_domain",
+                                 "position_in_chain", "motif", "score",
+                                 "verdict"]],
+                             hide_index=True, **FIT,
+                             column_config={
+                                 "domain": "Domain",
+                                 "protease": "Protease",
+                                 "position_in_domain": "Position in domain",
+                                 "position_in_chain": "Position in chain",
+                                 "motif": "Motif", "score": "Score",
+                                 "verdict": "Seen"})
+            elif cut["n_domains"]:
+                st.caption(
+                    f"Protease sites: the {cut['n_domains']} domain(s) read "
+                    "the same on their own as they do inside this chain.")
 
             for w in cut["warnings"]:
                 st.warning(w, icon="⚠️")

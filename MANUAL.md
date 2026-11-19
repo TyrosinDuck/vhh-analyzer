@@ -461,6 +461,37 @@ any sequence carries; the ones worth reading are the high-scoring recognition
 sites. Note that a rigid (EAAAK) linker carries a lysine per repeat, so it is
 not inert here, where a (GGGGS) linker is.
 
+Every protease figure in this panel comes from **one pass over the whole
+chain**, not from a pass per segment. A motif's rule reads the residues around
+it, the trypsin rule for instance declining to cleave before a proline, so
+cutting the sequence into segments first would answer differently on each side
+of every junction. The segments decide what is displayed, not what is computed.
+
+**Where the chain and the isolated domain disagree.** Each domain is read
+twice: once inside the submitted chain, and once as the separate `_D1` sequence
+the tabs above analyse. At a domain's ends the two readings can differ, because
+the rule looks at residues that exist in the chain and not in the domain on its
+own. The panel runs both and lists the sites they disagree about. It lists
+differences, not sites that happen to sit near a boundary: there is no distance
+threshold here, and nothing to tune.
+
+`only in the construct` means the chain has a site the isolated domain cannot
+show. At a domain's first or last residue this is usually the junction bond
+itself. A domain beginning with aspartate, which is common, gives an AspN-like
+cleavage on the bond joining it to the linker: that bond exists only in the
+construct, and it is reported in no other view, since its position falls inside
+the domain and the isolated domain has nothing in front of it.
+
+`only alone` is the opposite and the one to watch: the isolated domain shows a
+site that the construct does not have. A domain ending in lysine followed by a
+linker that starts with proline is the clear case, the trypsin site being
+blocked by the proline. **The chain is the one to believe**; it is the
+molecule. The per-domain tabs cannot know what follows the domain, which is
+exactly why this comparison is drawn here.
+
+When the two readings agree everywhere, which is the common outcome, the panel
+says so in one line rather than showing an empty table.
+
 **What is deliberately not computed on the whole chain.** Nothing camelid. The
 hallmark tetrad, CDR lengths, germline assignment and humanness are reported per
 domain only. Read across a junction they would describe an artefact of the

@@ -229,3 +229,84 @@ def test_no_domain_at_all_is_reported_not_guessed():
     assert cut["n_domains"] == 0
     assert cut["per_vhh"].empty
     assert any("nothing" in w for w in cut["warnings"])
+
+
+# --------------------------------------------------------------------------- #
+# Reading a domain alone against reading it in the chain
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.skipif(not HAS_HMMER, reason="ANARCI needs HMMER")
+def test_a_proline_in_the_linker_blocks_a_site_the_domain_shows_alone():
+    """The case the whole comparison exists for.
+
+    A domain ending in lysine is a trypsin site when nothing follows it, and
+    not one when the next residue is a proline. The analysis screen reads each
+    domain as a sequence of its own, with nothing after it, so it reports a
+    site the construct does not have. The construct is right, and the
+    disagreement has to be visible somewhere.
+
+    Trastuzumab's VL is used because its framework genuinely ends in lysine;
+    a VHH ends in VTVSS and cannot produce this.
+    """
+    import library as lib
+    tab, _problems = lib.load_library()
+    vl = [r["protein"] for _i, r in tab.iterrows() if r["name"] == "trastuzumab-VL"]
+    if not vl:
+        pytest.skip("trastuzumab-VL is not in the bundled library")
+    vl = vc.clean_sequence(vl[0])
+    assert vl[-1] == "K", "the fixture only works if the domain ends in lysine"
+
+    cut = ctm.dissect_construct(vl + "P" + "GGGGSGGGGS" + _examples()[0][1],
+                                name="X")
+    cd = cut["context_differences"]
+    row = cd[(cd["verdict"] == "only alone") & (cd["protease"] == "Trypsin-like")]
+    assert len(row) == 1, f"the blocked site was not reported: {cd.to_dict()}"
+    assert int(row["position_in_domain"].iloc[0]) == len(vl)
+
+
+@pytest.mark.skipif(not HAS_HMMER, reason="ANARCI needs HMMER")
+def test_the_junction_bond_itself_is_reported(two_vhhs):
+    """A cleavage on the bond between a linker and the domain that follows it
+    is invisible to both other views: its position sits inside the domain, so
+    the junction table skips it, and the isolated domain has no preceding
+    residue to form the bond at all."""
+    a, b = two_vhhs
+    assert b[0] == "D", "this fixture needs a domain starting with aspartate"
+    cut = ctm.dissect_construct(a + "GGGGSGGGGSGGGGS" + b, name="X")
+    cd = cut["context_differences"]
+    first = cd[(cd["domain"] == "X_D2") & (cd["position_in_domain"] == 1)]
+    assert len(first) == 1
+    assert first["verdict"].iloc[0] == "only in the construct"
+    assert first["protease"].iloc[0] == "AspN-like"
+    # and it is in neither of the other two places
+    js = cut["junction_sites"]
+    assert js[js["position"] == int(first["position_in_chain"].iloc[0])].empty
+
+
+@pytest.mark.skipif(not HAS_HMMER, reason="ANARCI needs HMMER")
+def test_differences_are_differences_not_proximity(two_vhhs):
+    """Nothing is reported merely for sitting near a boundary. Every row must
+    be absent from one of the two readings, which is what makes the table
+    worth looking at rather than a list of everything at the edges."""
+    a, b = two_vhhs
+    cut = ctm.dissect_construct(a + "GGGGSGGGGSGGGGS" + b, name="X")
+    cd = cut["context_differences"]
+    whole = vc.find_protease_sites(cut["sequence"])
+    for _i, row in cd.iterrows():
+        d = next(x for x in cut["domains"] if x["name"] == row["domain"])
+        alone = vc.find_protease_sites(d["sequence"])
+        in_alone = not alone[(alone["position"] == row["position_in_domain"])
+                             & (alone["protease"] == row["protease"])].empty
+        in_chain = not whole[(whole["position"] == row["position_in_chain"])
+                             & (whole["protease"] == row["protease"])].empty
+        assert in_alone != in_chain, f"{row.to_dict()} reads the same both ways"
+
+
+@pytest.mark.skipif(not HAS_HMMER, reason="ANARCI needs HMMER")
+def test_a_monovalent_vhh_has_nothing_to_disagree_about(two_vhhs):
+    """One domain covering the whole sequence is the same sequence twice, so
+    the comparison must come back empty. A row here would mean the comparison
+    itself introduces differences."""
+    a, _b = two_vhhs
+    cut = ctm.dissect_construct(a, name="X")
+    assert cut["context_differences"].empty
