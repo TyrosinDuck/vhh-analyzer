@@ -499,6 +499,23 @@ concatenation rather than the protein. Mass, pI and extinction coefficient go
 the other way: they are additive over the segments and stay valid across a
 fusion, which is why the whole chain keeps them.
 
+**CDR bands on the whole construct's figures.** The figures drawn for the
+submitted chain, the liability map, the per-sequence profiles and the
+aggregation profile, shade the CDRs of **every** domain it carries, so an
+aggregation-prone stretch or a deamidation site can be read against the loops
+of the second VHH as well as the first. A liability in the second domain is
+reported with its region and counted as being in a CDR, which it was not
+before: until this was fixed the chain was annotated as though only its first
+domain existed, and everything past the linker came back as region "?".
+
+**The clinical-context tab leaves the construct out**, and names it. Its
+thresholds come from single-domain nanobodies, and a chain with two domains has
+two sets of CDRs and no total of its own. The domains are in the run under
+their own names and are compared individually on their own lines, which is the
+comparison that means something. The same applies in a notebook: `tnp.profile`
+returns `None` for the lengths of a multi-domain chain, not zero, because zero
+is a measurement and this is an absence.
+
 **The Bench section treats the same chain as one molecule**, on purpose. A
 biparatopic is one species in one tube, so its mass and extinction coefficient
 are the whole chain's, and that is what turns an A280 into a concentration. The

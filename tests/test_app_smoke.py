@@ -225,6 +225,24 @@ def test_a_biparatopic_is_split_into_its_domains(app):
         f"the two domains were not analysed separately; saw {sorted(names)}"
     assert "bip" in names, "the submitted chain was dropped from the run"
 
+    # Every family has to survive a construct being in the run. The construct's
+    # own annotation carries its domains and leaves the flat regions empty, and
+    # a tab that reads those regions without expecting an absence would fail
+    # here rather than in front of a user.
+    selector = [r for r in app.radio if r.label == "Section"][0]
+    for family in selector.options:
+        [r for r in app.radio if r.label == "Section"][0].set_value(family).run()
+        _no_failure(app, f"family {family} with a construct in the run")
+
+    # The clinical context compares CDR lengths against single-domain
+    # nanobodies, so the construct must be named as excluded rather than
+    # listed with its first domain's CDRs standing in for the whole chain.
+    risk = [o for o in selector.options if "Developability" in o][0]
+    [r for r in app.radio if r.label == "Section"][0].set_value(risk).run()
+    said = " ".join(str(i.value) for i in app.info)
+    assert "more than one variable domain" in said, \
+        "the clinical-context tab did not say the construct was left out"
+
     # Put the shared fixture back, the app is module-scoped.
     app.text_area[0].set_value(FASTA)
     _click(app, "Analyze")

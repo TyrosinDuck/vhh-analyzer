@@ -66,7 +66,7 @@ from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
                    usage_prompt)
 
-__version__ = "2026.11.19b"
+__version__ = "2026.11.19c"
 
 
 @dataclass
@@ -1670,9 +1670,35 @@ def _clinical_context(r: Run) -> None:
     if "annotation_method" in df:
         methods = dict(zip(df["name"], df["annotation_method"]))
 
+    # A construct carrying several variable domains has no single CDR1, CDR2 or
+    # CDR3, so it has no total CDR length either, and the guidelines it would
+    # be compared against were derived from single-domain nanobodies. It used
+    # to be listed here with its first domain's CDRs standing in for the whole
+    # chain, which is a wrong number rather than a missing one. Its domains are
+    # in the run as sequences of their own and appear in the table below on
+    # their own lines, which is where the comparison belongs.
+    multi = [n for n in sequences
+             if (annotations.get(n) or {}).get("domains")]
+    scored = {n: s for n, s in sequences.items() if n not in multi}
+
+    if multi:
+        st.info(
+            "**" + ", ".join(multi) + "** "
+            + ("carries" if len(multi) == 1 else "carry")
+            + " more than one variable domain, so there is no single set of "
+            "CDRs to measure and nothing to compare against guidelines drawn "
+            "from single-domain nanobodies. The individual domains are listed "
+            "below under their own names.", icon="🧩")
+
+    if not scored:
+        st.warning("None of the submitted sequences is a single variable "
+                   "domain, so there is nothing to place against the clinical "
+                   "set.")
+        return
+
     rows = [tnp_profile_for(name, seq, annotations.get(name),
                             methods.get(name), None)
-            for name, seq in sequences.items()]
+            for name, seq in scored.items()]
     table = pd.DataFrame(rows)
 
     off_scheme = [row["name"] for row in rows if not row.get("scheme_ok")]

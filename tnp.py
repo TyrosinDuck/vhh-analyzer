@@ -60,7 +60,7 @@ import pandas as pd
 
 import vhh_core as vc
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.19a"
 
 __all__ = [
     "METRICS", "SEQUENCE_METRICS", "STRUCTURAL_METRICS", "FLAG_ORDER",
@@ -223,15 +223,27 @@ def cdr_lengths(seq: str, annotation: dict | None = None,
         annotation, method = vc.annotate(seq)
     method = method or "unknown"
 
-    lengths = {}
+    lengths = {"method": method, "scheme_ok": "IMGT" in method.upper(),
+               "multi_domain": bool((annotation or {}).get("domains"))}
+
+    # A chain carrying several variable domains has one set of CDRs per domain
+    # and no single set of its own, so there is no length to return and no
+    # total to add up. The lengths come back as None rather than as zero, or as
+    # the first domain's: both of those are numbers, and a caller cannot tell a
+    # number that means "nothing here" from one that was measured. The domains
+    # are measured individually by passing each of them in turn.
+    if lengths["multi_domain"]:
+        for key in ("cdr1_length", "cdr2_length", "cdr3_length",
+                    "total_cdr_length"):
+            lengths[key] = None
+        return lengths
+
     for region in ("CDR1", "CDR2", "CDR3"):
         block = annotation.get(region) or {}
         lengths[region.lower() + "_length"] = len(block.get("seq") or "")
 
     lengths["total_cdr_length"] = sum(
         lengths[f"cdr{i}_length"] for i in (1, 2, 3))
-    lengths["method"] = method
-    lengths["scheme_ok"] = "IMGT" in method.upper()
     return lengths
 
 
@@ -255,6 +267,7 @@ def profile(name: str, seq: str, annotation: dict | None = None,
     }
 
     row = {"name": name, "method": lengths["method"], "scheme_ok": scheme_ok,
+           "multi_domain": lengths.get("multi_domain", False),
            "cdr1_length": lengths["cdr1_length"],
            "cdr2_length": lengths["cdr2_length"]}
     flags = {}

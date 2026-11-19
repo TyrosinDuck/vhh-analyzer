@@ -16,6 +16,46 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A construct was annotated as though its second domain did not exist.**
+  `annotate` numbered the first variable domain it found and returned that as
+  the annotation of the whole sequence, which for a bivalent or biparatopic
+  chain is the first VHH standing in for the entire construct. Nothing failed
+  and nothing was logged. Three views were wrong in three different ways at
+  once: the liability map and the aggregation profile shaded the first
+  domain's CDRs only, so the second VHH's loops were invisible on a figure of
+  the chain they belong to; every liability past the linker was filed under
+  region "?" and never counted as being in a CDR, because `region_of` had only
+  the first domain's coordinates to search; and the clinical-context table
+  compared the first domain's CDR lengths against the guidelines under the
+  whole construct's name, which is a wrong number rather than a missing one.
+  Reported from use, on a real biparatopic.
+
+  An annotation now carries its domains. For a chain with one domain nothing
+  changes, which is almost every sequence the app sees. For a chain with
+  several, each domain is annotated separately with coordinates along the
+  chain, and they are returned under `domains`. The chain's own top-level
+  regions are deliberately left empty rather than filled with the first
+  domain's: a bivalent construct has two CDR3s and no single one, so a caller
+  that reads `annotation["CDR3"]` without knowing about domains now gets a
+  visible absence instead of a plausible wrong answer. That is what made the
+  original bug silent.
+
+  Two functions read the structure, and every consumer goes through one of
+  them: `region_of` for which region a residue sits in, and `region_bands`,
+  new, for which bands a figure should shade. The four places that enumerated
+  CDR bands by hand now call `region_bands`, so they cannot drift apart again.
+  `tnp.cdr_lengths` returns `None` for a multi-domain chain rather than zero,
+  and the clinical-context tab names the construct it left out instead of
+  silently dropping it. The `cdr3_len` and `cdr3_gravy` columns are empty for a
+  construct for the same reason.
+
+  While fixing this, the ANARCI entry point was rewritten to keep every domain
+  it finds instead of the first, which removed a second ANARCI pass: finding a
+  construct's domains and annotating them now share one cached call, and a test
+  asserts it on the cache rather than on timing.
+
 ### Added
 
 - **Bivalent and biparatopic constructs are cut into their domains and

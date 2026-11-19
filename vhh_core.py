@@ -56,12 +56,13 @@ __all__ = [
     "humanness", "human_germlines", "disulfides",
     "suggest_repairs", "apply_repairs", "LIABILITY_REPAIRS",
     "compare_to_reference", "plot_differences",
-    "CONSERVED_IMGT", "protein_aligner", "region_of",
+    "CONSERVED_IMGT", "protein_aligner", "region_of", "region_bands",
+    "annotation_domains",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.19a"
+__version__ = "2026.11.19b"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -320,26 +321,14 @@ def find_domains(seq: str, method: str | None = None) -> list[dict]:
 
     if method in ("auto", "anarci"):
         try:
-            from anarci import anarci
-            numbered, details, _ = anarci([("q", seq)], scheme="imgt",
-                                          output=False)
+            found = _anarci_all(seq)
         except Exception:
             if method == "anarci":
                 raise
-            numbered = None
-        if numbered is not None:
-            if numbered[0] is None:
-                return []
-            out = []
-            for i, (_numbering, start, end) in enumerate(numbered[0]):
-                detail = details[0][i] if details[0] else {}
-                out.append({"start": start, "end": end,
-                            "chain": detail.get("chain_type"),
-                            "evalue": detail.get("evalue"),
-                            "bounds": "exact"})
-            return sorted(out, key=lambda d: d["start"])
-        if method == "anarci":
-            return []
+            found = None
+        if found is not None:
+            return [{"start": d["start"], "end": d["end"], "chain": d["chain"],
+                     "evalue": d["evalue"], "bounds": "exact"} for d in found]
 
     try:
         return _domains_regex(seq)
@@ -662,6 +651,29 @@ def anarci_available() -> bool:
         return False
 
 
+def _regions_from_numbering(numbering) -> dict:
+    """Turn one domain's IMGT numbering into the region dict the app uses.
+
+    Pulled out of `annotate_anarci` so that a construct's second and third
+    domains go through the same code as its first. The residue indices in
+    `numbering` are counted along the whole sequence, so the coordinates this
+    returns are the chain's, not the domain's, which is what lets a band be
+    drawn on a figure of the whole construct.
+    """
+    out = {r: {"seq": [], "pos": []} for r in REGIONS}
+    # positions stay 0-based here: the return statement adds one back
+    for num, _ins, aa, idx in numbering:
+        region = next((c for c, (lo, hi) in IMGT_CDR.items() if lo <= num <= hi), None)
+        if region is None:
+            region = "FR1" if num < 27 else "FR2" if num < 56 else "FR3" if num < 105 else "FR4"
+        out[region]["seq"].append(aa)
+        out[region]["pos"].append(idx - 1)
+
+    return {r: {"start": (out[r]["pos"][0] + 1) if out[r]["pos"] else None,
+                "end": (out[r]["pos"][-1] + 1) if out[r]["pos"] else None,
+                "seq": "".join(out[r]["seq"])} for r in REGIONS}
+
+
 def annotate_anarci(seq: str, scheme: str = "imgt") -> dict:
     """Annotate using ANARCI numbering (reference method; needs anarci + HMMER).
 
@@ -673,18 +685,7 @@ def annotate_anarci(seq: str, scheme: str = "imgt") -> dict:
         raise ValueError(f"only the IMGT scheme is supported, not {scheme!r}")
 
     seq = clean_sequence(seq)
-    out = {r: {"seq": [], "pos": []} for r in REGIONS}
-    # positions stay 0-based here, as before: the return statement adds one back
-    for num, _ins, aa, idx in _anarci_numbering(seq):
-        region = next((c for c, (lo, hi) in IMGT_CDR.items() if lo <= num <= hi), None)
-        if region is None:
-            region = "FR1" if num < 27 else "FR2" if num < 56 else "FR3" if num < 105 else "FR4"
-        out[region]["seq"].append(aa)
-        out[region]["pos"].append(idx - 1)
-
-    return {r: {"start": (out[r]["pos"][0] + 1) if out[r]["pos"] else None,
-                "end": (out[r]["pos"][-1] + 1) if out[r]["pos"] else None,
-                "seq": "".join(out[r]["seq"])} for r in REGIONS}
+    return _regions_from_numbering(_anarci_numbering(seq))
 
 
 # --------------------------------------------------------------------------- #
@@ -850,15 +851,51 @@ def risk_category(score: float) -> str:
     return "Low" if score < low else ("Medium" if score < high else "High")
 
 
-def region_of(position: int, annotation: dict | None) -> str:
-    """Region containing a 1-based residue position, or '?' without annotation."""
+def annotation_domains(annotation: dict | None) -> list[dict]:
+    """The per-domain region dicts of an annotation, as a list.
+
+    One entry for an ordinary single-domain annotation, one per domain for a
+    construct. Every caller that walks regions goes through this, so none of
+    them carries its own "is this a construct" test, and adding a third shape
+    of annotation later means changing this function and nothing else.
+    """
     if not annotation:
-        return "?"
-    for region in REGIONS:
-        r = annotation[region]
-        if r["start"] and r["start"] <= position <= r["end"]:
-            return region
+        return []
+    return list(annotation.get("domains") or [annotation])
+
+
+def region_of(position: int, annotation: dict | None) -> str:
+    """Region containing a 1-based residue position, or '?' without annotation.
+
+    Searches every domain of a multi-domain annotation, so a liability in the
+    second VHH of a bivalent construct is reported as being in its CDR rather
+    than as '?'.
+    """
+    for ann in annotation_domains(annotation):
+        for region in REGIONS:
+            r = ann.get(region)
+            if r and r["start"] and r["start"] <= position <= r["end"]:
+                return region
     return "?"
+
+
+def region_bands(annotation: dict | None,
+                 regions: tuple[str, ...] = ("CDR1", "CDR2", "CDR3")):
+    """``[(region, start, end), ...]`` to shade on a figure of this sequence.
+
+    One band per region per domain, in N-to-C order, so a figure of a whole
+    construct marks the CDRs of every domain it carries and not only the
+    first. The single place that enumerates bands: the liability map, the
+    per-sequence profiles and the aggregation profile all call it, which is why
+    they could not drift apart again.
+    """
+    out = []
+    for ann in annotation_domains(annotation):
+        for region in regions:
+            r = ann.get(region)
+            if r and r["start"]:
+                out.append((region, r["start"], r["end"]))
+    return out
 
 
 def find_liabilities(seq: str, annotation: dict | None = None,
@@ -1011,15 +1048,10 @@ def plot_liability_map(liabilities: dict[str, pd.DataFrame],
     # CDR bands per row, so a liability landing in a loop is visible at a glance
     if annotations:
         for y, name in enumerate(names):
-            ann = annotations.get(name)
-            if not ann:
-                continue
-            for region in ("CDR1", "CDR2", "CDR3"):
-                r = ann.get(region)
-                if r and r["start"]:
-                    ax.add_patch(plt.Rectangle(
-                        (r["start"], y - 0.34), r["end"] - r["start"], 0.68,
-                        facecolor=REGION_COLORS[region], alpha=0.16, lw=0, zorder=0))
+            for region, lo, hi in region_bands(annotations.get(name)):
+                ax.add_patch(plt.Rectangle(
+                    (lo, y - 0.34), hi - lo, 0.68,
+                    facecolor=REGION_COLORS[region], alpha=0.16, lw=0, zorder=0))
 
     seen = []
     for y, name in enumerate(names):
@@ -1196,11 +1228,35 @@ def annotate(seq: str, method: str | None = None) -> tuple[dict, str]:
 
     ``method`` is "auto" (ANARCI with silent fallback), "anarci" (strict) or
     "regex". Returns ``(annotation, method_used)``.
+
+    **A chain carrying more than one variable domain is annotated domain by
+    domain**, and the result carries them under ``domains``, a list of region
+    dicts in N-to-C order whose coordinates are the chain's. Its own top-level
+    regions are left empty, deliberately: a bivalent construct has two CDR3s
+    and no single one, so a caller that reads ``annotation["CDR3"]`` without
+    knowing about domains gets a visible absence instead of the first domain's
+    CDR3 passed off as the chain's. That was the bug this replaces, and it was
+    silent in three places at once, the liability map, the aggregation profile
+    and the clinical-context table, each drawing or counting the first domain's
+    CDRs as though they were the whole construct's.
+
+    Ask `region_of` which region a residue is in, and `region_bands` which
+    bands to draw: both read ``domains`` when it is there and the flat regions
+    when it is not, so neither caller has to care which kind of annotation it
+    holds.
     """
     method = method or DEFAULTS["annotation_method"]
     if method in ("auto", "anarci"):
         try:
-            return annotate_anarci(seq), "ANARCI / IMGT"
+            domains = _anarci_all(clean_sequence(seq))
+            if not domains:
+                raise ValueError("ANARCI could not number this sequence")
+            if len(domains) == 1:
+                return _regions_from_numbering(domains[0]["numbering"]), "ANARCI / IMGT"
+            ann = {r: {"start": None, "end": None, "seq": ""} for r in REGIONS}
+            ann["domains"] = [_regions_from_numbering(d["numbering"])
+                              for d in domains]
+            return ann, "ANARCI / IMGT"
         except Exception:
             if method == "anarci":
                 raise
@@ -1251,14 +1307,20 @@ def _frac_kr(seq, ctx):
 
 @register_feature("cdr3_len", "Length of CDR3, the dominant paratope loop in VHHs")
 def _cdr3_len(seq, ctx):
+    # A construct has one CDR3 per domain and no single one, so there is no
+    # number to put in this column. NaN rather than the first domain's length,
+    # which is what this used to report for a bivalent chain; the per-domain
+    # rows carry the real values.
     ann = ctx.get("annotation")
-    return len(ann["CDR3"]["seq"]) if ann else np.nan
+    if not ann or ann.get("domains"):
+        return np.nan
+    return len(ann["CDR3"]["seq"])
 
 
 @register_feature("cdr3_gravy", "GRAVY restricted to CDR3, hydrophobic loops drive non-specific binding")
 def _cdr3_gravy(seq, ctx):
     ann = ctx.get("annotation")
-    if not ann or not ann["CDR3"]["seq"]:
+    if not ann or ann.get("domains") or not ann["CDR3"]["seq"]:
         return np.nan
     return round(ProteinAnalysis(ann["CDR3"]["seq"]).gravy(), 3)
 
@@ -1460,15 +1522,12 @@ def plot_profiles(seqs: dict[str, str], annotations: dict | None = None,
         for a, v in ((ax, hydro), (ax2, charge)):   # align both zero lines
             lim = float(np.abs(v).max()) * 1.15 or 1.0
             a.set_ylim(-lim, lim)
-        if annotations and name in annotations:
-            for region in ("CDR1", "CDR2", "CDR3"):
-                r = annotations[name].get(region)
-                if r and r["start"]:
-                    ax.axvspan(r["start"], r["end"], color=REGION_COLORS[region],
-                               alpha=0.18, lw=0)
-                    ax.text((r["start"] + r["end"]) / 2, ax.get_ylim()[1] * 0.78,
-                            region, ha="center", fontsize=7,
-                            color=REGION_COLORS[region], fontweight="bold")
+        for region, lo, hi in region_bands(annotations.get(name) if annotations
+                                           else None):
+            ax.axvspan(lo, hi, color=REGION_COLORS[region], alpha=0.18, lw=0)
+            ax.text((lo + hi) / 2, ax.get_ylim()[1] * 0.78, region,
+                    ha="center", fontsize=7, color=REGION_COLORS[region],
+                    fontweight="bold")
     axes[-1, 0].set_xlabel("Residue position")
     fig.tight_layout()
     return fig
@@ -1973,29 +2032,59 @@ def plot_family_dendrogram(result: dict, title: str | None = None):
 # ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=512)
-def _anarci_numbering(seq: str) -> tuple[tuple[int, str, str, int], ...]:
-    """ANARCI numbering for one sequence, the single place that calls ANARCI.
+def _anarci_all(seq: str) -> tuple[dict, ...]:
+    """Every variable domain ANARCI numbers in one sequence, N to C.
 
-    Cached because a full page build asks for the same sequence's numbering from
-    seven different directions (annotation, hallmarks, humanness, disulfides,
-    rare residues, repairs, reference comparison). Each call is cheap on its own;
-    seven of them per sequence, on a modest shared server, are not.
+    The single place that calls ANARCI, and the single place that knows a
+    sequence can carry more than one domain. One entry per domain, each with
+    0-based inclusive ``start`` and ``end``, the ``chain`` type, the ``evalue``,
+    and the ``numbering`` as ``_anarci_numbering`` has always returned it, with
+    residue indices counted along the whole sequence rather than along the
+    domain.
 
-    Returns a tuple so a caller cannot mutate the cached value.
+    Cached because a full page build asks for the same sequence's numbering
+    from seven different directions (annotation, hallmarks, humanness,
+    disulfides, rare residues, repairs, reference comparison). Each call is
+    cheap on its own; seven of them per sequence, on a modest shared server,
+    are not. `find_domains` draws on the same cache, so finding the domains of
+    a construct and annotating them is still one ANARCI pass.
+
+    Returns tuples so a caller cannot mutate the cached value.
     """
     from anarci import anarci
 
-    numbered, _details, _ = anarci([("query", seq)], scheme="imgt", output=False)
+    numbered, details, _ = anarci([("query", seq)], scheme="imgt", output=False)
     if numbered[0] is None:
+        return ()
+    out = []
+    for i, (numbering, start, end) in enumerate(numbered[0]):
+        rows, idx = [], start
+        for (num, ins), aa in numbering:
+            if aa == "-":
+                continue
+            rows.append((int(num), (ins or " ").strip(), aa, idx + 1))
+            idx += 1
+        detail = details[0][i] if details[0] else {}
+        out.append({"start": start, "end": end,
+                    "chain": detail.get("chain_type"),
+                    "evalue": detail.get("evalue"),
+                    "numbering": tuple(rows)})
+    return tuple(sorted(out, key=lambda d: d["start"]))
+
+
+def _anarci_numbering(seq: str) -> tuple[tuple[int, str, str, int], ...]:
+    """IMGT numbering of the first variable domain in a sequence.
+
+    Kept as the first domain's numbering rather than the whole chain's, because
+    everything built on it, the hallmark tetrad, germline assignment, humanness,
+    the disulfide analysis, is a statement about one domain and has no meaning
+    averaged over two. A caller that needs all the domains of a construct asks
+    `find_domains` or `annotate`, which carry them separately.
+    """
+    domains = _anarci_all(seq)
+    if not domains:
         raise ValueError("ANARCI could not number this sequence")
-    numbering, start, _end = numbered[0][0]
-    out, idx = [], start
-    for (num, ins), aa in numbering:
-        if aa == "-":
-            continue
-        out.append((int(num), (ins or " ").strip(), aa, idx + 1))
-        idx += 1
-    return tuple(out)
+    return domains[0]["numbering"]
 
 
 def imgt_numbering(seq: str) -> list[tuple[int, str, str, int]]:
@@ -2178,15 +2267,12 @@ def plot_aggregation(profile: pd.DataFrame, annotation: dict | None = None,
     x = profile["position"].to_numpy()
     y = profile["score"].to_numpy()
 
-    if annotation:
-        for region, colour in REGION_COLORS.items():
-            info = annotation.get(region) or {}
-            if info.get("start") and info.get("end") and region.startswith("CDR"):
-                ax.axvspan(info["start"] - 0.5, info["end"] + 0.5, color=colour,
-                           alpha=0.22, lw=0, zorder=0)
-                ax.text((info["start"] + info["end"]) / 2, 1.02, region,
-                        transform=ax.get_xaxis_transform(), ha="center",
-                        fontsize=7.5, color="0.3")
+    for region, lo, hi in region_bands(annotation):
+        ax.axvspan(lo - 0.5, hi + 0.5, color=REGION_COLORS[region],
+                   alpha=0.22, lw=0, zorder=0)
+        ax.text((lo + hi) / 2, 1.02, region,
+                transform=ax.get_xaxis_transform(), ha="center",
+                fontsize=7.5, color="0.3")
 
     ax.axhline(0, color="0.5", lw=0.8)
     ax.axhline(threshold, color="crimson", lw=0.9, ls="--")
@@ -3032,16 +3118,12 @@ def plot_chou_fasman(seq: str, name: str = "",
     for spine in ax_track.spines.values():
         spine.set_visible(True)
 
-    if annotation:
-        for region in ("CDR1", "CDR2", "CDR3"):
-            r = annotation.get(region)
-            if r and r["start"]:
-                ax.axvspan(r["start"], r["end"], color=REGION_COLORS[region],
-                           alpha=0.12, lw=0)
-                lo, hi = ax.get_ylim()
-                ax.text((r["start"] + r["end"]) / 2, hi - 0.03 * (hi - lo),
-                        region, ha="center", va="top", fontsize=7,
-                        color=REGION_COLORS[region], fontweight="bold")
+    for region, start, end in region_bands(annotation):
+        ax.axvspan(start, end, color=REGION_COLORS[region], alpha=0.12, lw=0)
+        lo, hi = ax.get_ylim()
+        ax.text((start + end) / 2, hi - 0.03 * (hi - lo), region,
+                ha="center", va="top", fontsize=7,
+                color=REGION_COLORS[region], fontweight="bold")
 
     # One figure-level legend for the predicted-state track, below everything.
     # tight_layout cannot place it, so the margins are set explicitly.

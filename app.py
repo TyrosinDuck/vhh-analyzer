@@ -125,7 +125,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.11.19a", "sanger": "2026.11.18a",
+REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.18a",
                     "session": "2026.11.12a",
                     "provenance": "2026.11.18a",
                     "sections.provenance": "2026.11.17b",
@@ -138,9 +138,9 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19a", "sanger": "2026.11.18a",
                     "af3": "2026.11.17a",
                     "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.19b",
+                    "sections.analysis": "2026.11.19c",
                     "specificity": "2026.11.17b",
-                    "tnp": "2026.11.17a",
+                    "tnp": "2026.11.19a",
                     "sabdab": "2026.11.12a",
                     "elsewhere": "2026.11.12b",
                     "sections.bench": "2026.11.19a",
