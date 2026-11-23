@@ -42,7 +42,7 @@ __all__ = [
     "well_name", "__version__",
 ]
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.23a"
 
 
 # Rows and columns per format, and nothing else: a plate is a grid, and the
@@ -120,7 +120,14 @@ def serial_dilution(start: float, fold: float, points: int,
                 "diluent_ul": 0.0 if index == 0 else round(diluent_each, 3),
                 "from_previous_ul": 0.0 if index == 0 else round(transfer_ul, 3),
                 "pass_on_ul": 0.0 if index == points - 1 else round(transfer_ul, 3),
-                "final_volume_ul": round(volume_ul, 3),
+                # The last position keeps what it never passes on, so it
+                # holds the final volume plus one transfer. Reporting
+                # `volume_ul` for every row made this the one figure in
+                # the table that the last tube does not hold; a notebook
+                # reading the column rather than the note was misled.
+                "final_volume_ul": round(
+                    volume_ul + (transfer_ul if index == points - 1 else 0.0),
+                    3),
                 "note": "",
             })
         rows[-1]["note"] = (
@@ -337,12 +344,26 @@ def plate_layout(samples, dilution_points: int = 1, replicates: int = 1,
     usable = sum(len(line) for line in lines)
     if len(placed) < requested:
         short = requested - len(placed)
-        plates_needed = -(-requested // usable) if usable else 0
+        # Count whatever the placement actually spends. Under
+        # `group_per_line` a group occupies a whole line however few wells it
+        # fills, so the plate count is groups per line and not wells per
+        # usable well: 30 groups on a plate offering 12 columns needs 3
+        # plates, and dividing 150 requested wells by 96 usable ones says 2.
+        # Somebody who sets up two plates on that number runs out of columns
+        # halfway through.
+        if group_per_line and lines:
+            plates_needed = -(-len(groups) // len(lines))
+            basis = (f"{len(groups)} groups at one per "
+                     f"{'column' if by_column else 'row'}, "
+                     f"{len(lines)} per plate")
+        else:
+            plates_needed = -(-requested // usable) if usable else 0
+            basis = f"{requested} wells, {usable} usable per plate"
         warnings.append(
             f"{requested} wells were asked for and {usable} are usable on a "
             f"{plate}-well plate with these settings, so {short} did not fit. "
-            f"Split the run over {plates_needed} plates, or reduce the "
-            f"replicates or the dilution points.")
+            f"Split the run over {plates_needed} plates ({basis}), or reduce "
+            f"the replicates or the dilution points.")
 
     grid = pd.DataFrame("", index=list(ROW_LETTERS[:n_rows]),
                         columns=[str(c + 1) for c in range(n_cols)])

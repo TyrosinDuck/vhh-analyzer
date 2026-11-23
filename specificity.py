@@ -78,7 +78,7 @@ import pandas as pd
 
 import sabdab
 
-__version__ = "2026.11.17b"
+__version__ = "2026.11.23a"
 
 __all__ = ["AA", "CdrSet", "FLAG_PERCENTILE", "N_FEATURES", "cdrs_from_annotation",
            "cdrs_regex", "cdrs_to_kmer", "model_cdrs", "observed_cdr_bounds",
@@ -407,7 +407,7 @@ def observed_cdr_bounds() -> dict[str, tuple[int, int]]:
     integers in `_implausible`, said to be "the observed range of those real
     domains", and they were not: against `data/sabdab/single_domain.csv` the
     CDR1 ceiling of 19 refused a 20-residue CDR1 that is in the snapshot, and
-    the CDR2 ceiling of 14 refused lengths of 15 and 19 that are in it too.
+    the CDR2 ceiling of 14 refused a length of 19 that is in it too.
     Hard-coding a property of a shipped file is the second list this project
     does not keep, so the file is now measured instead and the bounds cannot
     drift from it again. Refresh the snapshot and they follow.

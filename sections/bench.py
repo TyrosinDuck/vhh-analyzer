@@ -27,7 +27,7 @@ from compute import analyze_one, classify_cached
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.19a"
+__version__ = "2026.11.23a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
@@ -847,13 +847,16 @@ def _pair(t: Tube) -> None:
         st.caption(
             f"The sum of the two masses minus one water "
             f"({out['water_lost_da']:.3f} Da, derived from its formula with "
-            f"the atomic weights in the buffers module). Both inputs are "
-            f"theoretical masses, so this is one too: it is what to compare a "
+            f"the atomic weights in the buffers module). A's mass is "
+            f"theoretical when it came from the sequence; B's is whatever you "
+            f"typed, which this view cannot classify. Treat the sum as no "
+            f"better than the weaker of the two: it is what to compare a "
             f"measured mass against, not a measurement.")
     else:
         st.caption(
             "The plain sum of the two masses, since no condensation was "
-            "declared. Both inputs are theoretical, so this is too.")
+            "declared. A's mass is theoretical when it came from the "
+            "sequence; B's is whatever you typed.")
 
     if out["dilution"]:
         d = out["dilution"]
@@ -1447,10 +1450,24 @@ def _batch(t: Tube) -> None:
             with how[2]:
                 rws = st.number_input("Rows", 1, 20, bn.LABEL_SHEET["rows"],
                                       1, key="b_lab_r")
+            # Width and height were parameters of `build_label_sheet` with no
+            # widget, while this caption, the manual and the register all said
+            # the whole grid was settable. Printing onto real stock is the one
+            # case where the millimetres matter more than the counts, so the
+            # honest repair is to expose them rather than withdraw the claim.
+            size = st.columns(2)
+            with size[0]:
+                label_w = st.number_input(
+                    "Label width (mm)", 10.0, 200.0,
+                    float(bn.LABEL_SHEET["width_mm"]), 0.1, key="b_lab_w")
+            with size[1]:
+                label_h = st.number_input(
+                    "Label height (mm)", 10.0, 200.0,
+                    float(bn.LABEL_SHEET["height_mm"]), 0.1, key="b_lab_h")
             st.caption(
                 f"The grid is {bn.LABEL_SHEET['width_mm']:g} by "
-                f"{bn.LABEL_SHEET['height_mm']:g} mm by default and both "
-                f"counts are yours to set. It matches no commercial sheet in "
+                f"{bn.LABEL_SHEET['height_mm']:g} mm by default, and all "
+                f"four values are yours to set. It matches no commercial sheet in "
                 f"particular, and says so rather than naming a product it "
                 f"might be half a millimetre out on: each label prints its "
                 f"own cut outline.")
@@ -1460,9 +1477,15 @@ def _batch(t: Tube) -> None:
                     bn.build_label_sheet(
                         sheet_path, lines, copies=int(copies),
                         columns=int(cols), rows=int(rws),
+                        width_mm=float(label_w), height_mm=float(label_h),
+                        # Only a derived concentration carries the asterisk,
+                        # so only a derived one gets the footnote explaining
+                        # it. A measured figure prints bare, with its method
+                        # on the batch sheet where there is room for it.
                         footnote=("* derived from an A280, see the batch "
-                                  "sheet" if sheet.get(
-                                      "concentration_mg_per_ml") else ""))
+                                  "sheet"
+                                  if sheet.get("concentration_basis")
+                                  == "derived" else ""))
                 except Exception as exc:
                     st.error(f"The labels could not be built: {exc}")
                 else:

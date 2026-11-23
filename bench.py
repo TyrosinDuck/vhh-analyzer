@@ -38,7 +38,7 @@ __all__ = [
     "build_campaign_pdf", "__version__",
 ]
 
-__version__ = "2026.11.17c"
+__version__ = "2026.11.23a"
 
 
 # --------------------------------------------------------------------------
@@ -101,6 +101,14 @@ SOLVENTS = ["water", "DMSO", "DMF", "PBS"]
 # excess to mean anything, and the stock should be diluted first. The Thermo
 # cheat sheet makes the same point with a fixed 1:10 dilution.
 PIPETTE_MINIMUM_UL = 2.0
+
+# Above this, adding B has diluted A enough to be worth saying so. Written
+# inline in `protein_pair_plan` until the November 2026 audit found it: a
+# judgement number inside a function body is invisible to the provenance
+# register's scan, which reads module-level assignments and default
+# arguments. Same class of defect as the sixteen promoted the week before,
+# and the same repair.
+DILUTION_OF_A_WORTH_SAYING = 2.0
 
 
 def desalting_column(volume_ul: float) -> str:
@@ -383,7 +391,7 @@ def protein_pair_plan(a_volume_ul: float, a_mg_per_ml: float, a_mw_da: float,
             f"unless it is removed afterwards.")
 
     dilution_of_a = final_ul / a_volume_ul
-    if dilution_of_a > 2.0:
+    if dilution_of_a > DILUTION_OF_A_WORTH_SAYING:
         notes.append(
             f"Adding B dilutes A {dilution_of_a:.1f}-fold. Concentrate B "
             f"first if the reaction needs A to stay where it is.")
@@ -1391,6 +1399,22 @@ def batch_sheet(name: str, seq: str, properties: dict,
         "derived": derived,
         "derivation_notes": notes,
         "concentration_mg_per_ml": concentration,
+        # Where that concentration came from, so whatever prints it can say so
+        # truthfully. "derived" is Beer-Lambert on an A280 with an extinction
+        # coefficient predicted from the sequence; "measured" is a figure the
+        # user supplied from a method that does not go through the sequence,
+        # named in `concentration_method`; None means there is none at all.
+        #
+        # This key exists because the label printer could not tell the two
+        # apart and marked every concentration as derived, so a tube filled
+        # from a BCA assay left the laboratory carrying an asterisk claiming
+        # it came from an A280. A caller that cannot see the basis will guess,
+        # and a label going into a freezer is the worst place to guess.
+        "concentration_basis": ("measured" if direct
+                                else "derived" if concentration is not None
+                                else None),
+        "concentration_method": ((measured.get("method") or
+                                  "method not stated") if direct else None),
         "mass_difference_da": difference,
     }
 
@@ -1795,8 +1819,8 @@ def build_batch_pdf(path, sheet: dict, version: str = "", author: str = "",
 # The label grid, in millimetres. Not a commercial sheet's layout: no Avery
 # or other reference is claimed, because a template that says it matches a
 # product and is half a millimetre out is worse than one that admits it is
-# generic. Both are settable from the screen, and the sheet prints a cut
-# outline rather than assuming pre-cut stock.
+# generic. All four values are settable from the screen, and the sheet
+# prints a cut outline rather than assuming pre-cut stock.
 LABEL_SHEET = {"columns": 3, "rows": 8, "width_mm": 63.5, "height_mm": 33.9}
 
 
@@ -1817,9 +1841,15 @@ def label_lines(sheet: dict, include_concentration: bool = True) -> list[str]:
     if sheet.get("name"):
         lines.append(str(sheet["name"]))
     if include_concentration and sheet.get("concentration_mg_per_ml"):
-        # Marked as derived on the label too, in one character, because the
-        # whole point of the batch sheet is that this number is not measured.
-        lines.append(f"{sheet['concentration_mg_per_ml']:.3g} mg/mL*")
+        # The asterisk marks a derived number and only a derived one. It used
+        # to be printed unconditionally, with a comment reasoning that the
+        # whole point of the batch sheet is that this number is not measured,
+        # which is true of the Beer-Lambert route and false of a BCA or a
+        # Bradford figure the user typed in. The effect was a tube leaving the
+        # laboratory with a label asserting a provenance it did not have, and
+        # calling a measurement derived is the same failure as the reverse.
+        marker = "*" if sheet.get("concentration_basis") == "derived" else ""
+        lines.append(f"{sheet['concentration_mg_per_ml']:.3g} mg/mL{marker}")
     for key in ("buffer", "storage", "date"):
         if fields.get(key):
             lines.append(str(fields[key]))
@@ -1974,18 +2004,39 @@ def campaign_sheet(rounds, fields: dict | None = None,
             read.append((f"{row['round']}, colonies + / -",
                          f"{row['plus_colonies']:g} / {row['minus_colonies']:g}"))
 
-    counted = [row for row in rows if row["enrichment"]]
+    # `is not None`, not truthiness. A plus plate counted at zero gives an
+    # enrichment of 0.0, which is a result: it says nothing came back on the
+    # antigen. Testing the float for truth made that round indistinguishable
+    # from one nobody counted, so it vanished from the derived block and the
+    # "last against first" comparison quietly started from the round after
+    # it. A campaign whose first round yields nothing is exactly the campaign
+    # whose first round you want to see.
+    counted = [row for row in rows if row["enrichment"] is not None]
     for row in counted:
         text = f"{row['enrichment']:.3g}"
         if row["relative_uncertainty"]:
             text += f" (counting floor {row['relative_uncertainty'] * 100:.0f}%)"
         derived.append((f"{row['round']}, enrichment", text))
 
-    if len(counted) >= 2:
-        first, last = counted[0], counted[-1]
+    # A ratio against zero is not a number, so the comparison runs between the
+    # first and last rounds that actually enriched. When that is not the first
+    # and last counted round, the labels say which two it ran between, and the
+    # note below says why the others are missing from it.
+    nonzero = [row for row in counted if row["enrichment"]]
+    if len(nonzero) >= 2:
+        first, last = nonzero[0], nonzero[-1]
         change = last["enrichment"] / first["enrichment"]
         derived.append((f"{last['round']} against {first['round']}",
                         f"{change:.3g}x"))
+        skipped = [row["round"] for row in counted
+                   if not row["enrichment"]]
+        if skipped:
+            notes.append(
+                f"{', '.join(skipped)} returned no colony on the antigen "
+                f"plate, so {'it is' if len(skipped) == 1 else 'they are'} "
+                f"reported as an enrichment of zero and left out of the "
+                f"comparison above, which cannot divide by it. That is a "
+                f"result, not a missing count.")
         notes.append(
             f"The enrichment went from {first['enrichment']:.3g} at "
             f"{first['round']} to {last['enrichment']:.3g} at "
@@ -1994,6 +2045,11 @@ def campaign_sheet(rounds, fields: dict | None = None,
             f"well, or simply grows faster than the rest of the library, "
             f"enriches exactly the same way; sequencing the output is what "
             f"tells them apart.")
+    elif len(counted) >= 2:
+        notes.append(
+            "No two rounds enriched, so there is no round-against-round "
+            "comparison: a ratio needs two non-zero numbers. The per-round "
+            "enrichments above are the whole of what these counts support.")
     if any(row["relative_uncertainty"] for row in counted):
         notes.append(
             "The percentage beside each ratio is the Poisson floor of its two "
@@ -2081,6 +2137,34 @@ def build_campaign_pdf(path, sheet: dict, version: str = "", author: str = "",
         story.append(Spacer(1, 3))
         for note in sheet.get("derivation_notes") or []:
             story.append(Paragraph(note, small))
+
+    # Every round, including the ones neither block could show. A round with
+    # no counts appears in neither "Counted" nor "Derived", so until this
+    # block existed it was absent from the report altogether, while the manual
+    # promised that a round that happened is part of the record. Its per-round
+    # note is the other thing that was computed and thrown away: "no colony on
+    # the - plate, count a less diluted one" is advice nobody ever read.
+    rounds = sheet.get("rounds") or []
+    if rounds:
+        story.append(Paragraph("Every round", h2))
+        lines = []
+        for entry in rounds:
+            plus, minus = entry.get("plus_colonies"), entry.get("minus_colonies")
+            if plus is None or minus is None:
+                state = "not counted"
+            else:
+                state = f"{plus:g} / {minus:g} colonies"
+                if entry.get("enrichment") is not None:
+                    state += f", enrichment {entry['enrichment']:.3g}"
+            if entry.get("note"):
+                state += f". {entry['note']}"
+            lines.append((entry.get("round") or "unnamed", state))
+        story.append(block(lines))
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(
+            "Every round of the campaign, counted or not. A round that "
+            "happened is part of the record even when it contributes no "
+            "ratio.", small))
 
     footer = ("A record of a selection, not evidence that it worked: this "
               "sheet carries no binding data, no sequences and no decision "

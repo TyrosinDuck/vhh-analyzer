@@ -16,6 +16,122 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Fixed
+
+A third independent audit, November 2026, over the Plates section, the new
+bench arithmetic and the multi-domain work. Two of its findings were about a
+number leaving the laboratory on a physical object, which is the kind of
+defect a screen can hide and a printer cannot.
+
+The arithmetic itself held. The dilution series, both modes, the plate
+geometry, the ligation plan against the published form, the centrifuge
+against the definition of RCF, every concentration-unit factor and the eight
+mass-check deltas were all rederived and reproduced. What needed fixing was
+what the app said about its numbers, and three places where a result went
+missing.
+
+- **A measured concentration was printed on a tube label as derived from an
+  A280.** `batch_sheet` already filed a BCA or Bradford figure in the measured
+  block, correctly, but `label_lines` appended the asterisk unconditionally
+  and the screen attached the "derived from an A280" footnote whenever there
+  was a concentration at all. A tube left the laboratory asserting a
+  provenance it did not have, and calling a measurement derived is the same
+  failure as the reverse. The sheet now carries `concentration_basis` and
+  `concentration_method` beside the number, because neither caller could tell
+  the two cases apart and a label is the worst place to guess.
+
+- **A panning round counted at zero colonies vanished from the campaign.**
+  `panning_enrichment` returns 0.0 for a plus plate counted at zero, which is
+  a result and not a missing count, and the filter tested the float for truth.
+  The round disappeared from the derived block and the "last against first"
+  comparison quietly started from the round after it. It is `is not None` now.
+  A ratio still cannot divide by zero, so the comparison runs between the
+  first and last rounds that enriched, names which two, and a note says why
+  the others are out of it. With every round at zero there is no comparison
+  and a note says that instead.
+
+- **An uncounted round, and every round's own note, reached neither the
+  screen nor the PDF.** Both were computed and kept in `sheet["rounds"]`, and
+  nothing rendered them, while the manual promised that a round that happened
+  is part of the record. The advice to count a less diluted minus plate was
+  generated and thrown away. There is an "Every round" block in both now.
+
+- **The plate layout understated how many plates a run needs.** The warning
+  divided wells by usable wells while the default placement spends a whole
+  column per group: 15 samples at 5 dilution points in duplicate came out as
+  two plates where 30 groups at 12 columns per plate need three. Somebody
+  setting up two plates on that number runs out of columns halfway. The count
+  now follows whatever the placement actually spends, and says which basis it
+  used.
+
+- **The per-domain table reported a protein nearly a kilodalton lighter than
+  the chain, and the warning did not mention mass.** With the regex scanner
+  the N-terminal boundary is placed by convention, so the first residues of a
+  plain single-domain VHH fall outside the domain: on cAbLys3 the chain is
+  13992.2 Da and the domain 13079.3, a gap of 913 Da. The warning said to read
+  the linker length as approximate and said nothing about mass or pI, while
+  Batch and QC compares a measured mass inside 2 Da, 450 times smaller than
+  the gap. The warning now computes the difference and prints it, because
+  "approximate" and "913 Da" are read differently and only the second is
+  actionable.
+
+- **Overlapping domains produced coordinates the chain does not have.** The
+  segment positions are built by walking the pieces end to end, which is the
+  chain's numbering only while the domains partition it; an overlap pushes
+  every later segment past the end of the sequence, and the protease filter
+  then files sites under the wrong segment. The regex scanner cannot produce
+  one and ANARCI has not been checked for it, so this is a guard against
+  something unobserved: `coordinates_consistent` in the result, and a warning
+  that says to read the per-domain table and ignore the positions.
+
+- **Both conventions for the mass of a base pair are now named, and what the
+  choice does is measured rather than asserted.** This app derives 617.9 g/mol
+  from the nucleotide formulas; NEB's calculators use 650. The first draft of
+  this note claimed the insert mass differed by 5%, which is wrong: the mass
+  per base pair appears above and below in the ratio and cancels, so the
+  insert mass is the same to four decimal places and what you pipette does not
+  depend on the choice at all. What moves by 5% is the picomoles, 0.0245
+  against 0.0233 for a 3300 bp vector at 50 ng. The ligation view says so, and
+  reports the other convention's figure beside its own. Also corrected: the
+  comment claimed 617.96 circulated without a primary source, and Qiagen
+  publishes the whole formula including the two-water end correction.
+
+- **Five sentences that contradicted the code beside them.** The dilution
+  caption said every position takes the same diluent, and position 1 is the
+  undiluted stock and takes none. `ligation_plan`'s docstring said a 3:1 molar
+  ratio of a 500 bp insert into a 5000 bp vector is a tenth of the vector's
+  mass, and it is three tenths. A comment added last week cited a CDR2 of
+  length 15 in the SAbDab snapshot, and there is none. The manual said neither
+  molar mass in the couple view is prefilled, in a sentence whose next clause
+  says A comes from the sequence. The couple view called both input masses
+  theoretical, and B is whatever the user typed, which may be a measured mass.
+
+- **The label grid is settable in all four values, as three places already
+  claimed.** Width and height were parameters of `build_label_sheet` with no
+  widget. Printing onto real stock is the one case where the millimetres
+  matter more than the counts, so they are exposed rather than the claim
+  withdrawn.
+
+- **A non-antibody chain is no longer promised to be "reported as one piece".**
+  It is still read for tags and linkers, and a motif as short as GS matches
+  inside ordinary proteins, so hen lysozyme comes back in five segments with
+  two of them labelled linker. The warning says what the labels are and what
+  they are not, and stops referring to domains that do not exist.
+
+- **The last position of a series now reports the volume it holds.** Every row
+  carried the final volume, but the last keeps the transfer it never passes
+  on. The note and the caption both said so in words while the column did not.
+
+- **Two more numbers moved onto the provenance register.** The two-fold
+  dilution-of-A threshold was an inline literal in `protein_pair_plan`, which
+  is invisible to the completeness scan by construction, the same class of
+  defect as the sixteen promoted the week before. The C-terminal trailer read
+  past the last annotated tag had no length bound where the annotated tags
+  have one, so a plasmid with a long open reading frame after its last tag
+  would have been reported as a linker of hundreds of residues; it is capped
+  and the cap is declared. The completeness test caught all three new
+  constants on the first run, which is what it is for.
+
 ### Added
 
 - **The reads can be given your own names.** A sequencing provider names each
