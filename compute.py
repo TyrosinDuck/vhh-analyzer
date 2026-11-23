@@ -48,7 +48,7 @@ import vhh_core as vc
 
 from shell import CACHE_MAX_ENTRIES, CACHE_TTL, _FIG_CACHE, fig_to_png
 
-__version__ = "2026.11.19a"
+__version__ = "2026.11.23a"
 
 def _analyze(seqs: dict[str, str], ph: float, method: str):
     return vc.analyze(seqs, ph=ph, method=method)
@@ -107,10 +107,18 @@ def germline_data(seq: str):
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=4)
 def process_ab1(payload: tuple, vector: str, cutoff: float, min_len: int,
-                min_phred: float):
-    """Parse and extract a batch of .ab1 uploads (cached on the file contents)."""
+                min_phred: float, names: tuple = ()):
+    """Parse and extract a batch of .ab1 uploads (cached on the file contents).
+
+    ``names`` is aligned with ``payload``, already made unique by
+    `sanger.assign_names`. It is part of the cache key, so renaming a read
+    re-runs the extraction rather than relabelling a cached table: the
+    duplicate column refers to reads by name, and relabelling after the fact
+    would be a second place that has to know that.
+    """
     return sg.process_reads(list(payload), vector=vector, mott_cutoff=cutoff,
-                            min_trimmed_len=min_len, min_mean_phred=min_phred)
+                            min_trimmed_len=min_len, min_mean_phred=min_phred,
+                            names=list(names))
 
 
 # Caching is a policy, not a property of the function, so it is attached here
@@ -594,17 +602,25 @@ def png_logo(seqs, anns, to_type, wrap_length, color_scheme):
         return fig_to_png(fig, close=True), matrix
 
 
+def _labelled_reads(payload, cutoff, names=()):
+    """The reads the quality figure and its table draw, under their names."""
+    names = list(names)
+    return [sg.read_ab1(data, name=name, cutoff=cutoff,
+                        label=names[i] if i < len(names) else None)
+            for i, (name, data) in enumerate(payload)]
+
+
 @st.cache_data(**_FIG_CACHE)
-def png_quality(payload, cutoff):
-    reads = [sg.read_ab1(data, name=name, cutoff=cutoff) for name, data in payload]
+def png_quality(payload, cutoff, names: tuple = ()):
+    reads = _labelled_reads(payload, cutoff, names)
     fig = sg.plot_quality(reads)
     return fig_to_png(fig, close=True) if fig else None
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL or 60, max_entries=16)
-def quality_table_for(payload, cutoff):
+def quality_table_for(payload, cutoff, names: tuple = ()):
     """Phred per base for the reads the quality figure draws, same slice."""
-    reads = [sg.read_ab1(data, name=name, cutoff=cutoff) for name, data in payload]
+    reads = _labelled_reads(payload, cutoff, names)
     return sg.quality_table(reads)
 
 

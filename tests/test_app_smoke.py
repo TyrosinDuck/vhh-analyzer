@@ -1484,6 +1484,48 @@ def test_the_sequencing_screen_loads_its_example_run(app):
         "the example is drawn without saying it is simulated")
 
 
+def test_the_sequencing_screen_uses_the_names_given_to_the_reads(app):
+    """Names reach the results table, with the reference kept beside them.
+
+    `AppTest` cannot type into a data_editor, so the names are put where the
+    screen builds the editor from, which is also where a loaded table of
+    names puts them, and the editor's key is bumped as loading one does. The
+    forward and reverse of clone A1 are given one name on purpose: the screen
+    has to keep both and say what it did.
+    """
+    _goto(app, "🧪 Sanger sequencing")
+    if not app.session_state.get("ab1_example_files"):
+        _click(app, "Load an example run")
+    app.session_state["ab1_names"] = {"clone_A1_fwd": "Nb_A1",
+                                      "clone_A1_rev": "Nb_A1",
+                                      "clone_B2_fwd": "Nb B2"}
+    app.session_state["ab1_names_last"] = {}
+    app.session_state["ab1_names_rev"] = (
+        app.session_state["ab1_names_rev"] + 1
+        if "ab1_names_rev" in app.session_state else 1)
+    app.run()
+    _no_failure(app, "naming the example reads")
+
+    table = next(d.value for d in app.dataframe
+                 if "status" in getattr(d.value, "columns", []))
+    assert table["read"].tolist()[:3] == ["Nb_A1", "Nb_A1_2", "Nb_B2"]
+    assert table["file"].tolist()[:3] == ["clone_A1_fwd", "clone_A1_rev",
+                                         "clone_B2_fwd"]
+    warnings = " ".join(w.value for w in app.warning)
+    assert "already used by clone_A1_fwd" in warnings
+    assert "spaces replaced" in warnings
+    picked = next(m for m in app.multiselect
+                  if m.label == "Sequences to analyse")
+    assert "Nb_A1" in picked.options and "clone_A1_fwd" not in picked.options
+
+    _click(app, "Reset to the reference names")
+    _no_failure(app, "resetting the names")
+    table = next(d.value for d in app.dataframe
+                 if "status" in getattr(d.value, "columns", []))
+    assert table["read"].tolist()[0] == "clone_A1_fwd"
+    assert "file" not in table.columns
+
+
 def test_the_example_run_can_be_cleared(app):
     """It has to be possible to get back to an empty screen to upload."""
     _click(app, "Clear the example")

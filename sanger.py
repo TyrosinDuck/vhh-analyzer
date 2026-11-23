@@ -14,6 +14,8 @@ Main entry points
 read_ab1(data, name)            parse one .ab1 into a read dict
 extract_cassette(nt, vector)    locate PelB / VHH / tags in a nucleotide read
 process_reads(files, ...)       the whole pipeline over several files
+assign_names(stems, requested)  your own names for the reads, made unique
+read_name_map(data, stems)      a two-column CSV/TSV of reference -> name
 plot_quality(reads)             per-read Phred trace with the trimmed window
 """
 
@@ -35,11 +37,12 @@ from Bio.Seq import Seq
 __all__ = [
     "VECTORS", "DEFAULTS", "mott_trim", "read_ab1", "extract_cassette",
     "process_reads", "plot_quality", "quality_table", "reads_to_fasta",
+    "clean_name", "assign_names", "read_name_map",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.18a"
+__version__ = "2026.11.23a"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -165,11 +168,17 @@ def mott_trim(quals, cutoff: float = MOTT_CUTOFF) -> tuple[int, int]:
     return best if best_sum > 0 else (0, 0)
 
 
-def read_ab1(data, name: str | None = None, cutoff: float | None = None) -> dict:
+def read_ab1(data, name: str | None = None, cutoff: float | None = None,
+             label: str | None = None) -> dict:
     """Parse one .ab1 chromatogram and apply quality trimming.
 
     ``data`` is a path, a bytes object or a file-like object, so the same
     function serves a notebook reading from disk and a web upload held in memory.
+
+    ``label`` is the name the read goes by from here on, in the table, the
+    figure and the FASTA headers. Without it the read is named after its file.
+    The file's own stem is kept beside it as ``file_stem`` either way, so a
+    renamed read can always be traced back to the chromatogram it came from.
     """
     cutoff = DEFAULTS["mott_cutoff"] if cutoff is None else cutoff
 
@@ -186,7 +195,7 @@ def read_ab1(data, name: str | None = None, cutoff: float | None = None) -> dict
     start, end = mott_trim(quals, cutoff)
 
     return {
-        "read": stem, "file_stem": stem,
+        "read": label or stem, "file_stem": stem,
         "raw_seq": seq, "raw_len": len(seq),
         "trim_start": int(start), "trim_end": int(end),
         "trimmed_seq": seq[start:end], "trimmed_len": int(end - start),
@@ -368,10 +377,14 @@ def extract_cassette(nt: str, vector: str = "pMES3") -> dict:
 
 def process_reads(files, vector: str | None = None, mott_cutoff: float | None = None,
                   min_trimmed_len: int | None = None, min_mean_phred: float | None = None,
-                  progress=None) -> tuple[pd.DataFrame, list[dict]]:
+                  progress=None, names=None) -> tuple[pd.DataFrame, list[dict]]:
     """Run the whole pipeline over several .ab1 inputs.
 
     ``files`` is a list of paths, or of ``(name, bytes)`` pairs for uploads.
+    ``names`` is an optional list aligned with ``files``, giving the name each
+    read should go by; an empty or missing entry keeps the file's stem. It is
+    used as given, so pass it through `assign_names` first if it may contain
+    repeats or spaces. The file's stem stays in the ``file`` column.
     ``progress`` is an optional callable ``(fraction, label)`` for a progress bar.
     Returns ``(results_dataframe, reads)`` where reads keep the quality arrays
     needed for the chromatogram figure.
@@ -381,6 +394,7 @@ def process_reads(files, vector: str | None = None, mott_cutoff: float | None = 
     min_len = DEFAULTS["min_trimmed_len"] if min_trimmed_len is None else min_trimmed_len
     min_phred = DEFAULTS["min_mean_phred"] if min_mean_phred is None else min_mean_phred
 
+    names = list(names or [])
     rows, reads = [], []
     total = max(len(files), 1)
     for i, item in enumerate(files):
@@ -388,13 +402,15 @@ def process_reads(files, vector: str | None = None, mott_cutoff: float | None = 
             name, data = item
         else:
             name, data = Path(item).name, item
+        label = (names[i] if i < len(names) else None) or None
         if progress:
             progress(i / total, f"Reading {name} ({i + 1}/{total})…")
 
         try:
-            read = read_ab1(data, name=name, cutoff=mott_cutoff)
+            read = read_ab1(data, name=name, cutoff=mott_cutoff, label=label)
         except Exception as exc:
-            rows.append({"read": Path(name).stem, "status": "unreadable",
+            rows.append({"read": label or Path(name).stem,
+                         "file": Path(name).stem, "status": "unreadable",
                          "warnings": f"could not parse: {exc}", "qc_pass": False,
                          "vhh_aa": "", "usable": False})
             continue
@@ -414,7 +430,8 @@ def process_reads(files, vector: str | None = None, mott_cutoff: float | None = 
                   "no FR4" if not ex["fr4_found"] else "unusable")
 
         rows.append({
-            "read": read["read"], "status": status, "usable": usable,
+            "read": read["read"], "file": read["file_stem"],
+            "status": status, "usable": usable,
             "qc_pass": bool(qc_pass),
             "raw_len": read["raw_len"], "trimmed_len": read["trimmed_len"],
             "mean_phred_trim": round(read["mean_phred_trim"], 1)
@@ -450,6 +467,142 @@ def process_reads(files, vector: str | None = None, mott_cutoff: float | None = 
         df["n_copies"] = df["vhh_aa"].map(
             df[df["vhh_aa"].astype(bool)]["vhh_aa"].value_counts()).fillna(0).astype(int)
     return df, reads
+
+
+# --------------------------------------------------------------------------- #
+# Naming the reads
+# --------------------------------------------------------------------------- #
+
+def clean_name(text) -> str:
+    """A name as it can travel through a FASTA header.
+
+    Surrounding whitespace is dropped and every run of inner whitespace becomes
+    one underscore. Not cosmetic: the analysis section reads a FASTA header up
+    to its first space, so "Nb 12" would arrive there as "Nb", and two clones
+    called "Nb 12" and "Nb 13" would arrive as the same sequence, the second
+    silently replacing the first. Anything that is not a string, including a
+    missing value from a table, is an empty name.
+    """
+    if not isinstance(text, str):
+        return ""
+    return re.sub(r"\s+", "_", text.strip())
+
+
+def assign_names(stems, requested=None) -> pd.DataFrame:
+    """Decide the name each read goes by, from the names asked for.
+
+    ``stems`` are the reference names, the file stems as the sequencing
+    provider wrote them, in upload order. ``requested`` is aligned with them;
+    an empty entry keeps the reference name. Returns one row per read with
+    ``file``, ``requested``, ``name`` (what is used) and ``note`` (why ``name``
+    differs from what was asked for, empty when it does not).
+
+    Names come out unique, because everything downstream is keyed on them: the
+    duplicate column, the selection sent to the analysis, and the analysis
+    itself, which holds sequences by name and keeps only the last of two that
+    share one. A repeat gets ``_2``, ``_3`` and so on, and the note says so.
+    A name asked for explicitly is served before a reference name kept by
+    default, so renaming one file to the reference name of another moves the
+    suffix onto the read nobody named, not onto the one somebody did.
+    Giving the forward and the reverse read of a clone the same name is the
+    usual way to arrive here, and the suffix keeps both reads.
+    """
+    stems = [str(s) for s in stems]
+    requested = list(requested or [])
+    asked = [clean_name(requested[i]) if i < len(requested) else ""
+             for i in range(len(stems))]
+    raw = [requested[i] if i < len(requested) and isinstance(requested[i], str)
+           else "" for i in range(len(stems))]
+    wanted = [a or s for a, s in zip(asked, stems)]
+    notes = ["spaces replaced by _" if a and a != r.strip() else ""
+             for a, r in zip(asked, raw)]
+
+    final: list[str | None] = [None] * len(stems)
+    taken: set[str] = set()
+    # explicit names first, then the reference names kept by default
+    order = ([i for i, a in enumerate(asked) if a]
+             + [i for i, a in enumerate(asked) if not a])
+    first_holder: dict[str, int] = {}
+    for i in order:
+        candidate, n = wanted[i], 1
+        while candidate in taken:
+            n += 1
+            candidate = f"{wanted[i]}_{n}"
+        if candidate != wanted[i]:
+            holder = stems[first_holder[wanted[i]]]
+            clash = f"{wanted[i]} is already used by {holder}, renamed {candidate}"
+            notes[i] = "; ".join(x for x in (notes[i], clash) if x)
+        first_holder[candidate] = i
+        taken.add(candidate)
+        final[i] = candidate
+
+    return pd.DataFrame({"file": stems, "requested": [r.strip() for r in raw],
+                         "name": final, "note": notes},
+                        columns=["file", "requested", "name", "note"])
+
+
+def _reference_key(text) -> str:
+    """A reference name as typed in a sheet: no extension, no outer spaces."""
+    key = str(text).strip()
+    return key[:-4] if key.lower().endswith(".ab1") else key
+
+
+def read_name_map(data, stems) -> tuple[dict[str, str], list[str]]:
+    """Read a two-column table of reference name -> your name.
+
+    ``data`` is the bytes or text of a CSV or TSV. The delimiter is whichever
+    of tab, semicolon and comma occurs most on the first line, so a comma, a
+    semicolon (a spreadsheet saved in a French or Belgian locale) or a tab all
+    work. The first column is matched against ``stems`` with any
+    ``.ab1`` extension and surrounding whitespace removed, so a sheet listing
+    the file names rather than the stems matches as well. Matching is
+    case-sensitive, because providers' names often differ by case alone.
+    Columns past the second are ignored.
+
+    The first row is taken as a header and skipped when its first cell is not
+    one of ``stems``. A sheet with no header whose first reference matches no
+    loaded file loses that row from the unmatched list and nothing else, since
+    it would not have been applied anyway.
+
+    Returns ``(mapping, unmatched)``: the names for the references that were
+    found, and the references in the sheet that match no loaded read, so the
+    screen can say what it did not apply instead of applying less in silence.
+    Raises ValueError with a readable message when the table has fewer than
+    two columns.
+    """
+    text = data.decode("utf-8-sig", errors="replace") if isinstance(data, bytes) else str(data)
+    # The delimiter is chosen among the three a spreadsheet writes, not left
+    # to csv.Sniffer: given one column of well names, the sniffer picks
+    # whatever character recurs, an underscore or a digit, and splits on it.
+    first = next((line for line in text.splitlines() if line.strip()), "")
+    sep = max(("\t", ";", ","), key=first.count)
+    if not first.count(sep):
+        raise ValueError("The table needs two columns: the reference name, "
+                         "then the name to use, separated by a comma, a "
+                         "semicolon or a tab.")
+    try:
+        frame = pd.read_csv(io.StringIO(text), sep=sep, header=None, dtype=str,
+                            keep_default_na=False, skip_blank_lines=True,
+                            usecols=[0, 1], on_bad_lines="skip")
+    except Exception as exc:        # csv.Error, ParserError, EmptyDataError
+        raise ValueError(f"The table could not be read as CSV or TSV: {exc}") from exc
+    if frame.shape[1] < 2:
+        raise ValueError("The table needs two columns: the reference name, "
+                         "then the name to use.")
+    known = {str(s) for s in stems}
+    pairs = [(_reference_key(a), b) for a, b in
+             zip(frame.iloc[:, 0], frame.iloc[:, 1])]
+    if pairs and pairs[0][0] not in known:
+        pairs = pairs[1:]
+    mapping, unmatched = {}, []
+    for ref, name in pairs:
+        if not ref:
+            continue
+        if ref in known:
+            mapping[ref] = str(name).strip()
+        else:
+            unmatched.append(ref)
+    return mapping, unmatched
 
 
 def reads_to_fasta(df: pd.DataFrame, only_usable: bool = True,

@@ -3187,6 +3187,69 @@ them in a chromatogram viewer or to put them through your own pipeline. Each
 file names itself a simulation in its own sample name and comment fields, so
 the warning travels with the file when it leaves the app.
 
+### 8.1c Naming the reads
+
+A chromatogram arrives named after the provider's order and well, which is a
+reference and not a name anybody wants on a figure. **Name the reads**, just
+above the results, lists the uploaded files by that reference with an empty
+*Your name* cell beside each. Whatever is typed there is the name the read goes
+by everywhere afterwards: the results table, the warnings, the quality traces,
+the three FASTA downloads, and the sequences sent to the analysis section,
+where every table and figure carries it. An empty cell keeps the reference.
+
+Three ways to fill the table:
+
+| Way | How |
+|---|---|
+| Type | one cell at a time |
+| Paste | copy a column of names from a spreadsheet and paste it into *Your name*, in the order of the rows |
+| Load a table | a `.csv`, `.tsv` or `.txt` file of two columns, the reference then the name |
+
+A loaded table may have a header row or not, and its separator may be a comma,
+a semicolon, as a spreadsheet saved in a French or Belgian locale writes, or a
+tab. The reference may be written with or without `.ab1`. Matching is exact,
+case included, because provider references often differ by case alone.
+Columns past the second are ignored. References in the table that match no
+uploaded read are listed under it and not applied; names already typed for
+reads the table does not mention are kept. An Excel workbook is not read
+directly: save it as CSV, or paste its column. **The names (CSV)** downloads
+the names in use in the same two-column form, so a run named once can be named
+again next time by loading that file.
+
+The reference is never lost. It is shown in a *Reference* column of the results
+table as soon as one read is renamed, beside the read in the warnings, and
+always in the `file` column of the full CSV, so a renamed read can be traced
+back to the chromatogram it came from.
+
+Two rules apply to the names, and a warning under the table says when either
+changed one:
+
+- **Whitespace becomes an underscore.** The analysis section reads a FASTA name
+  up to its first space, so "Nb 12" would arrive there as "Nb", and two clones
+  named "Nb 12" and "Nb 13" would arrive as one sequence, the second silently
+  replacing the first.
+- **Every read gets a name of its own.** The duplicate column, the selection
+  sent to the analysis and the analysis itself all refer to reads by name. A
+  repeat is suffixed `_2`, `_3`, and so on. Giving the forward and the reverse
+  read of one clone the same name is the usual way to arrive here, and it keeps
+  both reads. A name typed explicitly is served before a reference kept by
+  default: renaming read A to the reference of read B suffixes B, which nobody
+  named, rather than A.
+
+**Reset to the reference names** clears every name. Names survive adding a file
+to the upload; they are held for the session only, like everything else the app
+is given, and are not stored on the server.
+
+From a notebook:
+
+```python
+import sanger as sg
+stems = ["24AB_A01", "24AB_A01_rev", "24AB_B01"]
+names = sg.assign_names(stems, ["Nb1", "Nb1", "Nb 2"])
+# name: Nb1, Nb1_2, Nb_2, with a note on each one that changed
+df, reads = sg.process_reads(files, names=names["name"].tolist())
+```
+
 ### 8.2 Settings
 
 | Setting | Default | Effect |
@@ -3265,7 +3328,8 @@ is the thing to look at when a tag reads oddly.
 
 Four counters at the top: reads, VHHs extracted, unique sequences, failures.
 
-The table carries the status, QC pass, trimmed length, mean Q, the strand and
+The table carries the read's name and, once a read has been renamed, its
+reference, then the status, QC pass, trimmed length, mean Q, the strand and
 frame
 where the cassette was found, the VHH length, the tags found and missing,
 premature

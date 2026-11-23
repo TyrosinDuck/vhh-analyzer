@@ -16,6 +16,36 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **The reads can be given your own names.** A sequencing provider names each
+  chromatogram after its order and well, and that reference was the only name
+  a read could have: it went into the results table, the quality traces, the
+  FASTA files and, from there, every table and figure of the analysis section.
+  The Sanger screen now has a *Name the reads* table, the reference name on
+  each row and an empty cell beside it. A name typed there, or a column pasted
+  from a spreadsheet, is the name the read goes by from then on; an empty cell
+  keeps the reference. A two-column CSV or TSV of reference and name can be
+  loaded instead, with or without a header and with comma, semicolon or tab
+  as separator, and the names in use can be downloaded to load again next
+  time. References in a loaded table that match no read are listed rather than
+  ignored. The reference is never lost: it stays in a *Reference* column of the
+  results table and in the `file` column of the CSV.
+
+  Two rules apply to what is typed, and the screen says when either changed a
+  name. Whitespace becomes an underscore, because the analysis section reads a
+  FASTA name up to its first space, so "Nb 12" and "Nb 13" would have arrived
+  there as one sequence called "Nb", the second silently replacing the first.
+  And every read gets a name of its own: giving the forward and the reverse
+  read of a clone the same name, which is the natural thing to do, makes the
+  second one `_2` rather than dropping it. A name typed explicitly is served
+  before a reference kept by default.
+
+  In code, `sanger.assign_names`, `sanger.clean_name` and
+  `sanger.read_name_map` are new, and `read_ab1` and `process_reads` take an
+  optional `label` and `names`. Both are keyword parameters with a default, so
+  existing notebooks are unaffected.
+
 ### Fixed
 
 - **A construct was annotated as though its second domain did not exist.**

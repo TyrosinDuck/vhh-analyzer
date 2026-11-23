@@ -7,10 +7,13 @@ The screen only. Its computations live in `compute.py`; the chrome it uses
 
 from __future__ import annotations
 
+import hashlib
 import io
 import zipfile
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import streamlit as st
 
 import demo
@@ -18,7 +21,7 @@ import sanger as sg
 from compute import png_quality, process_ab1, quality_table_for
 from shell import FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.18a"
+__version__ = "2026.11.23a"
 
 
 def _zipped(files) -> bytes:
@@ -29,6 +32,121 @@ def _zipped(files) -> bytes:
         for name, data in files:
             archive.writestr(name, data)
     return buffer.getvalue()
+
+
+def _name_reads(stems: list[str]) -> list[str]:
+    """The table where the reads get the user's names. Returns the names used.
+
+    What the user typed is the editor's own state, and nothing here writes it
+    back into the frame the editor was built from: a data_editor whose data
+    changes under it on every rerun loses the edit in progress. The frame is
+    rebuilt only on three occasions, each of which bumps the editor's key: a
+    table of names is loaded, the names are reset, or the set of files changes.
+    On each, the names last typed are carried into the new frame, so loading a
+    sheet for half the reads keeps what was typed for the other half, and
+    adding a file to the upload keeps the names already given.
+    """
+    state = st.session_state
+    base = state.setdefault("ab1_names", {})
+    last = state.get("ab1_names_last", {})
+    files_key = hashlib.sha1("\x00".join(stems).encode()).hexdigest()[:10]
+    if state.get("ab1_names_files") != files_key:
+        base.update(last)
+        for key in [k for k, v in base.items() if not v]:
+            del base[key]
+        state["ab1_names_files"] = files_key
+        state.pop("ab1_names_msg", None)
+    rev = state.setdefault("ab1_names_rev", 0)
+
+    renamed = sum(1 for s in stems
+                  if (last[s] if s in last else base.get(s, "")).strip())
+    label = "✏️ Name the reads" + (f" ({renamed} renamed)" if renamed else "")
+    with st.expander(label, expanded=False):
+        st.caption(
+            "Each read is named after its file, which is the provider's "
+            "reference. Type the name you want next to it, or paste a column "
+            "from a spreadsheet into *Your name*; an empty cell keeps the "
+            "reference. The names are used everywhere below: the table, the "
+            "quality traces, the FASTA files and the analysis section. The "
+            "reference stays in a column of its own, so a renamed read can be "
+            "traced back to its chromatogram.")
+        edited = st.data_editor(
+            pd.DataFrame({"Reference name": stems,
+                          "Your name": [base.get(s, "") for s in stems]}),
+            key=f"ab1_names_editor_{files_key}_{rev}", hide_index=True,
+            num_rows="fixed", disabled=["Reference name"], **FIT,
+            height=min(38 + 35 * len(stems), 400),
+            column_config={
+                "Reference name": st.column_config.TextColumn(width="medium"),
+                "Your name": st.column_config.TextColumn(
+                    width="medium",
+                    help="Spaces become underscores, because the analysis "
+                         "section reads a FASTA name up to its first space."),
+            })
+        requested = ["" if not isinstance(v, str) else v
+                     for v in edited["Your name"].tolist()]
+        state["ab1_names_last"] = dict(zip(stems, requested))
+        resolved = sg.assign_names(stems, requested)
+
+        changed = resolved[resolved["note"].astype(bool)]
+        if len(changed):
+            st.warning("Some names were adjusted so that every read has a "
+                       "name of its own:\n\n" + "\n".join(
+                           f"- **{r.file}**: {r.note}"
+                           for r in changed.itertuples()))
+
+        side = st.columns([3, 2, 2])
+        with side[0]:
+            sheet = st.file_uploader(
+                "Or load a table of names (.csv, .tsv, .txt)",
+                type=["csv", "tsv", "txt"], key="ab1_names_file",
+                help="Two columns: the reference name, with or without .ab1, "
+                     "then your name. A header row is optional. An Excel "
+                     "sheet can be saved as CSV, or its two columns pasted "
+                     "into the table above.")
+        if sheet is not None:
+            raw = sheet.getvalue()
+            digest = hashlib.sha1(raw).hexdigest()
+            # Applied once per file, not on every rerun: re-applying it would
+            # overwrite whatever is typed into the table after loading it.
+            if state.get("ab1_names_sheet") != digest:
+                state["ab1_names_sheet"] = digest
+                try:
+                    mapping, unmatched = sg.read_name_map(raw, stems)
+                except ValueError as exc:
+                    state["ab1_names_msg"] = ("error", str(exc))
+                else:
+                    state["ab1_names"] = {**{k: v for k, v in
+                                             state["ab1_names_last"].items() if v},
+                                          **mapping}
+                    state["ab1_names_rev"] = rev + 1
+                    msg = f"{len(mapping)} name(s) applied from {sheet.name}."
+                    if unmatched:
+                        msg += (f" {len(unmatched)} reference(s) in the table "
+                                "match no loaded read and were not applied: "
+                                + ", ".join(unmatched[:10])
+                                + (", …" if len(unmatched) > 10 else "") + ".")
+                    state["ab1_names_msg"] = ("info", msg)
+                st.rerun()
+        kind, msg = state.get("ab1_names_msg", (None, None))
+        if msg:
+            (st.error if kind == "error" else st.info)(msg)
+        with side[1]:
+            data_download("The names (CSV)",
+                          resolved[["file", "name"]].rename(
+                              columns={"file": "reference", "name": "name"}),
+                          "read_names.csv", key="dl_read_names",
+                          help="The names in use, to keep with the run or to "
+                               "load again next time.")
+        with side[2]:
+            if st.button("Reset to the reference names", key="ab1_names_reset",
+                         disabled=not renamed, **FIT):
+                state["ab1_names"] = {}
+                state["ab1_names_last"] = {}
+                state.pop("ab1_names_msg", None)
+                state["ab1_names_rev"] = rev + 1
+                st.rerun()
+    return resolved["name"].tolist()
 
 
 def render(settings: Settings) -> None:
@@ -132,10 +250,12 @@ def render(settings: Settings) -> None:
                          "deleted, a read that stops inside the VHH, and an "
                          "empty well: one of each status the table below "
                          "reports.")
+        names = tuple(_name_reads([Path(name).stem for name, _ in payload]))
         bar = st.progress(0.0, text="Reading chromatograms…")
         try:
             sanger_df, reads = process_ab1(payload, vector, mott_cutoff,
-                                           int(min_len), float(min_phred))
+                                           int(min_len), float(min_phred),
+                                           names)
         finally:
             bar.empty()
 
@@ -148,7 +268,11 @@ def render(settings: Settings) -> None:
         cols_m[2].metric("Unique sequences", n_unique)
         cols_m[3].metric("Failed", n_total - n_usable)
 
-        show_cols = [c for c in ["read", "status", "qc_pass", "trimmed_len",
+        # The reference column only when a read was renamed: otherwise it
+        # repeats the first column word for word.
+        renamed = ("file" in sanger_df.columns
+                   and bool((sanger_df["file"] != sanger_df["read"]).any()))
+        show_cols = [c for c in ["read"] + (["file"] if renamed else []) + ["status", "qc_pass", "trimmed_len",
                                  "mean_phred_trim", "strand", "frame", "vhh_len",
                                  "tags_found", "tags_missing", "tags_partial",
                                  "premature_stops",
@@ -167,6 +291,7 @@ def render(settings: Settings) -> None:
                 "trimmed_len": st.column_config.NumberColumn("Trimmed (nt)"),
                 "vhh_len": st.column_config.NumberColumn("VHH (aa)"),
                 "duplicate_of": st.column_config.TextColumn("Duplicate of"),
+                "file": st.column_config.TextColumn("Reference"),
             })
         st.caption("Drag a column edge to widen it, or use the fullscreen button at "
                    "the top right of the table.")
@@ -177,7 +302,9 @@ def render(settings: Settings) -> None:
             with st.expander(f"Warnings in full ({len(flagged)} read(s))",
                              expanded=True):
                 for _, row in flagged.iterrows():
-                    st.markdown(f"**{row['read']}**, *{row['status']}*")
+                    ref = row.get("file", row["read"])
+                    where = f" ({ref})" if ref != row["read"] else ""
+                    st.markdown(f"**{row['read']}**{where}, *{row['status']}*")
                     for w in str(row["warnings"]).split("; "):
                         if w:
                             st.markdown(f"- {w}")
@@ -190,13 +317,13 @@ def render(settings: Settings) -> None:
 
         if reads:
             with st.expander("Quality traces"):
-                img_q = png_quality(payload, mott_cutoff)
+                img_q = png_quality(payload, mott_cutoff, names)
                 if img_q:
                     st.image(img_q, **FIT)
                     st.caption("Blue is the window kept after trimming; the dashed "
                                "line is Phred 20.")
                     data_download("Phred per base",
-                                  quality_table_for(payload, mott_cutoff),
+                                  quality_table_for(payload, mott_cutoff, names),
                                   "read_quality.csv", key="dl_read_quality",
                                   help="One row per base of each read drawn, "
                                        "with the bases kept by the trim "

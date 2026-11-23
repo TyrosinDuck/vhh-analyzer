@@ -125,7 +125,7 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.18a",
+REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.23a",
                     "session": "2026.11.12a",
                     "provenance": "2026.11.18a",
                     "sections.provenance": "2026.11.17b",
@@ -134,7 +134,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.18a",
                     "repertoire": "2026.11.16a",
                     "triage": "2026.11.16a", "ranking": "2026.11.17a", "codons": "2026.11.17a",
                     "library": "2026.11.13b", "structure": "2026.11.16a",
-                    "shell": "2026.11.19a", "compute": "2026.11.19a",
+                    "shell": "2026.11.23a", "compute": "2026.11.23a",
                     "af3": "2026.11.17a",
                     "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
@@ -156,7 +156,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.18a",
                     "sections.home": "2026.11.12c",
                     "sections.library": "2026.11.13d",
                     "sections.manual": "2026.11.12a",
-                    "sections.sequencing": "2026.11.18a",
+                    "sections.sequencing": "2026.11.23a",
                     "sections.structure": "2026.11.16b"}
 
 
