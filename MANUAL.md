@@ -440,29 +440,8 @@ Without ANARCI the regex scanner finds the same domains on a canonical
 scaffold, but it places the N-terminal end of a domain at the conserved
 cysteine minus 22 residues, which is where IMGT numbering puts the start of a
 framework and not a measurement of your sequence. A few residues of framework
-then land in the linker, or, at the start of the chain, in a stretch marked
-unassigned. The panel says which of the two produced the segments, `exact` or
-`approximate`, and the app on vhh-tools-app.org has ANARCI.
-
-**What that costs the per-domain table, with the number attached.** Every
-value in it is computed on the delimited domain and not on the chain, which
-is the point of the table and also its trap. Run the regex scanner on
-cAbLys3, a plain single-domain VHH with no linker and no tag, and the first
-ten residues fall outside the domain: the chain is 13992.2 Da and pI 4.68,
-the domain 13079.3 Da and pI 4.87. The panel now computes that difference and
-prints it rather than saying "approximate", because the mass check in §5.2
-compares a measured mass inside 2 Da, which is 450 times smaller than the
-gap. Use the whole-chain figures for anything you weigh.
-
-**Overlapping domains are refused rather than renumbered.** The segment
-coordinates are built by walking the pieces end to end, which is the chain's
-own numbering only while the domains partition it. If two ever overlap, every
-segment after the overlap would sit at a position the chain does not have and
-the protease sites would be filed under the wrong segment. The panel says so
-and tells you to read the per-domain table and ignore the positions. The
-regex scanner cannot produce an overlap; whether ANARCI ever does on a tandem
-construct has not been established, which is why this is a guard and not a
-repair.
+then land in the linker. The panel says which of the two produced the segments,
+`exact` or `approximate`, and the app on vhh-tools-app.org has ANARCI.
 
 **What the panel shows.** A schematic of the construct drawn to scale, the
 segment table with every piece and its coordinates, how the length splits
@@ -2462,11 +2441,10 @@ enzymatic conjugation.
 the last line because a mg/mL is a ug/uL, which is the identity worth keeping
 in your head when checking this at the bench.
 
-**A is prefilled from the sequence, B never is.** A comes from the sequence
-picked at the top when there is one, and is then theoretical: computed from
-the sequence, not measured. With no sequence loaded, A is typed too and the
-view refuses to compute until it has one. B is always typed, because B is
-usually not the protein the screen is pointed at; run it through the analysis section to get its mass from its
+**Neither molar mass is prefilled.** A comes from the sequence picked at the
+top when there is one, and is theoretical: computed from the sequence, not
+measured. B is always typed, because B is usually not the protein the screen
+is pointed at; run it through the analysis section to get its mass from its
 sequence. The view refuses to compute until it has both, for the reason the
 rest of this screen refuses: an invented mass would set the volume of B to
 add, which is the one number this view exists to give.
@@ -2484,11 +2462,8 @@ be. The app does not tabulate which pair does which, because that is a fact
 about your reaction, and a delta taken from a table nobody checks is how a
 wrong mass becomes a wrong identity. The water itself is not typed either: it
 is derived from its formula with the atomic weights the Buffers section uses.
-A's mass is theoretical whenever it came from the sequence. B's is whatever
-you typed, which may be a measured mass from an intact LC-MS run of the
-partner, and this view cannot tell. So the conjugate mass is at best as good
-as the weaker of the two: it is what to compare a measured mass against, not
-a measurement.
+Both input masses are theoretical, so the conjugate mass is too. It is what
+to compare a measured mass against, not a measurement.
 
 **No yield is predicted.** The ratio says what to add for a stoichiometry.
 What fraction actually ligates depends on your partners and your conditions.
@@ -2698,10 +2673,9 @@ this batch is aliquoted into: the lot, the protein, the concentration when
 there is one, the buffer, the storage and the date. A label is not a record.
 What it cannot carry, including how that concentration was arrived at, is on
 the sheet the tube travels with, which is why a derived concentration is
-marked with an asterisk on the label and explained in a footnote, and a
-measured one is printed bare with its method on the sheet. The grid is
-63.5 by 33.9 mm, three across and eight down by default, and all four of
-those are yours to change; it matches no commercial sheet in particular and says so
+marked with an asterisk on the label and explained in a footnote. The grid is
+63.5 by 33.9 mm, three across and eight down by default, and all of it is
+yours to change; it matches no commercial sheet in particular and says so
 rather than naming a product it might be half a millimetre out on, so each
 label prints its own cut outline.
 
@@ -3048,26 +3022,10 @@ counts** is where the enrichments live, each with the Poisson floor of its
 two counts, and the comparison between the last round and the first.
 
 Each round takes the same four numbers as §7.2, so the dilutions are asked
-for separately and the ratio is of outputs rather than of raw counts.
-
-**Every round reaches the sheet, counted or not.** A third block lists them
-all with their counts, their enrichment where there is one, and the note the
-round earned: that it was not counted, or that the minus plate had no colony
-and a less diluted one is worth counting. Both the screen and the PDF carry
-it. Until November 2026 they carried neither: the rounds were kept in the
-data structure and rendered nowhere, so a round nobody counted vanished from
-a report that claimed a round that happened is part of the record.
-
-**An uncounted plate is not a plate with no colony, and neither one
-disappears.** A round whose plus plate was counted at zero has an enrichment
-of zero, which is a result: it says nothing came back on the antigen. It is
-listed with that zero. What it cannot do is anchor the round-against-round
-comparison, because a ratio cannot divide by it, so that comparison runs
-between the first and last rounds that enriched, names which two it used, and
-a note says which rounds are out of it and why. With no two rounds enriching
-there is no comparison at all, and a note says that instead. Before this a
-zero was indistinguishable from a missing count, and the comparison silently
-started one round later.
+for separately and the ratio is of outputs rather than of raw counts. A round
+left uncounted stays on the sheet and out of the ratios: a round that
+happened is part of the record, and an uncounted plate is not a plate with no
+colony.
 
 **The comparison carries the sentence this report exists for.** A rising
 enrichment is a rising ratio. A clone that binds the plastic of the well, or
@@ -3115,12 +3073,9 @@ transfer that satisfies that is
     V_t = V_final / (fold - 1)
 
 from which the diluent per position comes out as the final volume itself: the
-same volume of diluent at every position after the first, and the same
-transfer between each pair. Position 1 is the undiluted stock and takes
-neither, which is why it is the one position whose stock volume is the final
-volume plus the transfer. Forget the carry-over and nothing complains; the
-last positions simply come out short, or the last dilution is not the one you
-meant.
+same volume of diluent everywhere, and the same transfer everywhere. Forget
+the carry-over and nothing complains; the last positions simply come out
+short, or the last dilution is not the one you meant.
 
 At 2-fold the transfer equals the final volume, which is the case worth
 keeping in your head: 100 uL of diluent in every position, 100 uL moved along
@@ -3170,12 +3125,7 @@ Turn off one group per column if you would rather pack the plate.
 
 **What does not fit is counted, not dropped quietly.** Ask for more wells
 than the format holds and the screen says how many did not fit and over how
-many plates the run would have to be split. That plate count follows whatever
-the placement actually spends, and says which: with one group per column a
-group occupies a whole column however few wells it fills, so thirty groups on
-a plate offering twelve columns is three plates. Dividing wells by wells said
-two, and somebody setting up two plates on that number runs out of columns
-halfway.
+many plates the run would have to be split.
 
 The map carries no volumes. What a well takes depends on the plate and the
 protocol rather than on the count of its wells, so no working volume is
@@ -3966,32 +3916,15 @@ backbone, type the length of the fragment you gel-purified rather than that
 of the whole plasmid; neither length is assumed, because a length decides the
 molar mass and the molar mass decides the whole answer.
 
-**The molar masses are derived, not looked up.** A nucleoside is a base plus
+**The molar masses are derived, not looked up.** The figure quoted
+everywhere, 617.96 g/mol per base pair, circulates without a primary source.
+The same number falls out of the chemistry: a nucleoside is a base plus
 deoxyribose minus a water, a nucleotide is that plus HPO3, and a base pair in
 a duplex is the two nucleotides minus one water per strand, worked with the
 same CIAAW atomic weights the Buffers section weighs salts with. That gives
 617.9. An A-T pair comes out at 617.4 and a G-C pair at 618.4, a spread of
 0.16%, which is why the GC content is not asked for: it cannot move the
 answer by as much as the pipetting does. The ends add one water per strand.
-
-**Two conventions are in use, and the screen names both.** The derived figure
-is what Qiagen publishes, 617.96 per base pair plus 36.04 for the two end
-waters, with the same per-base values this derivation reproduces. NEB works
-at 650 throughout its own calculators, a round number that carries
-counterions and cannot be reproduced from the formulas. An earlier version of
-this section said the 617.96 circulated without a primary source, which was
-wrong: Qiagen states the whole formula.
-
-What the choice changes is worth being precise about, because the obvious
-guess is wrong. **The insert mass does not move.** It is the vector mass
-times the ratio times the length ratio of the two molar masses, so the mass
-per base pair appears above and below and cancels: 50 ng of a 3300 bp vector
-with a 400 bp insert at 3:1 gives 18.184 ng under either convention, to four
-decimal places. What you pipette does not depend on this at all. **The
-picomoles move by about 5%**, 0.0245 against 0.0233 for that vector, because
-there the mass per base pair does not cancel. The screen reports both figures
-for the vector, so a number checked against a vendor calculator has somewhere
-to land instead of looking like one of the two tools being broken.
 
 A volume of insert below what can be pipetted accurately is flagged with the
 remark that scaling the whole reaction up leaves the ratio unchanged.

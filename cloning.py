@@ -43,7 +43,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.23a"
+__version__ = "2026.11.18a"
 
 # --------------------------------------------------------------------------- #
 # Motif library, short protein elements only, see the module docstring
@@ -624,15 +624,6 @@ DEFAULT_LAYOUT = "pMES3"
 # bound is a guard against a mislabelled large feature, not a measurement.
 MAX_TAG_NT = 60
 
-# Ceiling on the C-terminal trailer read past the last annotated tag. The
-# annotated tags are bounded by MAX_TAG_NT; the trailer was bounded only by
-# the next in-frame stop, so a plasmid whose last tag is followed by a long
-# open reading frame would be reported as a linker of hundreds of residues in
-# the cassette layout. None of the five bundled vectors reaches it, pHEN25's
-# trailer being fifteen residues, so this is a guard against a map nobody has
-# loaded yet rather than a fix for one that broke.
-MAX_TRAILER_AA = 60
-
 
 def tag_name_for(label: str) -> str | None:
     """Canonical tag name for an annotation label, or None if it is not a tag."""
@@ -685,12 +676,6 @@ def c_terminal_trailer(seq: str, after: int) -> dict:
     if stop_i <= 0:                 # stop first (nothing there), or none in frame
         return dict(EMPTY_TRAILER)
     aa = protein[:stop_i]
-    if len(aa) > MAX_TRAILER_AA:
-        # Too long to be a linker and a terminal residue or two. Reported as
-        # nothing rather than as a linker of that length, because calling a
-        # whole domain a linker is worse than saying the trailer was not
-        # recognised.
-        return dict(EMPTY_TRAILER)
     cys = aa.endswith("C")
     linker = aa[:-1] if cys else aa
     labels = ([f"linker({linker})"] if linker else []) + (["Cys(C-term)"] if cys else [])
@@ -1456,8 +1441,9 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
 # the construct would encode what you intend; this is the number you need in
 # the tube, and it is the one most often done by eye.
 #
-# The molar mass of a base pair is derived here rather than typed. The same
-# number falls out of the chemistry, which anyone can check:
+# The molar mass of a base pair is derived here rather than typed. The figure
+# quoted everywhere, 617.96 g/mol, circulates without a primary source; the
+# same number falls out of the chemistry, which anyone can check:
 #
 #   nucleoside  = base + deoxyribose - H2O
 #   nucleotide  = nucleoside + HPO3
@@ -1467,52 +1453,6 @@ def plan_cloning(recipient: dict, donor_dna: str, donor_is_plasmid: bool,
 # pair comes out at 617.4 and a G-C pair at 618.4, a spread of 0.16%, which
 # is why the mean is used and the GC content is not asked for: it cannot
 # change the answer by as much as the pipetting does.
-#
-# TWO CONVENTIONS ARE IN USE AND THEY DIFFER BY 5%. This matters more than the
-# decimals above, because whoever checks this app against a vendor calculator
-# will land on one or the other.
-#
-#   617.96 g/mol per bp, plus 36.04 for the two end waters. This is what the
-#   chemistry gives and what Qiagen publishes, with the same per-base values
-#   this derivation reproduces, A and T at 617.44 and C and G at 618.43:
-#   https://www.qiagen.com/en/applications/enzymes/tools-and-calculators/dsdna-mass-to-moles-conventer
-#   An earlier version of this comment said the figure circulated without a
-#   primary source. That was wrong: Qiagen states the whole formula, end
-#   correction included.
-#
-#   650 g/mol per bp, which is what NEB uses throughout its own arithmetic:
-#   https://www.neb.com/en/faqs/how-to-calculate-the-molarity-of-ends
-#   It is a round number that carries counterions and is not reproducible
-#   from the formulas.
-#
-# This app uses the derived figure, because it can be checked from the atomic
-# weights and the 650 cannot. They are two conventions and not two
-# measurements, so the app names both rather than quietly picking one.
-#
-# What the choice does and does not change, measured rather than assumed:
-#
-#   The insert mass is unaffected. `insert_ng = vector_ng x ratio x
-#   M_insert / M_vector`, and the mass per base pair appears in both M's, so
-#   it cancels. On 50 ng of a 3300 bp vector with a 400 bp insert at 3:1 the
-#   two conventions give 18.184 ng either way, a difference of 0.0006% that
-#   comes only from the two end waters. What you pipette does not depend on
-#   this at all.
-#
-#   The picomoles move by 5%. 0.0245 pmol of vector under the derived figure
-#   against 0.0233 under 650, because there the mass per base pair does not
-#   cancel. Anyone comparing this screen's pmol against NEB's calculator will
-#   see that 5% and should know where it comes from; anyone comparing the
-#   insert mass will see nothing.
-#
-# That asymmetry is why the screen reports both pmol figures and only one
-# insert mass: showing two insert masses that agree to four decimal places
-# would suggest a choice matters where it does not.
-# The other convention in circulation, kept so the ligation view can name it
-# rather than leaving a 5% gap for somebody to discover against a vendor
-# calculator. Not used in any calculation: see the block above for what it
-# does and does not change.
-NEB_BASE_PAIR_MASS = 650.0
-
 DNMP_FORMULAS = {
     "dAMP": "C10H14N5O6P",
     "dTMP": "C10H15N2O8P",
@@ -1563,8 +1503,7 @@ def ligation_plan(vector_ng: float, vector_bp: int, insert_bp: int,
 
     The ratio is a count of molecules, not of nanograms, which is the whole
     point: a 500 bp insert and a 5000 bp vector at "3:1" are 3 molecules of
-    insert per molecule of vector, and that is three tenths of the vector's
-    mass,
+    insert per molecule of vector, and that is a tenth of the vector's mass,
     not three times it. Doing the ratio in nanograms is the commonest way to
     be out by the length ratio.
 
@@ -1608,27 +1547,8 @@ def ligation_plan(vector_ng: float, vector_bp: int, insert_bp: int,
             f"ratio asked for is {molar_ratio:g} molecules per molecule; the "
             f"two differ by the length ratio, {insert_bp / vector_bp:.3f}.")
 
-    # The other convention, so that a figure checked against a vendor
-    # calculator has somewhere to land. NEB works at 650 g/mol per base pair
-    # where this app derives 617.9; the picomoles differ by about 5% and the
-    # insert mass does not differ at all, because the mass per base pair
-    # cancels in the ratio. Saying so is cheaper than letting somebody find
-    # the 5% and wonder which of the two tools is broken.
-    neb_vector_pmol = vector_ng * 1000.0 / (vector_bp * NEB_BASE_PAIR_MASS)
-    notes.append(
-        f"Picomoles here use the derived mass per base pair, "
-        f"{base_pair_mass():.1f} g/mol. NEB's calculators use 650, which "
-        f"would make the vector {neb_vector_pmol:.4f} pmol rather than "
-        f"{vector_pmol:.4f}, about "
-        f"{abs(neb_vector_pmol - vector_pmol) / vector_pmol * 100:.0f}% "
-        f"apart. The insert mass above is the same under either convention, "
-        f"to four decimal places: the mass per base pair cancels in the "
-        f"ratio, so this changes what the screen reports and not what you "
-        f"pipette.")
-
     return {
         "vector_pmol": round(vector_pmol, 4),
-        "vector_pmol_neb_convention": round(neb_vector_pmol, 4),
         "vector_mass_da": round(duplex_mass(vector_bp), 1),
         "insert_pmol": round(insert_pmol, 4),
         "insert_mass_da": round(duplex_mass(insert_bp), 1),

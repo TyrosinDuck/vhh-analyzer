@@ -19,7 +19,7 @@ import plates as pt
 from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
                    usage_prompt)
 
-__version__ = "2026.11.23a"
+__version__ = "2026.11.17b"
 
 V_SERIES = "💧 Dilution series"
 V_LAYOUT = "🔲 Plate layout"
@@ -119,12 +119,10 @@ def _series() -> None:
         with cards[3]:
             st.metric("Final dilution", f"1:{out['final_dilution']:g}")
         st.caption(
-            f"Position 1 is the undiluted stock: it takes no diluent and no "
-            f"transfer. Every position after it takes the same "
-            f"{out['diluent_per_position_ul']:.1f} uL of diluent and the "
-            f"same {out['transfer_ul']:.2f} uL transfer, which is what the "
-            f"carry-over buys you: one volume to set on the pipette for the "
-            f"rest of the series. The last position keeps the "
+            f"Every position takes the same {out['diluent_per_position_ul']:.1f} "
+            f"uL of diluent and the same {out['transfer_ul']:.2f} uL transfer, "
+            f"which is what the carry-over buys you: one volume to set on the "
+            f"pipette for the whole series. The last position keeps the "
             f"{out['surplus_ul']:.2f} uL it never passes on.")
     else:
         cards = st.columns(3)

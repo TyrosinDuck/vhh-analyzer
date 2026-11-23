@@ -37,7 +37,7 @@ __all__ = [
     "dissect_construct", "SPACER_KINDS", "__version__",
 ]
 
-__version__ = "2026.11.23a"
+__version__ = "2026.11.19b"
 
 VERIFY_NOTICE = (
     "Check every tag and linker sequence against your own vector or reference "
@@ -379,23 +379,6 @@ def dissect_construct(seq: str, name: str = "construct",
         pos += len(piece)
     segments_df = pd.DataFrame(segments)
 
-    # The coordinates above are built by walking the pieces end to end, which
-    # is the chain's own numbering only while the domains partition it. Two
-    # domains that overlap break that silently: the pieces still concatenate,
-    # so `pos` runs past the end of the sequence and every segment after the
-    # overlap sits at a coordinate the chain does not have. The protease
-    # filter then maps whole-chain positions onto those shifted spans and
-    # files sites under the wrong segment. The regex scanner cannot produce
-    # an overlap; ANARCI is not run in the environment this was written in
-    # and has not been checked for one, so this guards against something
-    # unobserved rather than fixing something seen.
-    overlapping = [
-        f"{named_domains[i - 1]['name']} and {named_domains[i]['name']}"
-        for i in range(1, len(named_domains))
-        if named_domains[i]["start"] <= named_domains[i - 1]["end"]
-    ]
-    coordinates_consistent = pos == len(seq) and not overlapping
-
     # Protease sites outside the domains. Computed on the whole chain so that a
     # motif straddling a junction is seen, then kept only where it falls in a
     # segment that is not a domain.
@@ -418,32 +401,18 @@ def dissect_construct(seq: str, name: str = "construct",
     if not domains:
         warnings.append(
             "No immunoglobulin variable domain was found, so there is nothing "
-            "to cut into domains. The chain is still read for tags and "
-            "linkers, and whatever matches none of them is left as "
-            "'unassigned': a short motif such as GS can match inside an "
-            "ordinary protein, so read those labels as what the scanner "
-            "recognised and not as a claim about the architecture.")
+            "to cut: the sequence is reported as one piece.")
     if bounds_quality == "approximate":
         warnings.append(
             "Domain boundaries come from the regex scanner, not ANARCI. The "
             "C-terminal end of each domain is the FR4 motif and is located "
             "directly; the N-terminal end is placed by IMGT convention, so the "
-            "first residues of a domain can be reported as part of the linker, "
-            "or as 'unassigned' where they sit at the start of the chain. "
+            "first residues of a domain can be reported as part of the linker. "
             "Read the linker length as approximate.")
-    if overlapping:
-        warnings.append(
-            f"Two domains overlap ({'; '.join(overlapping)}), which this "
-            f"module's segment coordinates cannot represent: everything after "
-            f"the overlap is numbered past the end of the chain, and the "
-            f"protease sites below are filed under the wrong segment. Read "
-            f"the per-domain table and ignore the segment positions.")
     unassigned = [s for s in segments if s["label"] == "unassigned"]
     if unassigned:
-        where = ("between or around the domains" if named_domains
-                 else "in the chain")
         warnings.append(
-            f"{len(unassigned)} stretch(es) {where} match "
+            f"{len(unassigned)} stretch(es) between or around the domains match "
             "no tag or linker this module knows, and are left as "
             "'unassigned' rather than guessed at.")
     if len(domains) > 1:
@@ -463,49 +432,12 @@ def dissect_construct(seq: str, name: str = "construct",
                              for d in named_domains])
                if named_domains else pd.DataFrame())
 
-    # What the per-domain row is a row about, said with the number attached.
-    #
-    # Every value in `per_vhh` is computed on the delimited domain and not on
-    # the chain, which is the point of the table and also its trap: with the
-    # regex scanner the N-terminal boundary is placed by convention, so a
-    # plain single-domain VHH can have its first residues fall outside the
-    # domain and the row then reports a lighter protein than the one in the
-    # tube. On cAbLys3 the chain is 13992.25 Da and the domain 13079.30, a
-    # difference of 913 Da. That matters because Batch and QC compares a
-    # measured mass against a computed one inside 2 Da, so a per-domain mass
-    # carried over there cannot match and nothing would say why.
-    #
-    # The figure is computed rather than described, because a warning that
-    # says "approximate" and a warning that says "913 Da" are read
-    # differently, and only the second is actionable.
-    if named_domains:
-        covered = sum(d["length"] for d in named_domains)
-        outside = len(seq) - covered
-        if outside > 0:
-            domain_mass = float(per_vhh["mw_da"].sum())
-            chain_mass = float(whole["mw_da"].iloc[0])
-            gap = chain_mass - domain_mass
-            warnings.append(
-                f"Every value in the per-domain table is computed on the "
-                f"delimited domain, not on the chain. {outside} residue(s) of "
-                f"this chain sit outside every domain, so the per-domain "
-                f"masses add up to {domain_mass:.1f} Da against the chain's "
-                f"{chain_mass:.1f} Da, a difference of {gap:.1f} Da. Use the "
-                f"whole-chain mass for anything you weigh or measure, "
-                f"including the mass check in Batch and QC, which compares "
-                f"inside 2 Da.")
-
     return {"sequence": seq, "length": len(seq), "name": name,
             "segments": segments_df,
             "properties": whole, "per_vhh": per_vhh,
             "domains": named_domains,
             "n_domains": len(named_domains),
             "bounds_quality": bounds_quality,
-            # False when the segment positions cannot be trusted as chain
-            # coordinates, which today means only that two domains overlap.
-            # A caller that draws the segments or maps anything onto them
-            # should check this rather than assume a partition.
-            "coordinates_consistent": coordinates_consistent,
             "junction_sites": junction,
             "context_differences": context,
             "warnings": warnings,
