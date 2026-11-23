@@ -1526,6 +1526,45 @@ def test_the_sequencing_screen_uses_the_names_given_to_the_reads(app):
     assert "file" not in table.columns
 
 
+def test_the_naming_table_stays_open_while_names_are_typed(app):
+    """Regression: the table folded after almost every name.
+
+    Its label carried the number of reads renamed, and Streamlit derives an
+    expander's identity from its label, so each name typed made a new
+    expander, drawn closed. Checked on what that depends on: the label does
+    not move when a read is renamed, and the open state is a session value
+    that the rerun a rename triggers leaves alone. Whether a browser keeps an
+    expander open across reruns is not something AppTest can see.
+    """
+    _goto(app, "🧪 Sanger sequencing")
+    if not app.session_state.get("ab1_example_files"):
+        _click(app, "Load an example run")
+
+    def naming():
+        return [e for e in app.expander if "Name the reads" in e.label]
+
+    before = [e.label for e in naming()]
+    app.session_state["ab1_names_open"] = True
+    app.run()
+    for count, stem in enumerate(["clone_A1_fwd", "clone_B2_fwd"], start=1):
+        app.session_state["ab1_names"] = {
+            **app.session_state["ab1_names"], stem: f"Nb{count}"}
+        app.session_state["ab1_names_last"] = {}
+        app.session_state["ab1_names_rev"] = (
+            app.session_state["ab1_names_rev"] + 1)
+        app.run()
+        _no_failure(app, f"renaming read {count}")
+        assert [e.label for e in naming()] == before, (
+            "the expander's label changed with a rename, which closes it")
+        assert app.session_state["ab1_names_open"] is True
+        captions = " ".join(c.value for c in naming()[0].caption)
+        assert f"{count} of 6 read(s) renamed" in captions, (
+            "the count lags behind the names typed")
+
+    _click(app, "Reset to the reference names")
+    _no_failure(app, "resetting after the expander test")
+
+
 def test_the_example_run_can_be_cleared(app):
     """It has to be possible to get back to an empty screen to upload."""
     _click(app, "Clear the example")

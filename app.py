@@ -156,7 +156,7 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.23a",
                     "sections.home": "2026.11.12c",
                     "sections.library": "2026.11.13d",
                     "sections.manual": "2026.11.12a",
-                    "sections.sequencing": "2026.11.23a",
+                    "sections.sequencing": "2026.11.23b",
                     "sections.structure": "2026.11.16b"}
 
 

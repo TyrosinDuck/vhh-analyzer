@@ -3292,7 +3292,8 @@ changed one:
   default: renaming read A to the reference of read B suffixes B, which nobody
   named, rather than A.
 
-**Reset to the reference names** clears every name. Names survive adding a file
+The table stays open while you type, and a count under it says how many reads
+have a name of their own. **Reset to the reference names** clears every name. Names survive adding a file
 to the upload; they are held for the session only, like everything else the app
 is given, and are not stored on the server.
 

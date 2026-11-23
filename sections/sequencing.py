@@ -21,7 +21,10 @@ import sanger as sg
 from compute import png_quality, process_ab1, quality_table_for
 from shell import FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.23a"
+__version__ = "2026.11.23b"
+
+
+NAMES_LABEL = "✏️ Name the reads"
 
 
 def _zipped(files) -> bytes:
@@ -58,10 +61,15 @@ def _name_reads(stems: list[str]) -> list[str]:
         state.pop("ab1_names_msg", None)
     rev = state.setdefault("ab1_names_rev", 0)
 
-    renamed = sum(1 for s in stems
-                  if (last[s] if s in last else base.get(s, "")).strip())
-    label = "✏️ Name the reads" + (f" ({renamed} renamed)" if renamed else "")
-    with st.expander(label, expanded=False):
+    # The label is fixed. Streamlit derives an expander's identity from its
+    # label, so a label carrying the count ("3 renamed") was a new expander
+    # each time a name was typed, and a new expander is drawn closed: the
+    # table folded after almost every entry. The count is a caption inside
+    # instead. The key with on_change="rerun" makes the open state a widget
+    # value held in the session, so it survives the reruns an edit triggers
+    # rather than depending on the browser keeping it.
+    with st.expander(NAMES_LABEL, expanded=False, key="ab1_names_open",
+                     on_change="rerun"):
         st.caption(
             "Each read is named after its file, which is the provider's "
             "reference. Type the name you want next to it, or paste a column "
@@ -86,6 +94,11 @@ def _name_reads(stems: list[str]) -> list[str]:
         requested = ["" if not isinstance(v, str) else v
                      for v in edited["Your name"].tolist()]
         state["ab1_names_last"] = dict(zip(stems, requested))
+        # Counted from what the editor returned on this run, not from the
+        # previous run's names, which lagged one entry behind.
+        renamed = sum(1 for r in requested if r.strip())
+        if renamed:
+            st.caption(f"{renamed} of {len(stems)} read(s) renamed.")
         resolved = sg.assign_names(stems, requested)
 
         changed = resolved[resolved["note"].astype(bool)]

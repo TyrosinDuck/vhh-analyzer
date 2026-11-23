@@ -141,6 +141,20 @@ missing.
   and the cap is declared. The completeness test caught all three new
   constants on the first run, which is what it is for.
 
+- **The table for naming Sanger reads folded after almost every name.**
+  Reported from use, not by the audit above. The *Name the reads* expander
+  carried the count in its label, "(3 renamed)", and Streamlit derives an
+  expander's identity from its label, so each name typed changed the label,
+  made a new expander and drew it closed: naming a plate meant reopening the
+  table after every entry. The label is now fixed, the count is a caption
+  inside, and the expander has a key with `on_change="rerun"`, so whether it is
+  open is a value held in the session rather than left to the browser. The
+  count was also one entry behind, computed from the names of the previous run;
+  it is now taken from what the table returned. A test fails on the old label
+  and passes on the new one. That a browser keeps the expander open across the
+  rerun an edit triggers is the documented behaviour of a keyed expander and is
+  not something the test harness can observe.
+
 ### Added
 
 - **The reads can be given your own names.** A sequencing provider names each
