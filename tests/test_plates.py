@@ -33,7 +33,13 @@ def test_a_two_fold_series_transfers_the_whole_final_volume():
     assert out["diluent_per_position_ul"] == pytest.approx(100.0)
     assert out["final_dilution"] == pytest.approx(128)        # 2 ** 7
     assert out["final_concentration"] == pytest.approx(10.0 / 128)
-    assert [row["final_volume_ul"] for row in out["rows"]] == [100.0] * 8
+    # Seven positions hold the final volume; the last holds it plus the
+    # transfer it never passes on, which is the surplus reported beside
+    # it. This column used to read 100.0 for all eight, which was the
+    # one figure in the table the last tube did not hold.
+    assert [row["final_volume_ul"] for row in out["rows"]] == (
+        [100.0] * 7 + [200.0])
+    assert out["surplus_ul"] == pytest.approx(100.0)
     assert not out["warnings"]
 
 

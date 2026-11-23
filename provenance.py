@@ -46,7 +46,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 
-__version__ = "2026.11.18a"
+__version__ = "2026.11.23a"
 
 __all__ = [
     "BASES", "Constant", "NOT_SCIENTIFIC", "UNCLASSIFIED", "entries", "resolve", "value_text",
@@ -1141,6 +1141,41 @@ _REGISTRY = (
                  "decides what sequence is extracted from it.",
     ),
     Constant(
+        key="neb_base_pair_mass",
+        label="Mass per base pair, the other convention in circulation",
+        where=("cloning", "NEB_BASE_PAIR_MASS"),
+        unit="g/mol per base pair",
+        basis="vendor",
+        source="New England Biolabs use 650 g/mol per base pair throughout "
+               "their own arithmetic, stated in their molarity-of-ends FAQ: "
+               "https://www.neb.com/en/faqs/how-to-calculate-the-molarity-of-"
+               "ends . It is a round number carrying counterions and is not "
+               "reproducible from the nucleotide formulas, which is why this "
+               "app computes with the derived 617.9 instead. Nothing is "
+               "calculated from this value: it exists so the ligation view "
+               "can name the convention a vendor calculator will have used, "
+               "rather than leave a 5% difference in picomoles for somebody "
+               "to find and distrust.",
+        used_for="In-silico cloning, ligation: the note saying what the "
+                 "vector's picomoles would be under the other convention, "
+                 "and that the insert mass is the same under both.",
+    ),
+    Constant(
+        key="dilution_of_a_worth_saying",
+        label="Dilution of A above which the couple view says so",
+        where=("bench", "DILUTION_OF_A_WORTH_SAYING"),
+        unit="fold",
+        basis="convention",
+        source="This app's own, chosen so that adding B is mentioned once it "
+               "has more than halved A. Nothing fixes it at two rather than "
+               "at 1.5 or 3: it decides whether a sentence appears and never "
+               "a number. Written inline in `protein_pair_plan` until the "
+               "November 2026 audit found it, which is how a judgement "
+               "number stays outside this register.",
+        used_for="Batch and QC, Couple two proteins: the note about B "
+                 "diluting A.",
+    ),
+    Constant(
         key="kmer_k",
         label="Length of the k-mers the polyreactivity model counts",
         where=("specificity", "KMER_K"),
@@ -1270,6 +1305,10 @@ NOT_SCIENTIFIC: dict[str, str] = {
                          "millimetres and counts. It matches no commercial "
                          "sheet and says so; every label prints its own cut "
                          "outline, and all four values are settable",
+    "cloning.MAX_TRAILER_AA": "ceiling on the C-terminal trailer read past "
+                              "the last annotated tag, so a long open reading "
+                              "frame is reported as unrecognised rather than as "
+                              "a linker of hundreds of residues",
     "bench.build_label_sheet(copies)": "how many labels a sheet carries "
                                        "unless another number is asked for",
     "cloning.ligation_plan(molar_ratio)": "three molecules of insert per "

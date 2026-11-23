@@ -19,7 +19,7 @@ import streamlit as st
 import bench as bn
 from shell import AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings
 
-__version__ = "2026.11.17a"
+__version__ = "2026.11.23a"
 
 V_TITRE = "🧪 Titre"
 V_ENRICHMENT = "📈 Enrichment"
@@ -482,6 +482,30 @@ def _report() -> None:
 
     for note in sheet["derivation_notes"]:
         st.caption(note)
+
+    # Every round, including those neither block above can show. A round with
+    # no counts contributes nothing to either, so it used to disappear from
+    # the screen entirely, along with the per-round note telling you what to
+    # do about it.
+    if sheet.get("rounds"):
+        st.markdown("**Every round**")
+        st.caption(
+            "Counted or not. A round that happened is part of the record "
+            "even when it contributes no ratio.")
+        st.dataframe(
+            pd.DataFrame([{
+                "Round": entry.get("round") or "unnamed",
+                "Colonies + / -": (
+                    "not counted"
+                    if entry.get("plus_colonies") is None
+                    or entry.get("minus_colonies") is None
+                    else f"{entry['plus_colonies']:g} / "
+                         f"{entry['minus_colonies']:g}"),
+                "Enrichment": ("-" if entry.get("enrichment") is None
+                               else f"{entry['enrichment']:.3g}"),
+                "Note": entry.get("note") or "",
+            } for entry in sheet["rounds"]]),
+            hide_index=True, **FIT)
 
     with tempfile.TemporaryDirectory() as folder:
         pdf = Path(folder) / "campaign.pdf"
