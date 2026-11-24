@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.24d"
+__version__ = "2026.11.24e"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -482,43 +482,88 @@ def scroll_to_top(screen: str) -> None:
     changes, never on an ordinary rerun: a reader who moves a slider at the
     bottom of a screen must stay where they are.
 
-    The script scrolls every container that can hold the page's scroll,
-    because which element that is has changed between Streamlit versions. It
-    does so several times over the first 1.6 s: Streamlit removes the old
-    screen's elements after the new ones arrive, and a single scroll at the
-    first instant was undone by that, measured in headless Chrome, landing at
-    the bottom of the new screen exactly as without it. It stops as soon as
-    the reader scrolls, presses a key or clicks, so it never fights them. The
-    screen key is written into the fragment so that two successive changes of
-    screen are two different fragments, each of which runs. Where `st.html`
-    cannot run a script, an older Streamlit, a zero-height component does the
-    same from its iframe.
+    Three things this went through, each from a browser rather than from
+    reading the code:
+
+    * The fragment sits in a container keyed by the screen. Without the key
+      Streamlit reused the element and swapped its content, and a script
+      swapped in that way is never run: in headless Chrome the script sat in
+      the page after a change of screen and the page stayed at the bottom.
+    * It scrolls several times over the first second or so. Streamlit removes
+      the old screen's elements after the new ones arrive, and a single
+      scroll at the first instant was undone by that.
+    * **Which element scrolls is found rather than guessed.** It used to
+      write to a list of selectors taken from this Streamlit's markup, which
+      is a guess about the browser as much as about the version. Instead the
+      elements that are scrolled *right now*, before anything is reset, are
+      collected: whatever holds the scroll is in that list by definition.
+      The sidebar is left out, so its own scroll position is not disturbed.
+      The old selectors are still written to, in case the page is already at
+      the top of a container that is about to grow.
+
+    What stops it: a deliberate interaction, a click, a key or a touch. A
+    wheel event deliberately does **not**, although it did at first. On
+    macOS, inertial scrolling keeps firing wheel events for a second or more
+    after the fingers have left the trackpad, so a reader who flicked to the
+    bottom and clicked a section cancelled the scroll without touching
+    anything, and the page stayed where it was. That was reported from Safari
+    on a Mac, where this still fails, and it is the leading suspect.
+
+    Not verified in Safari: WebKit cannot be installed in the container this
+    was written in, so everything above was measured in headless Chrome.
     """
     import inspect
-    script = (f"<!-- {screen} --><script>"
-              "(function(){var d=(window.parent&&window.parent.document)"
-              "||document;var w=d.defaultView||window;var stop=false;"
-              "['wheel','touchmove','keydown','mousedown'].forEach(function(k)"
-              "{w.addEventListener(k,function(){stop=true;},"
-              "{once:true,passive:true});});"
-              "function up(){if(stop)return;"
-              "['[data-testid=\"stMain\"]',"
-              "'[data-testid=\"stAppViewContainer\"]','section.main',"
-              "'.main'].forEach(function(s){d.querySelectorAll(s)"
-              ".forEach(function(e){e.scrollTop=0;});});w.scrollTo(0,0);}"
-              "[0,50,150,300,500,800,1200,1600].forEach(function(t)"
-              "{setTimeout(up,t);});})();</script>")
-    # A container keyed by the screen, so the fragment is a new element on
-    # each change of screen. Without it Streamlit reused the element in place
-    # and only swapped its content, and a script swapped in that way is never
-    # run: in headless Chrome the scroll script sat in the page after a
-    # change of screen and the page stayed at the bottom.
+
+    # Written as one line per statement rather than as one long string, so
+    # the next person to debug this can read it.
+    script = f"""<!-- {screen} --><script>
+(function () {{
+  var d = (window.parent && window.parent.document) || document;
+  var w = d.defaultView || window;
+  var stop = false;
+  ['mousedown', 'keydown', 'touchstart'].forEach(function (k) {{
+    w.addEventListener(k, function () {{ stop = true; }},
+                       {{ once: true, passive: true }});
+  }});
+  var side = d.querySelector('[data-testid="stSidebar"]');
+  var targets = [];
+  var nodes = d.querySelectorAll('*');
+  for (var i = 0; i < nodes.length; i++) {{
+    var e = nodes[i];
+    if (e.scrollTop > 0 && !(side && side.contains(e))) {{ targets.push(e); }}
+  }}
+  ['[data-testid="stMain"]', '[data-testid="stAppViewContainer"]',
+   'section.main', '.main'].forEach(function (sel) {{
+    var found = d.querySelectorAll(sel);
+    for (var j = 0; j < found.length; j++) {{ targets.push(found[j]); }}
+  }});
+  if (d.scrollingElement) {{ targets.push(d.scrollingElement); }}
+  if (d.documentElement) {{ targets.push(d.documentElement); }}
+  if (d.body) {{ targets.push(d.body); }}
+  function up() {{
+    if (stop) {{ return; }}
+    for (var k = 0; k < targets.length; k++) {{
+      try {{ targets[k].scrollTop = 0; }} catch (err) {{}}
+    }}
+    try {{ w.scrollTo(0, 0); }} catch (err) {{}}
+  }}
+  [0, 40, 120, 250, 400, 600, 900, 1300].forEach(function (t) {{
+    setTimeout(up, t);
+  }});
+}})();
+</script>"""
+
     with st.container(key=f"scroll_top_{screen}"):
+        # Both, deliberately. `st.html` runs the script in the page itself,
+        # which is what Chrome was measured with; the zero-height component
+        # runs the same thing from an iframe of the same origin, which is the
+        # mechanism Streamlit has always had. If one of the two does not run
+        # the script in a given browser, the other does, and running it twice
+        # changes nothing: it sets a scroll position to zero.
         if "unsafe_allow_javascript" in inspect.signature(st.html).parameters:
             st.html(script, unsafe_allow_javascript=True)
-        else:
-            import streamlit.components.v1 as components
-            components.html(script, height=0)
+        import streamlit.components.v1 as components
+        components.html(script, height=0)
 
 
 def embed_html(html: str, height: int) -> None:

@@ -102,12 +102,29 @@ ran, from its Zenodo record.
   other run, so moving a control at the bottom of a screen still leaves you
   there. The scroll is repeated over the first moments, because Streamlit
   removes the previous screen after drawing the new one, and stops the
-  moment you scroll, click or type. The fragment that does it sits in a
+  moment you click or type. The fragment that does it sits in a
   container keyed by the screen: without the key, Streamlit reused the
   element and swapped its content, and a script swapped in that way never
   runs, which headless Chrome showed on the first attempt. Measured there
   from 1947 px down the Guides screen: the Manual, the Sanger screen and the
   analysis all open at 0, against the bottom of each without it.
+
+  **It still did nothing in Safari**, reported from a Mac where Chrome was
+  fine, and two things were changed for it. A wheel event no longer cancels
+  the scroll: on macOS, inertial scrolling keeps firing wheel events for a
+  second or more after the fingers leave the trackpad, so flicking to the
+  bottom and clicking a section cancelled the scroll without the reader
+  touching anything. And the element that scrolls is now found rather than
+  guessed: the elements that are scrolled at that moment are collected,
+  whatever markup this Streamlit and this browser produced, with the sidebar
+  left out so its own position is not disturbed. The script is also emitted
+  twice over, once into the page and once from a zero-height component
+  iframe, because a browser that runs neither cannot be ruled out from here
+  and running it twice sets the same scroll position to zero twice.
+
+  Not verified in Safari: WebKit cannot be installed in the container this
+  was written in, so Chrome is the only browser these measurements come
+  from.
 
 - **The Sanger screen forgot its chromatograms and its vector when you left
   it.** Streamlit empties a file uploader, and resets a selectbox or slider
