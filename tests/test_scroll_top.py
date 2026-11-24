@@ -53,6 +53,24 @@ def test_a_change_of_screen_adds_the_script_and_a_rerun_does_not():
     assert _scripts(at) == []
 
 
+def test_the_readers_own_scroll_stops_it_after_a_short_grace():
+    """A browser rule, so only its shape can be checked here.
+
+    Measured in headless Chrome, arriving on a screen from 1948 px down the
+    previous one: with the rule, a wheel at 450 ms and at 1200 ms both leave
+    the page where the reader put it (208 px); with the threshold raised so
+    that no wheel ever stops it, both come back to 0, which is what was
+    reported from Safari and Chrome. The 150 ms is a grace for the inertia
+    of the flick that preceded the click, which on macOS keeps firing wheel
+    events after the fingers have left the trackpad.
+    """
+    import shell
+    source = Path(shell.__file__).read_text()
+    assert "w.addEventListener('wheel', scrolled" in source
+    assert "w.addEventListener('touchmove', scrolled" in source
+    assert "Date.now() - t0 > 150" in source
+
+
 def test_each_change_of_screen_is_a_new_element():
     """Swapping the content of one element does not run a script; a new
     element does. The keyed container is what makes it new."""

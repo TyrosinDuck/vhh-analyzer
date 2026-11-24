@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.24f"
+__version__ = "2026.11.24g"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -501,20 +501,26 @@ def scroll_to_top(screen: str) -> None:
       The old selectors are still written to, in case the page is already at
       the top of a container that is about to grow.
 
-    What stops it: a deliberate interaction, a click, a key or a touch. A
-    wheel event deliberately does **not**, although it did at first. On
-    macOS, inertial scrolling keeps firing wheel events for a second or more
-    after the fingers have left the trackpad, so a reader who flicked to the
-    bottom and clicked a section cancelled the scroll without touching
-    anything, and the page stayed where it was. That is what Safari on a Mac
-    did, with Chrome on the same machine working, and it is why the wheel is
-    not on the list.
+    What stops it: a click, a key, a touch, or a scroll of the reader's own.
+    The scroll is the awkward one, and it went both ways before it settled
+    here. Stopping on any wheel event at all broke it on macOS, where
+    inertial scrolling keeps firing wheel events for a second or more after
+    the fingers leave the trackpad: a reader who flicked to the bottom and
+    clicked a section cancelled the scroll without touching anything. Not
+    stopping on it at all was worse, and was reported from both browsers: a
+    reader who arrived and started reading down the page was pulled back up
+    by a tick that had not fired yet. So a wheel in the first 150 ms is read
+    as the tail of the flick that preceded the click, and anything after
+    that as the reader. What is left uncovered is a flick whose inertia
+    outlives the click by more than that.
 
-    Safari was checked by hand on that Mac and opens at the top now. Which of
-    the two changes did it is not established: dropping the wheel and finding
-    the scrolled element instead of naming it went out together. Everything
-    measured rather than reported comes from headless Chrome, because WebKit
-    cannot be installed in the container this was written in.
+    Safari on a Mac was checked by hand, where this had failed outright
+    before the element that scrolls was found rather than named. Which of
+    those two changes fixed it is not established, since they went out
+    together, and this one weakens the wheel rule that was the other
+    candidate. Everything measured rather than reported comes from headless
+    Chrome, because WebKit cannot be installed in the container this was
+    written in.
     """
     import inspect
 
@@ -525,10 +531,16 @@ def scroll_to_top(screen: str) -> None:
   var d = (window.parent && window.parent.document) || document;
   var w = d.defaultView || window;
   var stop = false;
+  var t0 = Date.now();
   ['mousedown', 'keydown', 'touchstart'].forEach(function (k) {{
     w.addEventListener(k, function () {{ stop = true; }},
                        {{ once: true, passive: true }});
   }});
+  function scrolled() {{
+    if (Date.now() - t0 > 150) {{ stop = true; }}
+  }}
+  w.addEventListener('wheel', scrolled, {{ passive: true }});
+  w.addEventListener('touchmove', scrolled, {{ passive: true }});
   var side = d.querySelector('[data-testid="stSidebar"]');
   var targets = [];
   var nodes = d.querySelectorAll('*');

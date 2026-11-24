@@ -127,6 +127,17 @@ ran, from its Zenodo record.
   the only browser the measurements quoted above come from: WebKit cannot be
   installed in the container this was written in.
 
+  **Then it pulled the reader back up**, in both browsers, and that was the
+  wheel rule above being gone: arriving on a screen and starting to read
+  down it meant being returned to the top by one of the ticks that had not
+  fired yet, up to 1.3 s after landing. A wheel or a touch now stops it
+  again, but only after a 150 ms grace, which is the window where a wheel
+  event is still the inertia of the flick that preceded the click rather
+  than the reader. Measured in Chrome, arriving from 1948 px down: a wheel
+  at 450 ms and at 1200 ms both leave the page where the reader put it,
+  against 0 with the grace made endless. A flick whose inertia outlives the
+  click by more than 150 ms is what this does not cover.
+
 - **The Sanger screen forgot its chromatograms and its vector when you left
   it.** Streamlit empties a file uploader, and resets a selectbox or slider
   without a key, as soon as the screen drawing it is no longer drawn. Going
