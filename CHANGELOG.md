@@ -109,7 +109,7 @@ ran, from its Zenodo record.
   from 1947 px down the Guides screen: the Manual, the Sanger screen and the
   analysis all open at 0, against the bottom of each without it.
 
-  **It still did nothing in Safari**, reported from a Mac where Chrome was
+  **It did nothing at all in Safari**, reported from a Mac where Chrome was
   fine, and two things were changed for it. A wheel event no longer cancels
   the scroll: on macOS, inertial scrolling keeps firing wheel events for a
   second or more after the fingers leave the trackpad, so flicking to the
@@ -122,9 +122,10 @@ ran, from its Zenodo record.
   iframe, because a browser that runs neither cannot be ruled out from here
   and running it twice sets the same scroll position to zero twice.
 
-  Not verified in Safari: WebKit cannot be installed in the container this
-  was written in, so Chrome is the only browser these measurements come
-  from.
+  Safari on that Mac opens at the top now, checked by hand. Which of the two
+  changes did it is not established, since they went out together. Chrome is
+  the only browser the measurements quoted above come from: WebKit cannot be
+  installed in the container this was written in.
 
 - **The Sanger screen forgot its chromatograms and its vector when you left
   it.** Streamlit empties a file uploader, and resets a selectbox or slider

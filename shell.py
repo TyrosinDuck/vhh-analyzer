@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.24e"
+__version__ = "2026.11.24f"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -506,11 +506,15 @@ def scroll_to_top(screen: str) -> None:
     macOS, inertial scrolling keeps firing wheel events for a second or more
     after the fingers have left the trackpad, so a reader who flicked to the
     bottom and clicked a section cancelled the scroll without touching
-    anything, and the page stayed where it was. That was reported from Safari
-    on a Mac, where this still fails, and it is the leading suspect.
+    anything, and the page stayed where it was. That is what Safari on a Mac
+    did, with Chrome on the same machine working, and it is why the wheel is
+    not on the list.
 
-    Not verified in Safari: WebKit cannot be installed in the container this
-    was written in, so everything above was measured in headless Chrome.
+    Safari was checked by hand on that Mac and opens at the top now. Which of
+    the two changes did it is not established: dropping the wheel and finding
+    the scrolled element instead of naming it went out together. Everything
+    measured rather than reported comes from headless Chrome, because WebKit
+    cannot be installed in the container this was written in.
     """
     import inspect
 
