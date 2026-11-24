@@ -17,7 +17,7 @@ from shell import (APP_ICON, APP_NAME, AUTHOR_URL, DOI, DOI_URL, FIT, GROUPS,
                    group_header_html, report_url, sections_by_group,
                    usage_mailto, usage_url)
 
-__version__ = "2026.11.12c"
+__version__ = "2026.11.24a"
 
 # Drawn as inline SVG rather than with a diagramming library: it is a few boxes
 # and six arrows, it has to be legible on a light and a dark theme, and a
@@ -337,6 +337,16 @@ def render(settings: Settings) -> None:
     with hcols[1]:
         st.caption("Every screen explained, what each number means, and how far to "
                    "trust it.")
+    # Beside the manual rather than among the cards: a guide is not a tool but
+    # a path through several of them, and the reader most likely to need one
+    # is the one who has just landed here and does not know where to start.
+    gcols = st.columns([1, 2])
+    with gcols[0]:
+        st.button("🧭 Follow a guide", key="guides_from_home", **FIT,
+                  on_click=go_to, args=("guides",))
+    with gcols[1]:
+        st.caption("Start from a question, such as a Sanger screening, and get "
+                   "the screens that answer it, step by step.")
 
     staged = current_sequences()
     if staged:

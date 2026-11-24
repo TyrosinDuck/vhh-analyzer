@@ -109,6 +109,7 @@ a fresh export and rerunning that script.
 | `sections/library.py` | the Sequence library screen |
 | `sections/home.py`, `sections/manual.py`, `sections/reference.py` | the landing page, the manual and the reference tables |
 | `sections/provenance.py` | the provenance register: every constant and where it came from |
+| `sections/guides.py` | the Guides screen: a question, and the steps through the other screens that answer it |
 | `demo.py` | the example inputs the Sanger and Structure screens offer |
 
 Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
@@ -116,12 +117,14 @@ Plus the science, which the screens only arrange: `vhh_core.py`, `cloning.py`,
 `sanger.py`, `generator.py`, `constructs.py`, `triage.py`, `ranking.py`,
 `plates.py`,
 `specificity.py`, `tnp.py`, `sabdab.py`, `library.py`, `reference.py`,
-`af3.py`. Plus three files that describe the app rather than
+`af3.py`. Plus four files that describe the app rather than
 compute with it: `session.py`, which writes the inputs of a run to a file so
 the run can be repeated, `provenance.py`, which names the module and
 attribute that owns each constant so the register reads live values instead of
-a second copy, and `elsewhere.py`, which lists the questions this app does not
-answer and who answers them.
+a second copy, `elsewhere.py`, which lists the questions this app does not
+answer and who answers them, and `guides.py`, the step-by-step paths through
+the screens that the Guides screen shows, each step checked against the
+screens and tabs that exist.
 
 This paragraph is checked rather than trusted: `tests/test_metadata.py` fails
 on a module at the root that neither it nor the table above names. It was

@@ -34,7 +34,7 @@ import structure as stx
 import triage as tg
 import vhh_core as vc
 
-__version__ = "2026.11.23a"
+__version__ = "2026.11.24d"
 
 EXAMPLE = """>caplacizumab
 EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEG
@@ -72,7 +72,7 @@ RELEASE = "1.1.0"
 # re-imported on every reboot, so a computed date would change without the
 # code changing, and the one question this line has to answer, which build am
 # I looking at, would get a different answer each morning.
-BUILD = "20261123"
+BUILD = "20261124"
 
 # Names that can appear inside data/ without being part of the app: caches an
 # interpreter writes, and the file macOS leaves in every folder it has looked
@@ -319,6 +319,21 @@ def _fit() -> dict:
 FIT = _fit()
 
 
+def tabs_default(tab: str | None) -> dict:
+    """The keyword that opens `st.tabs` on `tab`, or nothing.
+
+    `st.tabs` takes `default` in recent Streamlit and raises TypeError on it in
+    older ones, which `requirements.in` still allows. Asked of the installed
+    function rather than of a version number, because what matters is whether
+    this particular `st.tabs` accepts the argument. Where it does not, the tab
+    simply opens on the first one, which is what it always did.
+    """
+    import inspect
+    if tab is None or "default" not in inspect.signature(st.tabs).parameters:
+        return {}
+    return {"default": tab}
+
+
 CACHE_TTL = 600        # seconds
 
 
@@ -456,6 +471,54 @@ def follow_app_theme() -> str:
         "if(document.body){sync();}else{addEventListener('DOMContentLoaded',sync);}"
         "setInterval(sync,500);"
         "})();</script>")
+
+
+def scroll_to_top(screen: str) -> None:
+    """Bring the page back to its top, once, after a change of screen.
+
+    Streamlit redraws a new screen in the same scrolled page, so a click on a
+    navigation button at the bottom of a long screen landed at the bottom of
+    the next one. The router calls this only on the run where the screen
+    changes, never on an ordinary rerun: a reader who moves a slider at the
+    bottom of a screen must stay where they are.
+
+    The script scrolls every container that can hold the page's scroll,
+    because which element that is has changed between Streamlit versions. It
+    does so several times over the first 1.6 s: Streamlit removes the old
+    screen's elements after the new ones arrive, and a single scroll at the
+    first instant was undone by that, measured in headless Chrome, landing at
+    the bottom of the new screen exactly as without it. It stops as soon as
+    the reader scrolls, presses a key or clicks, so it never fights them. The
+    screen key is written into the fragment so that two successive changes of
+    screen are two different fragments, each of which runs. Where `st.html`
+    cannot run a script, an older Streamlit, a zero-height component does the
+    same from its iframe.
+    """
+    import inspect
+    script = (f"<!-- {screen} --><script>"
+              "(function(){var d=(window.parent&&window.parent.document)"
+              "||document;var w=d.defaultView||window;var stop=false;"
+              "['wheel','touchmove','keydown','mousedown'].forEach(function(k)"
+              "{w.addEventListener(k,function(){stop=true;},"
+              "{once:true,passive:true});});"
+              "function up(){if(stop)return;"
+              "['[data-testid=\"stMain\"]',"
+              "'[data-testid=\"stAppViewContainer\"]','section.main',"
+              "'.main'].forEach(function(s){d.querySelectorAll(s)"
+              ".forEach(function(e){e.scrollTop=0;});});w.scrollTo(0,0);}"
+              "[0,50,150,300,500,800,1200,1600].forEach(function(t)"
+              "{setTimeout(up,t);});})();</script>")
+    # A container keyed by the screen, so the fragment is a new element on
+    # each change of screen. Without it Streamlit reused the element in place
+    # and only swapped its content, and a script swapped in that way is never
+    # run: in headless Chrome the scroll script sat in the page after a
+    # change of screen and the page stayed at the bottom.
+    with st.container(key=f"scroll_top_{screen}"):
+        if "unsafe_allow_javascript" in inspect.signature(st.html).parameters:
+            st.html(script, unsafe_allow_javascript=True)
+        else:
+            import streamlit.components.v1 as components
+            components.html(script, height=0)
 
 
 def embed_html(html: str, height: int) -> None:
@@ -659,18 +722,119 @@ SECTIONS = {
               "Bench"),
 }
 
-# The two screens that belong to no group: what you consult rather than what
+# The screens that belong to no group: what you consult rather than what
 # you run. They are not in SECTIONS because the home page builds a card per
-# section and the grouping covers every section, and these two would have to
+# section and the grouping covers every section, and these would have to
 # be excluded from both. They are declared here all the same, rather than
 # written out in the sidebar, so that the router can reach them the same way
 # it reaches a section: `app.py` knows every screen from SECTIONS, UTILITIES
 # and the home page, and holds no list of its own.
 UTILITIES = {
     "manual": ("📖", "Manual"),
+    "guides": ("🧭", "Guides"),
     "reference": ("📐", "Reference"),
     "provenance": ("🔎", "Provenance"),
 }
+
+# Named rather than indexed: inserting a tab in the middle of an indexed list
+# silently reassigns every panel after it.
+# Fourteen tabs are not fourteen subjects, they are four questions plus the
+# decision view. Grouping them does two things at once: a newcomer reads five
+# labels instead of scanning fourteen, and Streamlit only executes the family
+# that is open. Nested tabs would have fixed the first problem and not the
+# second, because every tab body runs whether or not its tab is selected.
+#
+# The six families of the analysis screen, each a key, its tabs and a blurb.
+# Declared here rather than in `sections/analysis.py`, where it lived until
+# the Guides screen needed the same names: a screen does not read the globals
+# of another one, and a guide that wrote "Comparison > Clonal families" out by
+# hand would keep saying it after a rename. `sections.analysis.view_count`
+# derives from this the number of views MANUAL.md §3.0 quotes, and
+# `guides.problems` checks every guide step against it.
+ANALYSIS_FAMILIES = {
+    "🎯 Triage": ("triage", ["Table", "Compare"],
+                  "Every flag in one table, and the same flags read as a "
+                  "comparison between the sequences you submitted: the views "
+                  "for deciding which to carry forward."),
+    "🔍 Identity": ("identity",
+                    ["Properties", "Plots", "CDR / Framework",
+                     "Hallmarks & germline"],
+                    "What each sequence is: physico-chemical descriptors, "
+                    "profiles, CDR and framework annotation, hallmarks and "
+                    "humanness."),
+    "⚠️ Developability": ("risk", ["Liabilities", "Aggregation",
+                                    "Clinical context", "Polyreactivity",
+                                    "Plastic resemblance"],
+                          "Whether it will behave: chemical liabilities, "
+                          "cysteines and disulfides, suggested repairs, "
+                          "aggregation-prone regions, where the CDR lengths "
+                          "sit relative to clinical-stage nanobodies, and how "
+                          "likely the CDRs are to bind things they were not "
+                          "selected against."),
+    "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
+                                  "Clonal families"],
+                      "How your sequences compare with each other: alignment "
+                      "and sequence logo, differences from a reference, clonal "
+                      "families."),
+    # The size of the reference set is deliberately absent from this sentence.
+    # This dict is read at import time, before any data file is opened, so a
+    # number here could only be a hand-written copy of what the matrix holds;
+    # the tab itself states it, from `repertoire.reference_report`.
+    "🌍 Repertoire": ("repertoire", ["Repertoire", "Closest structure"],
+                      "How they compare with what is already known: unusual "
+                      "framework residues, CDR lengths and composition "
+                      "against a reference set of real VHHs, and the nearest "
+                      "solved structures."),
+    "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download", "Session"],
+                   "What you make from them: codon-optimised DNA, fusion "
+                   "constructs, CSV, figures, the PDF report, and the session "
+                   "file that lets somebody run this again."),
+}
+
+
+# The views of the two screens that offer a selector of their own, each an
+# internal key and the label it is shown under. Here rather than in the
+# screens for the reason ANALYSIS_FAMILIES is: the Guides screen names a view
+# and may not read another screen's globals, and a guide that wrote the label
+# out by hand would keep saying it after a rename. The screens read their
+# labels from here, so there is one copy of each.
+#
+# The key is what a guide step carries, so renaming a label is a change in one
+# place and breaks nothing.
+BENCH_VIEWS = {
+    "quantify": "🧮 Quantify",
+    "mass": "⚖️ Mass check",
+    "conjugate": "🏷️ Conjugate",
+    "pair": "🔗 Couple two proteins",
+    "convert": "🔄 Convert",
+    "balance": "🧫 Purification",
+    "plan": "📐 How much culture",
+    "batch": "📄 Batch sheet",
+    "lots": "🗂️ Across lots",
+}
+
+# In the order the screen lists them. "interface" is drawn only when a binding
+# partner is selected, which is why `sections/structure.py` filters this dict
+# rather than copying its labels, and why no guide step points at it.
+STRUCTURE_VIEWS = {
+    "chains": "🧬 Chains & confidence",
+    "disulfides": "🔗 Disulfides",
+    "exposure": "💧 Exposure",
+    "cdr3": "📐 CDR3 shape",
+    "liabilities": "⚠️ Liabilities in 3D",
+    "patches": "🫧 Surface patches",
+    "interface": "🎯 Interface",
+    "view3d": "👁 3D view",
+}
+
+# Which screens have a view selector, with the Session State key of the radio
+# that holds it. `guides.problems` checks a step's view against this, and the
+# Guides screen writes the key to open a view.
+SCREEN_VIEWS = {
+    "bench": ("bench_view", BENCH_VIEWS),
+    "structure": ("struct_view", STRUCTURE_VIEWS),
+}
+
 
 # The key of the landing page. Named rather than spelt out in the three places
 # that need it (the default section, the Home button, the fallback for a
@@ -688,6 +852,20 @@ def screen_keys() -> list[str]:
     is one entry in `SECTIONS` plus one file in `sections/` and nothing else.
     """
     return [HOME, *SECTIONS, *UTILITIES]
+
+
+def screen_labels() -> dict[str, str]:
+    """The sidebar label of every section and utility, by key.
+
+    Derived from SECTIONS and UTILITIES, the same way the sidebar builds its
+    buttons, so that a guide naming a screen names it exactly as the reader
+    sees it, and a renamed section is renamed in the guides too.
+    """
+    labels = {key: f"{icon} {label}"
+              for key, (icon, label, *_rest) in SECTIONS.items()}
+    labels.update({key: f"{icon} {label}"
+                   for key, (icon, label) in UTILITIES.items()})
+    return labels
 
 
 @dataclasses.dataclass(frozen=True)

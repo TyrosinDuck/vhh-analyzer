@@ -77,6 +77,7 @@ try:
     import compute
     import constructs
     import generator
+    import guides
     import library
     import provenance
     import ranking
@@ -99,6 +100,7 @@ try:
     import sections.buffers
     import sections.cloning
     import sections.genes
+    import sections.guides
     import sections.home
     import sections.library
     import sections.manual
@@ -110,7 +112,7 @@ try:
     from shell import (APP_ICON, APP_NAME, CACHE_MAX_ENTRIES, CACHE_TTL, FIT,
                        HOME, SECTIONS, Settings, UTILITIES, anarci_status,
                        footer, go_to, group_header_html, screen_keys,
-                       sections_by_group)
+                       scroll_to_top, sections_by_group)
 except (KeyError, ImportError) as _exc:
     _updating(_exc)
 
@@ -125,8 +127,8 @@ st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
 # The analysis modules live in separate files that are updated together with this
 # one. Copying only app.py across used to fail deep inside a call with an opaque
 # AttributeError; this turns that into a message naming the stale file.
-REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.23a",
-                    "session": "2026.11.12a",
+REQUIRED_MODULES = {"vhh_core": "2026.11.24a", "sanger": "2026.11.24a",
+                    "session": "2026.11.24a",
                     "provenance": "2026.11.23a",
                     "sections.provenance": "2026.11.17b",
                     "cloning": "2026.11.23a", "generator": "2026.11.17a",
@@ -134,16 +136,16 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.23a",
                     "repertoire": "2026.11.16a",
                     "triage": "2026.11.16a", "ranking": "2026.11.17a", "codons": "2026.11.17a",
                     "library": "2026.11.13b", "structure": "2026.11.16a",
-                    "shell": "2026.11.23a", "compute": "2026.11.23a",
+                    "shell": "2026.11.24d", "compute": "2026.11.23a",
                     "af3": "2026.11.17a",
                     "demo": "2026.11.16a",
                     "reference": "2026.11.12a",
-                    "sections.analysis": "2026.11.19c",
+                    "sections.analysis": "2026.11.24c",
                     "specificity": "2026.11.23a",
                     "tnp": "2026.11.19a",
                     "sabdab": "2026.11.12a",
                     "elsewhere": "2026.11.12b",
-                    "sections.bench": "2026.11.23a",
+                    "sections.bench": "2026.11.24a",
                     "sections.phage": "2026.11.23a",
                     "plates": "2026.11.23a",
                     "sections.plates": "2026.11.23a",
@@ -153,11 +155,13 @@ REQUIRED_MODULES = {"vhh_core": "2026.11.19b", "sanger": "2026.11.23a",
                     "bench": "2026.11.23a",
                     "sections.cloning": "2026.11.18a",
                     "sections.genes": "2026.11.16a",
-                    "sections.home": "2026.11.12c",
+                    "guides": "2026.11.24c",
+                    "sections.guides": "2026.11.24c",
+                    "sections.home": "2026.11.24a",
                     "sections.library": "2026.11.13d",
                     "sections.manual": "2026.11.12a",
-                    "sections.sequencing": "2026.11.23b",
-                    "sections.structure": "2026.11.16b"}
+                    "sections.sequencing": "2026.11.24b",
+                    "sections.structure": "2026.11.24a"}
 
 
 def _imported(name: str):
@@ -223,6 +227,13 @@ for _pending in [key for key in st.session_state if key.startswith("pending_")]:
 for _input_key in ("seq_text", "gene_dna"):
     st.session_state.setdefault(_input_key, "")
     st.session_state[_input_key] = st.session_state[_input_key]
+# The same for any widget keyed with the `keep_` prefix, so that a screen can
+# make a setting survive a visit elsewhere by naming its key, without a line
+# here for each one: the prefix is derived from the keys present, as the
+# `pending_` mechanism above is. The two inputs just above predate it and keep
+# their names, which session files and other screens already use.
+for _kept in [key for key in st.session_state if key.startswith("keep_")]:
+    st.session_state[_kept] = st.session_state[_kept]
 
 # A key that is not a screen can only come from a session older than a rename.
 # It lands on the home page, which is reachable, rather than on a KeyError.
@@ -249,11 +260,11 @@ with st.sidebar:
             st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
                       disabled=section == key, on_click=go_to, args=(key,))
     st.divider()
-    # The manual, the reference tables and the provenance register sit below
-    # the divider rather than in SECTIONS: they are what you consult, not what
-    # you run, they belong to no group, and the home page cards are built from
-    # SECTIONS. They are listed
-    # in `shell.UTILITIES` all the same, so that the router reaches them the
+    # The manual, the guides, the reference tables and the provenance
+    # register sit below the divider rather than in SECTIONS: they are what
+    # you consult, not what you run, they belong to no group, and the home
+    # page cards are built from SECTIONS. They are listed in
+    # `shell.UTILITIES` all the same, so that the router reaches them the
     # same way it reaches a section.
     for key, (icon, label) in UTILITIES.items():
         st.button(f"{icon} {label}", key=f"nav_{key}", **FIT,
@@ -308,6 +319,13 @@ requirements.txt`, `streamlit run app.py`, and nothing ever leaves your computer
     st.caption("All values are theoretical, derived from the sequence alone. "
                "Confirm pI and extinction coefficient experimentally before "
                "relying on them.")
+
+    # Back to the top of the page when the screen has changed since the last
+    # run, and only then. In the sidebar so that the invisible fragment takes
+    # no room above the screen's title.
+    if st.session_state.get("_drawn_screen") != section:
+        scroll_to_top(section)
+    st.session_state["_drawn_screen"] = section
 
 
 # --------------------------------------------------------------------------- #

@@ -27,10 +27,24 @@ from compute import (annotation_for, classify_cached, pae_table_for,
                      st_exposure, st_identity_map, st_interface,
                      st_interface_summary, st_liabilities, st_load, st_patches,
                      st_resnum_map, st_weighted_liabilities, st_viewer_html)
-from shell import (FIT, Settings, current_sequences, data_download,
-                   embed_html, footer, go_to)
+from shell import (FIT, STRUCTURE_VIEWS, Settings, current_sequences,
+                   data_download, embed_html, footer, go_to)
 
-__version__ = "2026.11.16b"
+__version__ = "2026.11.24a"
+
+
+# The labels of the view selector, from `shell.STRUCTURE_VIEWS`, which is also
+# what a guide step names a view by. Named here rather than written out at
+# each comparison below: the list and the eight `view ==` tests were two
+# copies of the same strings, and a renamed label had to be changed in both.
+V_CHAINS = STRUCTURE_VIEWS["chains"]
+V_DISULFIDES = STRUCTURE_VIEWS["disulfides"]
+V_EXPOSURE = STRUCTURE_VIEWS["exposure"]
+V_CDR3 = STRUCTURE_VIEWS["cdr3"]
+V_LIABILITIES = STRUCTURE_VIEWS["liabilities"]
+V_PATCHES = STRUCTURE_VIEWS["patches"]
+V_INTERFACE = STRUCTURE_VIEWS["interface"]
+V_3D = STRUCTURE_VIEWS["view3d"]
 
 
 def render(settings: Settings) -> None:
@@ -255,17 +269,24 @@ behalf would mean this server making requests that look like they came from you.
     except Exception:
         annotation = None
 
-    views = ["🧬 Chains & confidence", "🔗 Disulfides", "💧 Exposure",
-             "📐 CDR3 shape", "⚠️ Liabilities in 3D", "🫧 Surface patches"]
-    if partners:
-        views.append("🎯 Interface")
-    views.append("👁 3D view")
+    # Every view but the interface, which needs a binding partner to measure.
+    # Filtered from the declaration rather than rebuilt here, so the order is
+    # the one `shell.STRUCTURE_VIEWS` gives and the labels have one source.
+    views = [label for key, label in STRUCTURE_VIEWS.items()
+             if key != "interface" or partners]
+    # A view the selector no longer offers cannot be its value: Streamlit
+    # raises on a Session State value that is not among the options. That
+    # happens when the interface view is selected and the next file has no
+    # partner, and it would happen to a guide pointing at a view that is
+    # conditional. Dropping the stale value falls back to the first view.
+    if st.session_state.get("struct_view") not in views:
+        st.session_state.pop("struct_view", None)
     view = st.radio("View", views, horizontal=True, label_visibility="collapsed",
                     key="struct_view")
     st.divider()
 
     # ------------------------------------------------------------------ #
-    if view == "🧬 Chains & confidence":
+    if view == V_CHAINS:
         if bundle is not None:
             _af3_panel(bundle, sample, zip_raw, chain, partners,
                        list(chains["chain"]))
@@ -317,7 +338,7 @@ behalf would mean this server making requests that look like they came from you.
                 "as buried.")
 
     # ------------------------------------------------------------------ #
-    elif view == "🔗 Disulfides":
+    elif view == V_DISULFIDES:
         st.subheader("Measured, not inferred")
         st.markdown(
             "The analysis section decides which cysteines pair from their IMGT "
@@ -379,7 +400,7 @@ behalf would mean this server making requests that look like they came from you.
                         "loop cannot be seen to pair.")
 
     # ------------------------------------------------------------------ #
-    elif view == "💧 Exposure":
+    elif view == V_EXPOSURE:
         st.subheader("Relative solvent accessibility")
         st.markdown(
             "Absolute accessibility in Å², divided by the maximum that residue "
@@ -433,7 +454,7 @@ behalf would mean this server making requests that look like they came from you.
             "surface underneath it.")
 
     # ------------------------------------------------------------------ #
-    elif view == "📐 CDR3 shape":
+    elif view == V_CDR3:
         st.subheader("How far the CDR3 loop reaches")
         st.markdown(
             "A VHH paratope is mostly CDR3, and the same number of residues "
@@ -481,7 +502,7 @@ behalf would mean this server making requests that look like they came from you.
                 st.caption(f"Metric definition and thresholds: {tnp.REFERENCE}")
 
     # ------------------------------------------------------------------ #
-    elif view == "⚠️ Liabilities in 3D":
+    elif view == V_LIABILITIES:
         st.subheader("Which of the flagged liabilities actually matter")
         st.markdown(
             "This is the join worth uploading a structure for. The analysis "
@@ -569,7 +590,7 @@ behalf would mean this server making requests that look like they came from you.
                            "by exposure alone."))
 
     # ------------------------------------------------------------------ #
-    elif view == "🫧 Surface patches":
+    elif view == V_PATCHES:
         st.subheader("Hydrophobic surface, grouped in space")
         st.markdown(
             "What drives aggregation is hydrophobic area that is **contiguous on "
@@ -626,7 +647,7 @@ behalf would mean this server making requests that look like they came from you.
             "aggregation rate.")
 
     # ------------------------------------------------------------------ #
-    elif view == "🎯 Interface":
+    elif view == V_INTERFACE:
         st.subheader(f"Chain {chain} against {', '.join(partners)}")
         st.markdown(
             "A residue is at the interface if it loses solvent accessibility when "
@@ -726,7 +747,7 @@ behalf would mean this server making requests that look like they came from you.
                     "telling them apart needs mutagenesis.")
 
     # ------------------------------------------------------------------ #
-    elif view == "👁 3D view":
+    elif view == V_3D:
         st.subheader("Interactive view")
         opts = st.columns([2, 2, 1])
         with opts[0]:

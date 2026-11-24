@@ -24,24 +24,26 @@ import streamlit as st
 import bench as bn
 import vhh_core as vc
 from compute import analyze_one, classify_cached
-from shell import (AUTHOR, DOI, FIT, SECTIONS, VERSION, Settings,
-                   current_sequences, data_download, usage_prompt)
+from shell import (AUTHOR, BENCH_VIEWS, DOI, FIT, SECTIONS, VERSION,
+                   Settings, current_sequences, data_download, usage_prompt)
 
-__version__ = "2026.11.23a"
+__version__ = "2026.11.24a"
 
 # Named rather than reached by index. The dispatch below used VIEWS[0] to
 # VIEWS[3] with an else, so inserting a view in the middle silently moved every
 # screen after it to the wrong function, and the only visible symptom would
 # have been the wrong calculator under the right label.
-V_QUANTIFY = "🧮 Quantify"
-V_MASS = "⚖️ Mass check"
-V_CONJUGATE = "🏷️ Conjugate"
-V_PAIR = "🔗 Couple two proteins"
-V_CONVERT = "🔄 Convert"
-V_BALANCE = "🧫 Purification"
-V_PLAN = "📐 How much culture"
-V_BATCH = "📄 Batch sheet"
-V_LOTS = "🗂️ Across lots"
+# The labels come from `shell.BENCH_VIEWS`, which is also what the Guides
+# screen names a view by; these names are what the dispatch below reads.
+V_QUANTIFY = BENCH_VIEWS["quantify"]
+V_MASS = BENCH_VIEWS["mass"]
+V_CONJUGATE = BENCH_VIEWS["conjugate"]
+V_PAIR = BENCH_VIEWS["pair"]
+V_CONVERT = BENCH_VIEWS["convert"]
+V_BALANCE = BENCH_VIEWS["balance"]
+V_PLAN = BENCH_VIEWS["plan"]
+V_BATCH = BENCH_VIEWS["batch"]
+V_LOTS = BENCH_VIEWS["lots"]
 
 
 @dataclasses.dataclass(frozen=True)

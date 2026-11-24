@@ -16,6 +16,116 @@ ran, from its Zenodo record.
 
 ## [Unreleased]
 
+### Added
+
+- **The number of identical Sanger reads now reaches the analysis.** The
+  Sanger screen sends one entry per unique protein by default, which dropped
+  how many reads had given each one: in the clonal families, a lineage picked
+  seven times looked like one picked once. Each sequence is now sent with its
+  count after the name on the FASTA header line, `>clone_A1_fwd
+  identical_reads=2`, so the name itself is untouched. The analysis reads it
+  back from its own input and shows an `identical_reads` column in the
+  clonal families, with a total per family that counts each distinct protein
+  once, and in the triage table and both CSVs. The count lives in the input
+  text and nowhere else, so editing or deleting a header changes it with no
+  second record to disagree. It counts reads, not clones, and every place it
+  appears says so: the example run's clean clone, read from both ends, comes
+  through as 2.
+
+  In code: `vhh_core.fasta_descriptions` returns what follows each name on a
+  header line, from the same private reader `parse_input` now uses, so the
+  two cannot disagree on names; `parse_input` itself and its signature are
+  unchanged, and this is a MINOR addition. `sanger.reads_to_fasta` takes
+  `counts=False`; `sanger.identical_reads`, `add_identical_reads` and
+  `family_identical_reads` read and display the tag, `sanger.READS_TAG`.
+  Session files keep the header descriptions under a new optional
+  `descriptions` key and write them back on reopening; a file without the key,
+  every earlier one, reads as having none, so the schema number is unchanged.
+
+- **Guides: from a question to the screens that answer it.** The app is
+  organised by tool, which suits somebody who knows which tools to chain and
+  leaves everybody else to find out. A new **🧭 Guides** screen, below the
+  divider next to the manual and reachable from a *Follow a guide* button on
+  the home page, starts from a question instead and lists the steps that
+  answer it, in order, each with where it happens and why it matters. The
+  first guide covers a Sanger screening: from the `.ab1` files to the clonal
+  families, the CDRs and hallmarks, the properties, the triage table and the
+  session file. Nothing moved: every step happens where it always did, and
+  its **Go there** button takes you to it, opening the right family and the
+  right tab on the analysis screen. A first version opened the family only,
+  which landed every step on the family's first tab, Alignment instead of
+  Clonal families, Properties instead of CDR / Framework; caught on the first
+  test by hand, and now checked step by step in headless Chrome. The tab is
+  opened once, so the family opens on its first tab again on a later visit.
+
+  **Two more guides.** *From a purified tube to its batch sheet* runs through
+  Batch & QC, from the A280 to the purification balance to the one-page PDF,
+  saying at each step which numbers are measured and which are derived from a
+  predicted extinction coefficient. *Replacing sequence guesses with
+  measurements from a model* goes through the Structure section: which
+  cysteines really pair, and which of the flagged liabilities are buried
+  rather than exposed. Both were written against the manual's own sections
+  rather than from the order the views happen to sit in, and every step that
+  opens a view was clicked in headless Chrome.
+
+  A step can now name a **view** as well as a family and a tab, which meant
+  giving the two screens that have a view selector the same treatment the
+  analysis families got: `shell.BENCH_VIEWS` and `shell.STRUCTURE_VIEWS`
+  hold the labels, `shell.SCREEN_VIEWS` says which screen has which, and
+  both screens read their labels from there. The Structure screen had those
+  eight labels written out twice, once in the selector and once in the eight
+  `view ==` tests below it; it now has them once.
+
+  **Two things found while testing this.** Leaving the Guides screen reset
+  the question to the first one, so coming back after a step offered the
+  wrong guide's steps, which nobody could see while there was one guide. And
+  the Structure screen raised on a view that was no longer on offer: select
+  the interface view on a complex, load a file with no binding partner, and
+  the stored value was not among the options. Both are fixed.
+
+  The guides are data in `guides.py`, not prose. Each step names its screen
+  by key and its analysis family and tab by name, `guides.problems` checks
+  every one of them against what the app actually has, and a test fails when
+  one no longer resolves, so renaming a tab breaks the build instead of
+  leaving a guide that points at nothing. To make that possible without a
+  screen reading another screen's globals, the table of analysis families
+  moved from `sections/analysis.py` to `shell.ANALYSIS_FAMILIES`, beside
+  `SECTIONS`; the analysis screen uses that same object.
+
+### Fixed
+
+- **Changing screen kept the page scrolled where it was.** Streamlit draws
+  the new screen in the page as it was, so a button clicked at the bottom of
+  a long screen, a guide's last steps or *Send selected to analysis* under
+  the Sanger results, landed at the bottom of the next one. The router now
+  scrolls back to the top on the run where the screen changes, and on no
+  other run, so moving a control at the bottom of a screen still leaves you
+  there. The scroll is repeated over the first moments, because Streamlit
+  removes the previous screen after drawing the new one, and stops the
+  moment you scroll, click or type. The fragment that does it sits in a
+  container keyed by the screen: without the key, Streamlit reused the
+  element and swapped its content, and a script swapped in that way never
+  runs, which headless Chrome showed on the first attempt. Measured there
+  from 1947 px down the Guides screen: the Manual, the Sanger screen and the
+  analysis all open at 0, against the bottom of each without it.
+
+- **The Sanger screen forgot its chromatograms and its vector when you left
+  it.** Streamlit empties a file uploader, and resets a selectbox or slider
+  without a key, as soon as the screen drawing it is no longer drawn. Going
+  from the Sanger screen to any other screen and back therefore came back to
+  "No chromatogram uploaded yet" and to the default vector, with only the
+  reads' names surviving. The Guides screen made this the expected path,
+  since its first two steps are an upload and a choice of vector with a visit
+  to the guide in between, and that is how it was found. The uploaded files
+  are now kept in the session when the upload changes, and used whenever the
+  uploader is empty again; a note says how many are loaded and offers
+  **Forget these files**. Uploading again replaces them, and emptying the
+  uploader on the screen forgets them. The vector, trim cutoff, minimum
+  trimmed length and minimum mean Phred are keyed with a new `keep_` prefix
+  that `app.py` holds on to while a screen is not drawn, derived from the keys
+  present like the `pending_` mechanism rather than from a list of them.
+  `tests/test_sanger_kept.py` drives the whole path, including the guide's.
+
 ### Fixed
 
 A third independent audit, November 2026, over the Plates section, the new

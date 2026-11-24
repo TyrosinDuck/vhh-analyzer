@@ -59,8 +59,8 @@ the
 The app opens on a home page with nine sections, sorted into three groups by
 the molecule they work on. The sidebar carries the same nine entries under the
 same group titles, plus a **Home** button at the top and, below the divider,
-the **Manual** you are reading, a **Reference** screen and a **Provenance**
-register, available from every screen.
+the **Manual** you are reading, the **Guides** (§2.2), a **Reference** screen
+and a **Provenance** register, available from every screen.
 
 | Group | Section | Use it for |
 |---|---|---|
@@ -74,7 +74,8 @@ register, available from every screen.
 | | 🧂 **Buffers & media** | what to weigh for a buffer or a medium, at any volume and concentration, with the hydrate you have |
 | | 🔲 **Plates & dilutions** | what to pipette for a dilution series, and which well holds what, as a sheet for the bench |
 | | 🦠 **Phage & panning** | the titre of a phage stock, how much of it a round of panning takes, and the report that leaves with a selection |
-| *no group*, below the divider | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
+| *no group*, below the divider | 🧭 **Guides** | a question, such as a Sanger screening, turned into the steps that answer it, §2.2 |
+| | 📐 **Reference** | the genetic code and the twenty amino acids, looked up rather than worked out |
 | | 🔎 **Provenance** | every constant the app computes with, what it is worth, and where it came from |
 
 Each group has its own colour, a blue, a green and an orange, used for the
@@ -84,6 +85,10 @@ sections fit together**. The colour is never the only cue: the group name is
 always written next to it. The text on the buttons is white, and the green and
 the orange are dark enough for it to meet the WCAG 2.1 AA minimum of 4.5:1 for
 normal text.
+
+A new screen opens at its top, whichever button took you there. Staying on
+the same screen, by moving a control or pressing a button that does not
+change screen, keeps the page where it was.
 
 The app follows your system's light or dark setting. To choose one regardless
 of the system, open the **⋮** menu at the top right and pick **Light**,
@@ -138,6 +143,67 @@ charge model on the composition, not the charge of your protein in your buffer,
 and a per-residue profile is a sliding-window mean, so a value is not a
 property of the residue it sits on. The column that says which window was used
 travels with the file for that reason.
+
+### 2.2 Guides: from a question to the screens that answer it
+
+The sections are organised by tool, which is the right shape for finding a
+tool and the wrong one for somebody who arrives with a question. Somebody who
+has just received the `.ab1` files of a screening wants to know which
+distinct VHHs came out of it and what they are like; the answer is spread
+over the sequencing section and four families of the analysis, and nothing in
+the tools themselves says in which order to visit them.
+
+The **🧭 Guides** screen, below the divider and behind the *Follow a guide*
+button of the home page, writes that order down. Pick a question, and the
+screen shows:
+
+- the route, the screens the path crosses, in one line;
+- each step, numbered, with what to do, where it happens written as
+  *screen › family › tab*, and in a line or two why it matters;
+- a **Go there** button on each step.
+
+**Go there** opens the step's screen and, on the analysis screen, the step's
+family and the tab inside it. On Batch & QC and Structure, the two screens
+with a view selector of their own, it opens the step's view. The tab is opened once: clicking another tab
+afterwards works as usual, and coming back to the family later without a
+guide opens it on its first tab, as it always did. Selecting the tab needs a
+Streamlit recent enough to accept it, which the pinned one is; with an older
+one the family opens on its first tab and the step's *screen › family › tab*
+line says where to click. Steps marked *optional* can be skipped without
+changing what comes after. A note under the steps says which settings the path leaves at their
+defaults.
+
+The question you picked stays picked while you are away on a step's screen,
+so coming back after step 2 offers step 3 and not the first guide's steps.
+
+A guide adds nothing that the sections do not already do and moves nothing:
+every step happens on the screen it always happened on, and the sections work
+exactly as before for somebody who never opens a guide.
+
+**What keeps a guide true.** A guide is not written as prose. Each step names
+its screen by its key, and its family, tab or view by key too, and the labels
+you read are looked up from the sidebar, the family selector and the view
+selector each time the screen is drawn. The test suite checks every
+step against the screens, families, tabs and views the app actually has, so
+renaming one of them fails the tests rather than leaving a guide that sends
+you to something that no longer exists. No step points at the Structure
+section's interface view, which is drawn only when a binding partner is
+selected; a test keeps it that way. The guides themselves are in `guides.py`;
+the screen lists the ones there are, so this manual does not repeat the list.
+
+From a notebook:
+
+```python
+import guides as gd
+import shell
+
+labels = shell.screen_labels()
+for step in gd.GUIDES["sanger_screening"].steps:
+    print(gd.location(step, labels, shell.ANALYSIS_FAMILIES), "|", step.action)
+
+# An empty list means every step resolves.
+gd.problems(gd.GUIDES, labels, shell.ANALYSIS_FAMILIES)
+```
 
 ---
 
@@ -600,6 +666,12 @@ that
 is not an antibody domain has no hallmark score, and its cysteines are not read
 against the VHH canonical pair, lysozyme's eight cysteines form four ordinary
 disulfides and are not eight orphan thiols.
+
+
+When the sequences came from the Sanger screen with their counts (§8.5), an
+`identical_reads` column follows the name: how many reads gave that protein.
+It is in the table and its CSV, and not in the Compare tab, because a read
+count is not an axis on which one clone is better than another.
 
 ### 3.2c Compare
 
@@ -1740,6 +1812,25 @@ Finally a per-sequence assignment table, and CSV downloads of the families, the
 assignment and the CDR3 identity matrix, plus a FASTA of one representative per
 family, which is usually what you actually want to order or subclone.
 
+**Reads behind a family.** When the sequences came from the Sanger screen
+with their counts (§8.5), the family table gains an `identical_reads` column
+after `n_sequences`, and the assignment table one after `name`. A family's
+total adds the counts of its distinct proteins, each protein once: if you
+ticked a duplicate back on, it carries the same count as its original, and
+adding both would count those reads twice. A family with a member that has
+no count, a sequence pasted by hand next to the ones sent from the Sanger
+screen, has no total rather than a total that leaves that member out. A
+sequence with no count shows an empty cell, not a zero.
+
+This is the number the default selection would otherwise hide: one entry per
+unique protein makes a lineage picked seven times look like one picked once.
+It counts reads, not clones (§8.5). The four numbers at the top of the tab
+still count sequences, not reads.
+
+A multi-domain construct cut into its domains (§3.1d) gives domains named
+`<name>_D1`, `_D2`: they carry no count, because the count was written for
+the whole chain.
+
 **Two honest limits.** Families are a *hypothesis* about shared lineage drawn from
 CDR3 similarity alone; two unrelated lineages can converge on a similar CDR3,
 and
@@ -1881,7 +1972,11 @@ is installed beside the app rather than by it.
 This tab is the answer that needs no database: a small file you keep.
 
 **Save this run** writes a JSON file holding the sequences and the three
-settings, and nothing else. No computed value is in it. Reopening it recomputes
+settings, and nothing else. What followed a name on its FASTA header line,
+such as the `identical_reads=` the Sanger screen writes (§8.5), is part of
+the input and is kept too, under `descriptions`, and put back after the name
+when the session is reopened. A file written before that key existed reads
+as having none. No computed value is in it. Reopening it recomputes
 everything with whatever version is running then, which is the point: the
 version that wrote the file is recorded in it, so a number that comes out
 differently is visible instead of being carried forward. The file contains your
@@ -3307,6 +3402,22 @@ names = sg.assign_names(stems, ["Nb1", "Nb1", "Nb 2"])
 df, reads = sg.process_reads(files, names=names["name"].tolist())
 ```
 
+### 8.1d Leaving the screen and coming back
+
+The uploaded chromatograms, the vector and the three reading settings stay as
+they were when you leave this screen and come back to it, whether you went to
+the Guides, the analysis or anywhere else. The uploader itself shows empty
+again, because Streamlit redraws it that way. A note above the settings says
+how many chromatograms are still loaded, with a **Forget these files** button.
+
+Uploading files again replaces the ones kept, it does not add to them.
+Removing every file from the uploader while you are on the screen forgets
+them too. The reads' names (§8.1c) were already kept the same way and still
+are.
+
+The files are kept where the rest of your session is, in the server's memory,
+until the browser tab's session ends (§13).
+
 ### 8.2 Settings
 
 | Setting | Default | Effect |
@@ -3431,6 +3542,32 @@ The app switches to the analysis section with those sequences loaded.
 
 **Duplicates are deselected by default**: one entry per unique protein sequence. Tick
 them back on if you want to see them separately.
+
+**The number of identical reads goes with them.** Each sequence is sent with
+a header such as
+
+```
+>clone_A1_fwd identical_reads=2
+```
+
+where `identical_reads` is how many reads of the run gave that same protein,
+the `n_copies` of the results table. It sits after the name, separated by a
+space, so the name is untouched: the analysis reads a name up to its first
+space. The analysis reads the count back from there and shows it in the
+clonal families (§3.12) and the triage table (§3.2b). The **VHH proteins
+(FASTA)** download carries the same headers; the DNA one does not, because
+two reads of one protein can differ in their DNA.
+
+It counts **reads, not clones**. A clone sequenced from both ends is two
+reads, which is exactly what the example run shows: its clean clone, read
+forward and reverse, arrives in the analysis with `identical_reads=2`. Read
+it as "how often this protein came back", and read the names to know how
+many colonies that was.
+
+The text in the analysis input is the only record of the count. Edit a
+header and the count follows; delete it and the count is gone. A FASTA
+from elsewhere, with other words in its headers, gives no count: only this
+exact tag is read, and nothing is guessed.
 
 ### 8.6 Downloads
 
@@ -4219,6 +4356,13 @@ repository is public.
 Sequences, chromatograms and plasmids are **never written to a persistent file,
 logged,
 or sent to a third party**. They are processed in the server's memory.
+
+What you give a screen is also kept in your browser session while you move
+between screens, so that coming back to a screen finds it as you left it: the
+analysis input, the Sanger chromatograms and their names, the settings of the
+Sanger screen. It is in the server's memory, it belongs to your session only,
+and it ends with the session, which closing or reloading the tab does. The
+Sanger screen also has a **Forget these files** button (§8.1d).
 
 Results are held in a short-lived cache (10 minutes, 8 entries for analyses,
 with per-item caps elsewhere) which exists only to keep the controls

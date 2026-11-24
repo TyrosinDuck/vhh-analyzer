@@ -21,7 +21,45 @@ import sanger as sg
 from compute import png_quality, process_ab1, quality_table_for
 from shell import FIT, Settings, data_download, go_to
 
-__version__ = "2026.11.23b"
+__version__ = "2026.11.24b"
+
+
+# Where the uploaded chromatograms are kept between visits to this screen, as
+# (name, bytes) pairs. Streamlit forgets a file uploader's files as soon as the
+# screen that draws it is left, so a reader who went to the Guides screen, or
+# anywhere else, between two steps came back to an empty screen. The files are
+# held in the session like the reads' names and the example run are: in the
+# server's memory, for as long as the browser tab is open, and nowhere else.
+KEPT_FILES = "ab1_kept"
+
+# The reading settings, keyed with the `keep_` prefix that `app.py` holds on to
+# while the screen is not drawn. Their defaults are put in place before the
+# widgets exist, rather than passed as each widget's value: a widget given both
+# a value and a Session State entry warns, and the entry is what survives.
+SETTING_DEFAULTS = {
+    "keep_sanger_vector": lambda: sg.DEFAULTS["vector"],
+    "keep_sanger_mott": lambda: sg.DEFAULTS["mott_cutoff"],
+    "keep_sanger_min_len": lambda: sg.DEFAULTS["min_trimmed_len"],
+    "keep_sanger_min_phred": lambda: sg.DEFAULTS["min_mean_phred"],
+}
+
+
+def _remember_uploads() -> None:
+    """Keep what the uploader now holds, or forget it if it was emptied.
+
+    Runs only when the reader changes the upload, never when the screen is
+    simply drawn again with an empty uploader after a visit elsewhere, which
+    is what lets the kept files outlive that empty uploader. Uploading again
+    replaces the kept files rather than adding to them: the uploader shows
+    what is being read, and two sets of files on one screen would be a screen
+    that cannot say which it is describing.
+    """
+    files = st.session_state.get("ab1_uploader") or []
+    if files:
+        st.session_state[KEPT_FILES] = tuple((f.name, f.getvalue())
+                                             for f in files)
+    else:
+        st.session_state.pop(KEPT_FILES, None)
 
 
 NAMES_LABEL = "✏️ Name the reads"
@@ -177,7 +215,26 @@ def render(settings: Settings) -> None:
         "them to the analysis section.")
 
     ab1_files = st.file_uploader("Chromatograms (.ab1)", type=["ab1"],
-                                 accept_multiple_files=True, key="ab1_uploader")
+                                 accept_multiple_files=True, key="ab1_uploader",
+                                 on_change=_remember_uploads)
+    kept = st.session_state.get(KEPT_FILES)
+    if ab1_files:
+        uploaded = tuple((f.name, f.getvalue()) for f in ab1_files)
+    elif kept:
+        # Back on the screen after a visit elsewhere: the uploader is empty
+        # again, the files are not.
+        uploaded = kept
+        held = st.columns([5, 2])
+        with held[0]:
+            st.info(f"**{len(kept)} chromatogram(s) uploaded earlier in this "
+                    "session are still loaded.** Uploading files again "
+                    "replaces them.", icon="📎")
+        with held[1]:
+            if st.button("Forget these files", key="ab1_kept_forget", **FIT):
+                st.session_state.pop(KEPT_FILES, None)
+                st.rerun()
+    else:
+        uploaded = ()
 
     # An example, for somebody who has no .ab1 to hand. It is parked under a
     # key of our own rather than pushed into the uploader, which Streamlit
@@ -187,12 +244,12 @@ def render(settings: Settings) -> None:
     example = st.columns([2, 5])
     with example[0]:
         if st.button("Load an example run", key="ab1_example",
-                     disabled=bool(ab1_files), **FIT,
+                     disabled=bool(uploaded), **FIT,
                      help="Six simulated reads, enough to see every status "
                           "the table reports."):
             st.session_state["ab1_example_files"] = demo.sanger_example_files()
             st.rerun()
-    if ab1_files:
+    if uploaded:
         st.session_state.pop("ab1_example_files", None)
     example_files = st.session_state.get("ab1_example_files")
     with example[1]:
@@ -210,29 +267,31 @@ def render(settings: Settings) -> None:
                     help="The same six .ab1 files, to open in a chromatogram "
                          "viewer or to run through your own pipeline.")
 
+    for key, default in SETTING_DEFAULTS.items():
+        st.session_state.setdefault(key, default())
     opts = st.columns(4)
     with opts[0]:
         # The list is the bundled maps, now five rather than the two that had
         # hand-written entries, so it is sorted by name and index 0 is no longer
-        # the default vector. Point at the default by name instead.
+        # the default vector. The default is put in place by name above.
         vector_names = list(sg.VECTORS)
+        if st.session_state["keep_sanger_vector"] not in vector_names:
+            st.session_state["keep_sanger_vector"] = vector_names[0]
         vector = st.selectbox(
-            "Vector", vector_names,
-            index=(vector_names.index(sg.DEFAULTS["vector"])
-                   if sg.DEFAULTS["vector"] in vector_names else 0),
+            "Vector", vector_names, key="keep_sanger_vector",
             help="Determines which tags are expected after the VHH. The layout is "
                  "read from the vector's own map.")
     with opts[1]:
-        mott_cutoff = st.slider("Trim cutoff", 0.01, 0.20,
-                                sg.DEFAULTS["mott_cutoff"], 0.01,
+        mott_cutoff = st.slider("Trim cutoff", 0.01, 0.20, step=0.01,
+                                key="keep_sanger_mott",
                                 help="Mott algorithm error-probability cutoff. "
                                      "Lower is stricter.")
     with opts[2]:
         min_len = st.number_input("Min trimmed length (nt)", 50, 800,
-                                  sg.DEFAULTS["min_trimmed_len"], 10)
+                                  step=10, key="keep_sanger_min_len")
     with opts[3]:
-        min_phred = st.number_input("Min mean Phred", 5, 50,
-                                    sg.DEFAULTS["min_mean_phred"], 1)
+        min_phred = st.number_input("Min mean Phred", 5, 50, step=1,
+                                    key="keep_sanger_min_phred")
     st.caption(f"{vector} layout: " + " → ".join(sg.VECTORS[vector]["layout"]))
     # The stretch after the last annotated tag is read from the vector's
     # sequence, so say so: on this screen everything else in the layout comes
@@ -250,11 +309,11 @@ def render(settings: Settings) -> None:
                      "stretch rather than as missing it")
         st.caption(note + ".")
 
-    if not ab1_files and not example_files:
+    if not uploaded and not example_files:
         st.info("No chromatogram uploaded yet.")
     else:
-        if ab1_files:
-            payload = tuple((f.name, f.getvalue()) for f in ab1_files)
+        if uploaded:
+            payload = uploaded
         else:
             payload = tuple(example_files)
             st.warning("**Example run, not a measurement.** " + demo.SANGER_NOTE
@@ -356,7 +415,10 @@ def render(settings: Settings) -> None:
             if st.button("Send selected to analysis", type="primary",
                          disabled=not chosen, **FIT):
                 picked = usable_df[usable_df["read"].isin(chosen)]
-                fasta = sg.reads_to_fasta(picked, only_usable=False)
+                # With the count of identical reads after each name, so the
+                # analysis still knows what the deselected duplicates were.
+                fasta = sg.reads_to_fasta(picked, only_usable=False,
+                                          counts=True)
                 current = st.session_state.get("seq_text", "").strip()
                 st.session_state["pending_seq_text"] = (
                     fasta if replace or not current else current + "\n" + fasta)
@@ -371,7 +433,8 @@ def render(settings: Settings) -> None:
                                .to_csv(index=False),
                                file_name="sanger_results.csv", mime="text/csv", **FIT)
         with dl[1]:
-            st.download_button("VHH proteins (FASTA)", sg.reads_to_fasta(sanger_df),
+            st.download_button("VHH proteins (FASTA)",
+                               sg.reads_to_fasta(sanger_df, counts=True),
                                file_name="vhh_proteins.fasta", mime="text/plain",
                                disabled=not n_usable, **FIT)
         with dl[2]:

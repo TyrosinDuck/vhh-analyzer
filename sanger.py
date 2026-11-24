@@ -38,11 +38,13 @@ __all__ = [
     "VECTORS", "DEFAULTS", "mott_trim", "read_ab1", "extract_cassette",
     "process_reads", "plot_quality", "quality_table", "reads_to_fasta",
     "clean_name", "assign_names", "read_name_map",
+    "READS_TAG", "identical_reads", "add_identical_reads",
+    "family_identical_reads",
 ]
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.23a"
+__version__ = "2026.11.24a"
 
 # --------------------------------------------------------------------------- #
 # Vector definitions
@@ -606,8 +608,17 @@ def read_name_map(data, stems) -> tuple[dict[str, str], list[str]]:
 
 
 def reads_to_fasta(df: pd.DataFrame, only_usable: bool = True,
-                   column: str = "vhh_aa") -> str:
-    """FASTA of the extracted sequences, protein by default, DNA with 'vhh_nt'."""
+                   column: str = "vhh_aa", counts: bool = False) -> str:
+    """FASTA of the extracted sequences, protein by default, DNA with 'vhh_nt'.
+
+    With ``counts``, each header carries, after the name, how many reads of
+    the run gave the same protein: ``>Nb12 identical_reads=3``. The name is
+    untouched, since a FASTA name ends at the first space, and the analysis
+    reads the count back from there (`identical_reads`). It counts reads, not
+    clones: a clone read from both ends is two reads. It is offered for the
+    protein only, because it counts identical proteins, and two reads of one
+    protein can differ in their DNA.
+    """
     sub = df[df["usable"]] if only_usable and "usable" in df.columns else df
     parts = []
     for _, row in sub.iterrows():
@@ -615,8 +626,92 @@ def reads_to_fasta(df: pd.DataFrame, only_usable: bool = True,
         if not seq:
             continue
         wrapped = "\n".join(seq[i:i + 60] for i in range(0, len(seq), 60))
-        parts.append(f">{row['read']}\n{wrapped}")
+        header = f">{row['read']}"
+        n = row.get("n_copies")
+        if counts and n is not None and not pd.isna(n) and int(n) > 0:
+            header += f" {READS_TAG}={int(n)}"
+        parts.append(f"{header}\n{wrapped}")
     return "\n".join(parts) + ("\n" if parts else "")
+
+
+# --------------------------------------------------------------------------- #
+# Identical reads, carried into the analysis
+# --------------------------------------------------------------------------- #
+# The results table says how many reads gave each protein. Sending one entry
+# per unique protein to the analysis, which is the default, dropped that
+# number: the clonal families then counted distinct sequences, and a family
+# picked seven times looked like one picked once. The count travels in the
+# FASTA header, after the name, and is read back from the analysis input
+# itself, so there is no second record of it to fall out of step with the
+# text: delete the line and the count goes with it.
+
+# The word written before the count. One constant for the writer and the
+# reader, so the two cannot drift apart.
+READS_TAG = "identical_reads"
+
+_READS_RE = re.compile(rf"(?:^|\s){READS_TAG}=(\d+)(?=\s|$)")
+
+
+def identical_reads(descriptions: dict[str, str]) -> dict[str, int]:
+    """The read counts found in FASTA header descriptions, by name.
+
+    ``descriptions`` is what `vhh_core.fasta_descriptions` returns. Only this
+    module's own tag is read, exactly: a FASTA from elsewhere, with other
+    words in its headers, gives nothing rather than a guess. A count of zero
+    is not a count of identical reads and is ignored.
+    """
+    found = {}
+    for name, desc in (descriptions or {}).items():
+        match = _READS_RE.search(desc or "")
+        if match and int(match.group(1)) > 0:
+            found[name] = int(match.group(1))
+    return found
+
+
+def add_identical_reads(frame: pd.DataFrame, reads: dict[str, int],
+                        name_column: str = "name") -> pd.DataFrame:
+    """A copy of ``frame`` with an ``identical_reads`` column after the name.
+
+    Empty (not zero) for a sequence with no count, which is a sequence that
+    did not come from the Sanger screen, or came without its header. With no
+    count at all the frame is returned unchanged, so a submission that never
+    saw the Sanger screen does not grow an empty column.
+    """
+    if not reads or name_column not in frame.columns:
+        return frame
+    out = frame.copy()
+    values = pd.array([reads.get(n) for n in out[name_column]], dtype="Int64")
+    out.insert(list(out.columns).index(name_column) + 1, READS_TAG, values)
+    return out
+
+
+def family_identical_reads(families: pd.DataFrame, assignment: pd.DataFrame,
+                           sequences: dict[str, str],
+                           reads: dict[str, int]) -> pd.DataFrame:
+    """A copy of the families table with the reads behind each family.
+
+    The sum is over the **distinct proteins** of the family, each counted
+    once: every read of one protein carries that protein's count, so a
+    protein sent to the analysis twice, the default selection deselected,
+    would otherwise be counted twice. A family with a member that has no
+    count gets no total, because a total that leaves a member out reads as
+    complete and is not.
+    """
+    if not reads or "family" not in families.columns:
+        return families
+    out = families.copy()
+    totals = []
+    for family in out["family"]:
+        members = assignment.loc[assignment["family"] == family, "name"]
+        if any(m not in reads for m in members):
+            totals.append(None)
+            continue
+        by_protein = {sequences.get(m, m): reads[m] for m in members}
+        totals.append(sum(by_protein.values()))
+    position = (list(out.columns).index("n_sequences") + 1
+                if "n_sequences" in out.columns else len(out.columns))
+    out.insert(position, READS_TAG, pd.array(totals, dtype="Int64"))
+    return out
 
 
 # --------------------------------------------------------------------------- #

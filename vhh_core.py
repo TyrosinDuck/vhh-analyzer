@@ -32,7 +32,7 @@ import pandas as pd
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
 __all__ = [
-    "clean_sequence", "seq_id", "parse_input", "characterize", "stability_flags",
+    "clean_sequence", "seq_id", "parse_input", "fasta_descriptions", "characterize", "stability_flags",
     "lysine_sites",
     "annotate", "annotate_anarci", "annotate_regex", "anarci_available",
     "register_feature", "compute_features", "FEATURE_REGISTRY",
@@ -62,7 +62,7 @@ __all__ = [
 
 # Bumped whenever the public API changes, so app.py can tell the user that a
 # module is out of date instead of crashing on a missing attribute.
-__version__ = "2026.11.19b"
+__version__ = "2026.11.24a"
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -122,6 +122,52 @@ def seq_id(seq: str) -> str:
     return hashlib.sha1(clean_sequence(seq).encode()).hexdigest()[:12]
 
 
+def _fasta_records(text: str) -> dict[str, tuple[str, str]]:
+    """The records of a FASTA block, as {name: (description, sequence)}.
+
+    The name is the first word of the header line and the description the
+    rest of it. A header with nothing on it is named ``Sequence_<n>``. A name
+    given twice keeps the place of its first record and the content of its
+    last, which is what `parse_input` has always done.
+
+    The one reading of a header in this module: `parse_input` takes the names
+    and sequences from here, and `fasta_descriptions` the descriptions, so
+    the two cannot disagree on which name a description belongs to.
+    """
+    records: dict[str, tuple[str, str]] = {}
+    name, desc, buf = None, "", []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line.startswith(">"):
+            if name:
+                records[name] = (desc, "".join(buf))
+            raw = line[1:].strip() or f"Sequence_{len(records) + 1}"
+            parts = raw.split(None, 1)
+            name, buf = parts[0], []
+            desc = parts[1].strip() if len(parts) > 1 else ""
+        elif line:
+            buf.append(line)
+    if name:
+        records[name] = (desc, "".join(buf))
+    return records
+
+
+def fasta_descriptions(text: str) -> dict[str, str]:
+    """What follows the name on each FASTA header line, by name.
+
+    `parse_input` keeps only the first word of a header as the sequence's
+    name and drops the rest. The rest can carry information: the Sanger
+    screen writes ``identical_reads=<n>`` there (see `sanger.READS_TAG`).
+    Only names with a non-empty description are returned, keyed exactly as
+    `parse_input` names them; text that is not FASTA has no headers and
+    gives an empty dict.
+    """
+    if ">" not in (text or ""):
+        return {}
+    return {name: desc for name, (desc, _body) in _fasta_records(text).items()
+            if desc}
+
+
 def parse_input(text: str, max_sequences: int | None = None,
                 max_length: int | None = None) -> dict[str, str]:
     """Parse FASTA or a bare sequence into {name: sequence}.
@@ -139,18 +185,8 @@ def parse_input(text: str, max_sequences: int | None = None,
     seqs: dict[str, str] = {}
 
     if ">" in text:
-        name, buf = None, []
-        for line in text.splitlines():
-            line = line.strip()
-            if line.startswith(">"):
-                if name:
-                    seqs[name] = "".join(buf)
-                raw = line[1:].strip() or f"Sequence_{len(seqs) + 1}"
-                name, buf = raw.split()[0], []
-            elif line:
-                buf.append(line)
-        if name:
-            seqs[name] = "".join(buf)
+        seqs = {name: body for name, (_desc, body)
+                in _fasta_records(text).items()}
     else:
         blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
         for i, block in enumerate(blocks, start=1):

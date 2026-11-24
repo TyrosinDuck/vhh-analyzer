@@ -23,7 +23,7 @@ import json
 import re
 import zipfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -59,14 +59,15 @@ from compute import (aggregation_for, analyze_with_progress, annotation_for,
     repertoire_reference, repertoire_stats,
     sabdab_closest, specificity_for, specificity_reference, st,
     tempfile, tg, tnp_profile_for, triage_for, vc)
+import sanger as sg
 import session as ses
-from shell import (APP_NAME, AUTHOR, BUILD, CACHE_TTL, CODE, DOI, EXAMPLE,
-                   FIT, RELEASE, REPO_URL, VERSION, Settings,
+from shell import (ANALYSIS_FAMILIES, APP_NAME, AUTHOR, BUILD, CACHE_TTL,
+                   CODE, DOI, EXAMPLE, FIT, RELEASE, REPO_URL, VERSION, Settings,
                    anarci_requirement, anarci_status, current_sequences,
                    data_download, fig_to_png, footer, go_to, runtime_versions,
-                   usage_prompt)
+                   tabs_default, usage_prompt)
 
-__version__ = "2026.11.19c"
+__version__ = "2026.11.24c"
 
 
 @dataclass
@@ -100,59 +101,17 @@ class Run:
     chosen: Any
     heavy_only_notice: Callable
     type_of: Callable
+    # What followed each name on its FASTA header line, and the read
+    # counts the Sanger screen wrote there (`sanger.READS_TAG`). Both are
+    # read from the input text, which stays the only record of them.
+    descriptions: dict = field(default_factory=dict)
+    identical_reads: dict = field(default_factory=dict)
 
 
-# Named rather than indexed: inserting a tab in the middle of an indexed list
-# silently reassigns every panel after it.
-# Fourteen tabs are not fourteen subjects, they are four questions plus the
-# decision view. Grouping them does two things at once: a newcomer reads five
-# labels instead of scanning fourteen, and Streamlit only executes the family
-# that is open. Nested tabs would have fixed the first problem and not the
-# second, because every tab body runs whether or not its tab is selected.
-#
-# Module level rather than local to `render`, so that `view_count` below can
-# derive the number of views from it. MANUAL.md §3.0 quotes that number, and a
-# second list of views written out by hand is exactly the kind of duplicate
-# that goes stale without saying so.
-_FAMILIES = {
-    "🎯 Triage": ("triage", ["Table", "Compare"],
-                  "Every flag in one table, and the same flags read as a "
-                  "comparison between the sequences you submitted: the views "
-                  "for deciding which to carry forward."),
-    "🔍 Identity": ("identity",
-                    ["Properties", "Plots", "CDR / Framework",
-                     "Hallmarks & germline"],
-                    "What each sequence is: physico-chemical descriptors, "
-                    "profiles, CDR and framework annotation, hallmarks and "
-                    "humanness."),
-    "⚠️ Developability": ("risk", ["Liabilities", "Aggregation",
-                                    "Clinical context", "Polyreactivity",
-                                    "Plastic resemblance"],
-                          "Whether it will behave: chemical liabilities, "
-                          "cysteines and disulfides, suggested repairs, "
-                          "aggregation-prone regions, where the CDR lengths "
-                          "sit relative to clinical-stage nanobodies, and how "
-                          "likely the CDRs are to bind things they were not "
-                          "selected against."),
-    "🔗 Comparison": ("compare", ["Alignment", "vs Reference",
-                                  "Clonal families"],
-                      "How your sequences compare with each other: alignment "
-                      "and sequence logo, differences from a reference, clonal "
-                      "families."),
-    # The size of the reference set is deliberately absent from this sentence.
-    # This dict is read at import time, before any data file is opened, so a
-    # number here could only be a hand-written copy of what the matrix holds;
-    # the tab itself states it, from `repertoire.reference_report`.
-    "🌍 Repertoire": ("repertoire", ["Repertoire", "Closest structure"],
-                      "How they compare with what is already known: unusual "
-                      "framework residues, CDR lengths and composition "
-                      "against a reference set of real VHHs, and the nearest "
-                      "solved structures."),
-    "🧪 Outputs": ("outputs", ["DNA", "Constructs", "Download", "Session"],
-                   "What you make from them: codon-optimised DNA, fusion "
-                   "constructs, CSV, figures, the PDF report, and the session "
-                   "file that lets somebody run this again."),
-}
+# The families are declared in `shell.ANALYSIS_FAMILIES`, beside SECTIONS,
+# because the Guides screen names them too, and a screen may not read the
+# globals of another screen. The local name is kept for the code below.
+_FAMILIES = ANALYSIS_FAMILIES
 
 
 
@@ -431,8 +390,14 @@ def _triage(r: Run) -> None:
             mask = view[tg.FLAG_COLUMNS].fillna(False).any(axis=1)
             view = view[mask]
 
+        # The reads behind each sequence, when it came from the Sanger screen
+        # with its count. Added to what is shown and downloaded here only,
+        # not to `table`, which the Compare tab ranks: a read count is not an
+        # axis on which one sequence is better than another.
+        view = sg.add_identical_reads(view, r.identical_reads)
         keep = [c for g in shown_groups for c in tg.COLUMN_GROUPS[g]]
-        keep = [c for c in dict.fromkeys(["name"] + keep) if c in view.columns]
+        keep = [c for c in dict.fromkeys(["name", sg.READS_TAG] + keep)
+                if c in view.columns]
         st.dataframe(view[keep], hide_index=True, **FIT)
         st.caption(
             f"{len(view)} of {len(table)} sequence(s) shown. Empty cells are "
@@ -453,7 +418,9 @@ def _triage(r: Run) -> None:
             with st.expander("The flag columns on their own"):
                 st.dataframe(flags, hide_index=True, **FIT)
 
-        st.download_button("Triage table (CSV)", table.to_csv(index=False),
+        st.download_button("Triage table (CSV)",
+                           sg.add_identical_reads(table, r.identical_reads)
+                           .to_csv(index=False),
                            file_name="triage.csv", mime="text/csv")
 
     # --- Compare ---------------------------------------------------------------- #
@@ -2038,6 +2005,14 @@ def _compare(r: Run) -> None:
                 fam = families_for(heavy_sequences, heavy_annotations, float(cutoff),
                                    linkage_method, bool(same_length))
 
+            # The reads behind each sequence and each family, when the input
+            # carries the counts the Sanger screen writes. Added to the shown
+            # and downloaded tables, not to the cached result.
+            fam_table = sg.family_identical_reads(
+                fam["families"], fam["assignment"], heavy_sequences,
+                r.identical_reads)
+            fam_assignment = sg.add_identical_reads(fam["assignment"],
+                                                    r.identical_reads)
             n_seqs = len(fam["assignment"])
             n_fam = fam["n_families"]
             singletons = int((fam["families"]["n_sequences"] == 1).sum())
@@ -2054,7 +2029,16 @@ def _compare(r: Run) -> None:
                            + ", ".join(fam["skipped"]))
 
             st.subheader("Families")
-            st.dataframe(fam["families"], hide_index=True, **FIT)
+            st.dataframe(fam_table, hide_index=True, **FIT)
+            if sg.READS_TAG in fam_table.columns:
+                st.caption(
+                    "`identical_reads` is how many Sanger reads gave the "
+                    "family's proteins, each distinct protein counted once, "
+                    "read from the `identical_reads=` the Sanger screen wrote "
+                    "after each name. It counts **reads, not clones**: a "
+                    "clone sequenced from both ends is two reads. A family "
+                    "with a member that carries no count has no total, "
+                    "rather than a total that leaves that member out.")
             st.caption(
                 "`min_identity` is the **worst** pair inside the family: with "
                 "*complete* linkage it can never fall below your threshold, so a "
@@ -2085,17 +2069,17 @@ def _compare(r: Run) -> None:
                          "internal group is named by the step that made it.")
 
             st.subheader("Per-sequence assignment")
-            st.dataframe(fam["assignment"].assign(
-                type=[type_of(x) for x in fam["assignment"]["name"]]),
+            st.dataframe(fam_assignment.assign(
+                type=[type_of(x) for x in fam_assignment["name"]]),
                 hide_index=True, **FIT)
 
             dl = st.columns(3)
             dl[0].download_button("Families (CSV)",
-                                  fam["families"].to_csv(index=False),
+                                  fam_table.to_csv(index=False),
                                   file_name=f"families_{int(cutoff)}pct.csv",
                                   mime="text/csv")
             dl[1].download_button("Assignment (CSV)",
-                                  fam["assignment"].to_csv(index=False),
+                                  fam_assignment.to_csv(index=False),
                                   file_name=f"family_assignment_{int(cutoff)}pct.csv",
                                   mime="text/csv")
             dl[2].download_button("CDR3 identity matrix (CSV)",
@@ -2764,7 +2748,7 @@ def _session(r: Run) -> None:
     record = ses.session_record(
         sequences, ph=ph, window=window, method=method, method_used=used,
         version=VERSION, release=RELEASE, build=BUILD, code=CODE,
-        runtime=runtime_versions())
+        runtime=runtime_versions(), descriptions=r.descriptions)
 
     st.subheader("Save this run")
     st.caption(
@@ -2854,7 +2838,8 @@ def _restore() -> None:
             "to set them by hand.")
         return
 
-    st.session_state["pending_seq_text"] = ses.fasta(loaded["sequences"])
+    st.session_state["pending_seq_text"] = ses.fasta(
+        loaded["sequences"], descriptions=loaded["descriptions"])
     st.session_state["pending_set_ph"] = float(loaded["ph"])
     st.session_state["pending_set_window"] = int(loaded["window"])
     # The method is only restored if this machine can honour it. A file asking
@@ -3043,6 +3028,8 @@ def render(settings: Settings) -> None:
         st.error(f"Input error, {exc}")
         footer()
         st.stop()
+    descriptions = vc.fasta_descriptions(text)
+    identical_reads = sg.identical_reads(descriptions)
 
     # Multi-domain constructs are cut into their domains before anything else
     # runs, so that every tab downstream sees a domain as an ordinary sequence.
@@ -3126,7 +3113,12 @@ def render(settings: Settings) -> None:
                       label_visibility="collapsed", key="analysis_family")
     family, tab_labels, family_blurb = FAMILIES[chosen]
     st.caption(family_blurb)
-    tabs = (dict(zip(tab_labels, st.tabs(tab_labels))) if tab_labels
+    # A guide step asks for one tab of the family it opens (see
+    # sections/guides.py). The request is used once: left in place, every
+    # later visit to this family would open on that tab rather than the first.
+    wanted = st.session_state.pop("analysis_open_tab", None)
+    opened = tabs_default(wanted if wanted in tab_labels else None)
+    tabs = (dict(zip(tab_labels, st.tabs(tab_labels, **opened))) if tab_labels
             else {"Triage": st.container()})
 
 
@@ -3149,7 +3141,9 @@ def render(settings: Settings) -> None:
         tabs=tabs,
         chosen=chosen,
         heavy_only_notice=heavy_only_notice,
-        type_of=type_of)
+        type_of=type_of,
+        descriptions=descriptions,
+        identical_reads=identical_reads)
 
     # One dispatch rather than six module-level `if` statements: only the
     # selected family runs - the whole performance argument for a selector -

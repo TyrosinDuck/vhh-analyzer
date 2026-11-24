@@ -66,8 +66,12 @@ def test_the_record_holds_no_computed_value():
     looking at now.
     """
     record = a_record()
+    # `descriptions` is input, not output: what followed each name on its
+    # FASTA header line, such as the Sanger screen's `identical_reads=3`. It
+    # is the text the user gave, so it belongs with the sequences.
     assert set(record) == {"schema", "created_with", "created_utc", "release",
-                           "build", "code", "runtime", "settings", "sequences"}
+                           "build", "code", "runtime", "settings", "sequences",
+                           "descriptions"}
     flat = json.dumps(record)
     for computed in ("mw_da", "pI", "ext_coeff", "gravy", "net_charge"):
         assert computed not in flat

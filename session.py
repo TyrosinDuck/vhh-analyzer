@@ -35,7 +35,7 @@ the tests do.
 
 from __future__ import annotations
 
-__version__ = "2026.11.12a"
+__version__ = "2026.11.24a"
 
 __all__ = [
     "SESSION_SCHEMA", "METHODS_SETTINGS", "session_record", "session_inputs",
@@ -70,7 +70,8 @@ ANNOTATION_METHODS = ("auto", "anarci", "regex")
 def session_record(sequences: dict[str, str], ph: float, window: int,
                    method: str, method_used: str = "",
                    version: str = "", release: str = "", build: str = "",
-                   code: str = "", runtime: dict | None = None) -> dict:
+                   code: str = "", runtime: dict | None = None,
+                   descriptions: dict[str, str] | None = None) -> dict:
     """One analysis as data: the sequences, the settings, and what ran them.
 
     ``method`` is what the sidebar was set to, which may be ``"auto"``.
@@ -89,6 +90,14 @@ def session_record(sequences: dict[str, str], ph: float, window: int,
     ``runtime`` is what the server process was running, from
     ``shell.runtime_versions()``. It is recorded rather than checked: see the
     module docstring.
+
+    ``descriptions`` is what followed each name on its FASTA header line in
+    the analysis input, from `vhh_core.fasta_descriptions`, such as the
+    ``identical_reads=3`` the Sanger screen writes. It is part of the input,
+    not a result, so it is kept, and `fasta` writes it back where it was. Only
+    descriptions of sequences in the record are stored. The key is optional:
+    a file without it, which every file written before it existed is, reads
+    as having no descriptions, so the schema number is unchanged.
     """
     from datetime import datetime, timezone
 
@@ -113,14 +122,18 @@ def session_record(sequences: dict[str, str], ph: float, window: int,
             "annotation_used": str(method_used or ""),
         },
         "sequences": clean,
+        "descriptions": {name: str(text) for name, text
+                         in (descriptions or {}).items()
+                         if name in clean and str(text).strip()},
     }
 
 
 def session_inputs(data: dict) -> dict:
     """Read a session file back into the inputs that made it.
 
-    Returns ``sequences``, ``ph``, ``window``, ``method``, ``method_used``,
-    ``created_with``, ``release``, ``build``, ``code`` and ``runtime``.
+    Returns ``sequences``, ``descriptions``, ``ph``, ``window``, ``method``,
+    ``method_used``, ``created_with``, ``release``, ``build``, ``code`` and
+    ``runtime``. ``descriptions`` is empty for a file that has none.
 
     Refuses rather than guesses, in three cases, each of which would otherwise
     restore a screen that is not the one that was saved:
@@ -197,12 +210,27 @@ def session_inputs(data: dict) -> dict:
             raise ValueError(f"the sequence stored under {name!r} is empty")
         sequences[str(name)] = residues
 
+    raw_descriptions = data.get("descriptions")
+    if raw_descriptions is not None and not isinstance(raw_descriptions, dict):
+        raise ValueError("`descriptions` in this session file is not an object")
+    descriptions: dict[str, str] = {}
+    for name, text in (raw_descriptions or {}).items():
+        if not isinstance(text, str):
+            raise ValueError(
+                f"the description stored under {name!r} is not text")
+        # A header is one line: a description holding a line break would
+        # write a sequence line of its own when it is put back as FASTA.
+        flat = " ".join(text.split())
+        if str(name) in sequences and flat:
+            descriptions[str(name)] = flat
+
     runtime = data.get("runtime")
     if runtime is not None and not isinstance(runtime, dict):
         raise ValueError("`runtime` in this session file is not an object")
 
     return {
         "sequences": sequences,
+        "descriptions": descriptions,
         "ph": numbers["ph"],
         # int() because it indexes a sliding window. A file saying 9.0 is
         # fine, one saying 9.5 is not, and the bounds check above has already
@@ -227,16 +255,21 @@ def _whole(value: float, where: str) -> int:
     return int(value)
 
 
-def fasta(sequences: dict[str, str], width: int = 60) -> str:
+def fasta(sequences: dict[str, str], width: int = 60,
+          descriptions: dict[str, str] | None = None) -> str:
     """Sequences as FASTA, wrapped, for a session file to be pasted back in.
 
     Here rather than in the screen because the session file and the text area
     should round-trip through the same formatting, and because a notebook
     reading a session file wants the FASTA without importing a screen.
+
+    A description, where there is one, goes back after the name on the header
+    line, where `vhh_core.fasta_descriptions` found it.
     """
     out = []
     for name, seq in (sequences or {}).items():
-        out.append(f">{name}")
+        desc = " ".join(str((descriptions or {}).get(name, "")).split())
+        out.append(f">{name} {desc}" if desc else f">{name}")
         out.extend(seq[i:i + width] for i in range(0, len(seq), width))
     return "\n".join(out) + ("\n" if out else "")
 
